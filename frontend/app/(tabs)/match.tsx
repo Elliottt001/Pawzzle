@@ -61,7 +61,7 @@ export default function MatchScreen() {
   const [messages, setMessages] = React.useState<ChatMessageData[]>(initialMessages);
   const [input, setInput] = React.useState('');
   const [isTyping, setIsTyping] = React.useState(false);
-  const scrollRef = React.useRef<ScrollView>(null);
+  const scrollRef = React.useRef<ScrollView | null>(null);
   const typingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const streamingIntervalRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const replyIndexRef = React.useRef(0);

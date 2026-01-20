@@ -1,69 +1,88 @@
 import * as React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Feather, FontAwesome5 } from '@expo/vector-icons';
-import { ComponentProps } from 'react';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 
-type PetCard = {
+import { PetCard } from '@/components/pet-card';
+import { petCards } from '@/data/pets';
+
+const categories = [
+  { id: 'all', label: 'All' },
+  { id: 'cards', label: 'Pet Cards' },
+  { id: 'updates', label: 'Updates' },
+  { id: 'guides', label: 'Guides' },
+] as const;
+
+type CategoryId = (typeof categories)[number]['id'];
+
+type InfoItem = {
   id: string;
-  name: string;
-  breed: string;
-  age: string;
-  energy: string;
-  trait: string;
-  distance: string;
-  icon: ComponentProps<typeof FontAwesome5>['name'];
+  title: string;
+  subtitle: string;
+  tag: string;
   tone: string;
 };
 
-const pets: PetCard[] = [
+const updates: InfoItem[] = [
   {
-    id: 'p1',
-    name: 'Mochi',
-    breed: 'Corgi',
-    age: '2 yrs',
-    energy: 'Playful',
-    trait: 'Loves sunrise walks and snack puzzles.',
-    distance: '2.1 km',
-    icon: 'dog',
-    tone: '#FDE2B3',
+    id: 'u1',
+    title: 'Meet Maple',
+    subtitle: 'A gentle beagle just arrived and loves couch naps.',
+    tag: 'New',
+    tone: '#FCE7CF',
   },
   {
-    id: 'p2',
-    name: 'Luna',
-    breed: 'British Shorthair',
-    age: '3 yrs',
-    energy: 'Calm',
-    trait: 'Apartment-friendly and gentle with guests.',
-    distance: '3.6 km',
-    icon: 'cat',
+    id: 'u2',
+    title: 'Weekend adoption fair',
+    subtitle: 'Saturday 10am to 4pm at Riverside Park.',
+    tag: 'Event',
     tone: '#DCEBFF',
   },
   {
-    id: 'p3',
-    name: 'Rio',
-    breed: 'Mini Poodle',
-    age: '1 yr',
-    energy: 'Smart',
-    trait: 'Quick learner, loves puzzle toys.',
-    distance: '1.4 km',
-    icon: 'paw',
-    tone: '#E5F5DE',
+    id: 'u3',
+    title: 'Trainer Q and A',
+    subtitle: 'Short answers on house training and leash manners.',
+    tag: 'Live',
+    tone: '#E7F5DE',
+  },
+];
+
+const guides: InfoItem[] = [
+  {
+    id: 'g1',
+    title: 'Apartment ready pets',
+    subtitle: 'Low shed coats and calm energy tips.',
+    tag: 'Guide',
+    tone: '#EAF2FF',
   },
   {
-    id: 'p4',
-    name: 'Hazel',
-    breed: 'Shiba Inu',
-    age: '4 yrs',
-    energy: 'Independent',
-    trait: 'Enjoys calm mornings and steady routines.',
-    distance: '4.8 km',
-    icon: 'dog',
-    tone: '#FFE1E1',
+    id: 'g2',
+    title: 'First week checklist',
+    subtitle: 'Supplies, routines, and settling in safely.',
+    tag: 'Checklist',
+    tone: '#FCE9E0',
+  },
+  {
+    id: 'g3',
+    title: 'Cat and dog intros',
+    subtitle: 'Slow steps for gentle introductions.',
+    tag: 'Tips',
+    tone: '#E8F5EE',
   },
 ];
 
 export default function HomeScreen() {
   const [query, setQuery] = React.useState('');
+  const [activeCategory, setActiveCategory] = React.useState<CategoryId>('all');
+
+  const normalized = query.trim().toLowerCase();
+  const visiblePets =
+    normalized.length === 0
+      ? petCards
+      : petCards.filter((pet) =>
+          [pet.name, pet.breed, pet.energy, pet.trait].some((field) =>
+            field.toLowerCase().includes(normalized)
+          )
+        );
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -94,32 +113,93 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.cardList}>
-        {pets.map((pet) => (
-          <View key={pet.id} style={styles.card}>
-            <View style={[styles.iconWrap, { backgroundColor: pet.tone }]}>
-              <FontAwesome5 name={pet.icon} size={22} color="#1F2937" />
-            </View>
-            <View style={styles.cardBody}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.petName}>{pet.name}</Text>
-                <View style={styles.energyPill}>
-                  <Text style={styles.energyText}>{pet.energy}</Text>
-                </View>
-              </View>
-              <Text style={styles.petMeta}>
-                {pet.breed} • {pet.age}
+      <View style={styles.categoryRow}>
+        {categories.map((category) => {
+          const isActive = activeCategory === category.id;
+          return (
+            <Pressable
+              key={category.id}
+              onPress={() => setActiveCategory(category.id)}
+              style={({ pressed }) => [
+                styles.categoryPill,
+                isActive && styles.categoryPillActive,
+                pressed && styles.categoryPillPressed,
+              ]}>
+              <Text style={[styles.categoryText, isActive && styles.categoryTextActive]}>
+                {category.label}
               </Text>
-              <Text style={styles.petTrait}>{pet.trait}</Text>
-              <View style={styles.distanceRow}>
-                <Feather name="map-pin" size={14} color="#6B7280" />
-                <Text style={styles.distanceText}>{pet.distance} away</Text>
-              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <ScrollView contentContainerStyle={styles.content}>
+        {activeCategory === 'all' || activeCategory === 'cards' ? (
+          <Section title="Pet Cards" subtitle={`${visiblePets.length} matches`}>
+            <View style={styles.cardList}>
+              {visiblePets.map((pet) => (
+                <PetCard key={pet.id} pet={pet} />
+              ))}
             </View>
-          </View>
-        ))}
+          </Section>
+        ) : null}
+
+        {activeCategory === 'all' || activeCategory === 'updates' ? (
+          <Section title="Updates" subtitle="Latest activity">
+            <View style={styles.infoList}>
+              {updates.map((item) => (
+                <InfoCard key={item.id} item={item} />
+              ))}
+            </View>
+          </Section>
+        ) : null}
+
+        {activeCategory === 'all' || activeCategory === 'guides' ? (
+          <Section title="Guides" subtitle="Quick knowledge">
+            <View style={styles.infoList}>
+              {guides.map((item) => (
+                <InfoCard key={item.id} item={item} />
+              ))}
+            </View>
+          </Section>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function Section({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <View>
+          <Text style={styles.sectionTitle}>{title}</Text>
+          <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+        </View>
+        <Feather name="chevron-right" size={18} color="#9CA3AF" />
+      </View>
+      {children}
+    </View>
+  );
+}
+
+function InfoCard({ item }: { item: InfoItem }) {
+  return (
+    <View style={styles.infoCard}>
+      <View style={[styles.infoTag, { backgroundColor: item.tone }]}>
+        <Text style={styles.infoTagText}>{item.tag}</Text>
+      </View>
+      <Text style={styles.infoTitle}>{item.title}</Text>
+      <Text style={styles.infoSubtitle}>{item.subtitle}</Text>
+    </View>
   );
 }
 
@@ -214,77 +294,98 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 2,
   },
-  cardList: {
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 120,
-    gap: 14,
-  },
-  card: {
+  categoryRow: {
     flexDirection: 'row',
-    gap: 14,
-    padding: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
-    borderRadius: 22,
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingBottom: 6,
+  },
+  categoryPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     borderWidth: 1,
     borderColor: '#EFE3D6',
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 14,
-    elevation: 3,
   },
-  iconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+  categoryPillActive: {
+    backgroundColor: '#157B57',
+    borderColor: '#157B57',
   },
-  cardBody: {
-    flex: 1,
+  categoryPillPressed: {
+    transform: [{ scale: 0.98 }],
   },
-  cardHeader: {
+  categoryText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  categoryTextActive: {
+    color: '#FFFFFF',
+  },
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 140,
+    gap: 18,
+  },
+  section: {
+    gap: 12,
+  },
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  petName: {
+  sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#111827',
   },
-  energyPill: {
+  sectionSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  cardList: {
+    gap: 14,
+  },
+  infoList: {
+    gap: 12,
+  },
+  infoCard: {
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderWidth: 1,
+    borderColor: '#EFE3D6',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  infoTag: {
+    alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: '#E8F5EE',
-    borderWidth: 1,
-    borderColor: '#CDE8D9',
+    marginBottom: 8,
   },
-  energyText: {
-    fontSize: 12,
-    color: '#15803D',
+  infoTagText: {
+    fontSize: 11,
     fontWeight: '600',
-  },
-  petMeta: {
-    marginTop: 4,
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  petTrait: {
-    marginTop: 8,
-    fontSize: 14,
     color: '#1F2937',
   },
-  distanceRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
   },
-  distanceText: {
-    fontSize: 12,
+  infoSubtitle: {
+    marginTop: 6,
+    fontSize: 13,
     color: '#6B7280',
   },
 });
