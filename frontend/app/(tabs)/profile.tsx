@@ -1,9 +1,88 @@
 import * as React from 'react';
 import { Image } from 'expo-image';
-import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+
+type AuthUser = {
+  id: number;
+  name: string;
+  email: string;
+};
+
+type AuthSession = {
+  token: string;
+  user: AuthUser;
+};
+
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL ??
+  (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 
 export default function ProfileScreen() {
+  const [session, setSession] = React.useState<AuthSession | null>(null);
+  const [status, setStatus] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [registerName, setRegisterName] = React.useState('');
+  const [registerEmail, setRegisterEmail] = React.useState('');
+  const [registerPassword, setRegisterPassword] = React.useState('');
+  const [loginEmail, setLoginEmail] = React.useState('');
+  const [loginPassword, setLoginPassword] = React.useState('');
+
+  const runAuthAction = async (action: () => Promise<void>) => {
+    setStatus(null);
+    setLoading(true);
+    try {
+      await action();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Something went wrong.';
+      setStatus(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = () =>
+    runAuthAction(async () => {
+      const data = await request<AuthSession>('/api/auth/register', {
+        name: registerName,
+        email: registerEmail,
+        password: registerPassword,
+      });
+      setSession(data);
+      setStatus('Registered and signed in.');
+    });
+
+  const handleLogin = () =>
+    runAuthAction(async () => {
+      const data = await request<AuthSession>('/api/auth/login', {
+        email: loginEmail,
+        password: loginPassword,
+      });
+      setSession(data);
+      setStatus('Signed in.');
+    });
+
+  const handleLogout = () =>
+    runAuthAction(async () => {
+      if (!session) {
+        return;
+      }
+      await request('/api/auth/logout', { token: session.token });
+      setSession(null);
+      setStatus('Signed out.');
+    });
+
+  const displayName = session?.user.name ?? 'Guest';
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.background}>
@@ -12,42 +91,181 @@ export default function ProfileScreen() {
         <View style={[styles.blob, styles.blobBottom]} />
       </View>
 
-      <View style={styles.header}>
-        <Text style={styles.overline}>User</Text>
-        <Text style={styles.title}>Your Profile</Text>
-      </View>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.header}>
+          <Text style={styles.overline}>User</Text>
+          <Text style={styles.title}>Account</Text>
+        </View>
 
-      <View style={styles.profileCard}>
-        <View style={styles.avatarWrap}>
-          <Image source={require('@/assets/images/icon.png')} style={styles.avatar} />
-        </View>
-        <Text style={styles.name}>Sunny</Text>
-        <Text style={styles.nicknameLabel}>Nickname</Text>
-        <View style={styles.nicknamePill}>
-          <Text style={styles.nicknameText}>Sunny</Text>
-        </View>
-      </View>
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.profileCard}>
+            <View style={styles.avatarWrap}>
+              <Image source={require('@/assets/images/icon.png')} style={styles.avatar} />
+            </View>
+            <Text style={styles.name}>{displayName}</Text>
+            <Text style={styles.nicknameLabel}>Status</Text>
+            <View style={styles.nicknamePill}>
+              <Text style={styles.nicknameText}>{session ? 'Signed in' : 'Guest mode'}</Text>
+            </View>
+            {session ? (
+              <Text style={styles.emailText}>{session.user.email}</Text>
+            ) : null}
+          </View>
 
-      <View style={styles.infoRow}>
-        <View style={styles.infoCard}>
-          <Feather name="map-pin" size={18} color="#1F2937" />
-          <Text style={styles.infoValue}>Shanghai</Text>
-          <Text style={styles.infoLabel}>City</Text>
-        </View>
-        <View style={styles.infoCard}>
-          <Feather name="heart" size={18} color="#1F2937" />
-          <Text style={styles.infoValue}>Cat friendly</Text>
-          <Text style={styles.infoLabel}>Preference</Text>
-        </View>
-      </View>
+          {status ? <Text style={styles.statusText}>{status}</Text> : null}
+
+          {session ? (
+            <View style={styles.formCard}>
+              <Text style={styles.formTitle}>Signed in</Text>
+              <Text style={styles.formSubtitle}>
+                You can sign out on this device when you are ready.
+              </Text>
+              <Pressable
+                onPress={handleLogout}
+                disabled={loading}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  pressed && styles.actionButtonPressed,
+                ]}>
+                <Text style={styles.actionButtonText}>
+                  {loading ? 'Signing out...' : 'Sign out'}
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              <FormSection title="Create account">
+                <TextInput
+                  value={registerName}
+                  onChangeText={setRegisterName}
+                  placeholder="Name"
+                  placeholderTextColor="#9CA3AF"
+                  style={styles.input}
+                />
+                <TextInput
+                  value={registerEmail}
+                  onChangeText={setRegisterEmail}
+                  placeholder="Email"
+                  placeholderTextColor="#9CA3AF"
+                  style={styles.input}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                />
+                <TextInput
+                  value={registerPassword}
+                  onChangeText={setRegisterPassword}
+                  placeholder="Password"
+                  placeholderTextColor="#9CA3AF"
+                  style={styles.input}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+                <Pressable
+                  onPress={handleRegister}
+                  disabled={loading}
+                  style={({ pressed }) => [
+                    styles.actionButton,
+                    pressed && styles.actionButtonPressed,
+                  ]}>
+                  <Text style={styles.actionButtonText}>
+                    {loading ? 'Registering...' : 'Register'}
+                  </Text>
+                </Pressable>
+              </FormSection>
+
+              <FormSection title="Sign in">
+                <TextInput
+                  value={loginEmail}
+                  onChangeText={setLoginEmail}
+                  placeholder="Email"
+                  placeholderTextColor="#9CA3AF"
+                  style={styles.input}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                />
+                <TextInput
+                  value={loginPassword}
+                  onChangeText={setLoginPassword}
+                  placeholder="Password"
+                  placeholderTextColor="#9CA3AF"
+                  style={styles.input}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+                <Pressable
+                  onPress={handleLogin}
+                  disabled={loading}
+                  style={({ pressed }) => [
+                    styles.actionButton,
+                    pressed && styles.actionButtonPressed,
+                  ]}>
+                  <Text style={styles.actionButtonText}>
+                    {loading ? 'Signing in...' : 'Sign in'}
+                  </Text>
+                </Pressable>
+              </FormSection>
+            </>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
+}
+
+function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.formCard}>
+      <Text style={styles.formTitle}>{title}</Text>
+      <View style={styles.formFields}>{children}</View>
+    </View>
+  );
+}
+
+async function request<T = unknown>(path: string, payload?: Record<string, unknown>) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: payload ? JSON.stringify(payload) : undefined,
+  });
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const text = await response.text();
+  let data: T | undefined;
+  if (text) {
+    try {
+      data = JSON.parse(text) as T;
+    } catch {
+      data = undefined;
+    }
+  }
+
+  if (!response.ok) {
+    const message =
+      typeof data === 'object' && data && 'message' in data
+        ? String((data as { message?: string }).message)
+        : response.statusText;
+    throw new Error(message || 'Request failed');
+  }
+
+  return data;
 }
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#FDF7F0',
+  },
+  container: {
+    flex: 1,
   },
   background: {
     ...StyleSheet.absoluteFillObject,
@@ -91,9 +309,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
   },
+  content: {
+    paddingHorizontal: 20,
+    paddingBottom: 140,
+    gap: 16,
+  },
   profileCard: {
     marginTop: 8,
-    marginHorizontal: 20,
     padding: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.92)',
     borderRadius: 24,
@@ -147,36 +369,63 @@ const styles = StyleSheet.create({
     color: '#15803D',
     fontWeight: '600',
   },
-  infoRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-    marginHorizontal: 20,
+  emailText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#6B7280',
   },
-  infoCard: {
-    flex: 1,
-    paddingVertical: 16,
-    paddingHorizontal: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.88)',
-    borderRadius: 18,
+  statusText: {
+    fontSize: 13,
+    color: '#1F2937',
+  },
+  formCard: {
+    padding: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#EFE3D6',
-    alignItems: 'flex-start',
     shadowColor: '#0F172A',
     shadowOpacity: 0.05,
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 12,
     elevation: 2,
   },
-  infoValue: {
-    marginTop: 10,
-    fontSize: 15,
+  formTitle: {
+    fontSize: 16,
     fontWeight: '600',
     color: '#111827',
+    marginBottom: 12,
   },
-  infoLabel: {
-    marginTop: 4,
-    fontSize: 12,
+  formSubtitle: {
+    fontSize: 13,
     color: '#6B7280',
+    marginBottom: 12,
+  },
+  formFields: {
+    gap: 12,
+  },
+  input: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: '#EEE6DC',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    color: '#111827',
+  },
+  actionButton: {
+    backgroundColor: '#157B57',
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  actionButtonPressed: {
+    transform: [{ scale: 0.98 }],
+  },
+  actionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

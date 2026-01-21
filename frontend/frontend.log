@@ -1,0 +1,27 @@
+
+> frontend@1.0.0 web C:\Users\Lzh\Desktop\Code\proj\Pawzzle\frontend
+> expo start --web
+
+Starting project at C:\Users\Lzh\Desktop\Code\proj\Pawzzle\frontend
+React Compiler enabled
+Starting Metro Bundler
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+Web node_modules\expo-router\entry.js ▓▓▓▓░░░░░░░░░░░░ 30.9% (15/27)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓░░░░░░░░░░░ 36.0% (261/435)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓░░░░░░░░░░░ 32.7% (234/409)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 86.8% ( 944/1013)
+λ Bundled 7728ms node_modules\expo-router\node\render.js (1216 modules)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.9% (1206/1207)
+Web Bundled 11074ms node_modules\expo-router\entry.js (1207 modules)
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 2179ms node_modules\expo-router\entry.js (1182 modules)
+ LOG  [web] Logs will appear in the browser console
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+λ Bundled 464ms node_modules\expo-router\node\render.js (1 module)
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 8231ms node_modules\expo-router\entry.js (1 module)
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 1246ms node_modules\expo-router\entry.js (1 module)
+ LOG  [web] Logs will appear in the browser console

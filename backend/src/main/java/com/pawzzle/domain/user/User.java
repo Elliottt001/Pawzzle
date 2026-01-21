@@ -7,7 +7,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,10 +30,26 @@ public class User {
 	@Column(nullable = false)
 	private String name;
 
+	@Column(nullable = false, unique = true)
+	private String email;
+
+	@Column(name = "password_hash", nullable = false)
+	private String passwordHash;
+
 	@Column(columnDefinition = "text")
 	private String preferenceSummary;
 
 	@Convert(converter = VectorStringConverter.class)
 	@Column(name = "preference_vector", columnDefinition = "vector(1536)")
 	private List<Double> preferenceVector;
+
+	@Column(name = "created_at", nullable = false)
+	private Instant createdAt;
+
+	@PrePersist
+	public void onCreate() {
+		if (createdAt == null) {
+			createdAt = Instant.now();
+		}
+	}
 }
