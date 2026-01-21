@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, Pressable } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 import type { PetCardData } from '@/data/pets';
 
@@ -9,27 +10,31 @@ type PetCardProps = {
 };
 
 export function PetCard({ pet }: PetCardProps) {
+  const router = useRouter();
+
   return (
-    <View style={styles.card}>
-      <View style={[styles.iconWrap, { backgroundColor: pet.tone }]}>
-        <FontAwesome5 name={pet.icon} size={22} color="#1F2937" />
-      </View>
-      <View style={styles.cardBody}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.petName}>{pet.name}</Text>
-          <View style={styles.energyPill}>
-            <Text style={styles.energyText}>{pet.energy}</Text>
+    <Pressable onPress={() => router.push(`/pet/${pet.id}`)}>
+      <View style={styles.card}>
+        <View style={[styles.iconWrap, { backgroundColor: pet.tone }]}>
+          <FontAwesome5 name={pet.icon} size={22} color="#1F2937" />
+        </View>
+        <View style={styles.cardBody}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.petName}>{pet.name}</Text>
+            <View style={styles.energyPill}>
+              <Text style={styles.energyText}>{pet.energy}</Text>
+            </View>
+          </View>
+          <Text style={styles.petMeta}>
+            {pet.breed} - {pet.age}
+          </Text>
+          <Text style={styles.petTrait}>{pet.trait}</Text>
+          <View style={styles.distanceRow}>
+            <Text style={styles.distanceText}>{pet.distance} away</Text>
           </View>
         </View>
-        <Text style={styles.petMeta}>
-          {pet.breed} - {pet.age}
-        </Text>
-        <Text style={styles.petTrait}>{pet.trait}</Text>
-        <View style={styles.distanceRow}>
-          <Text style={styles.distanceText}>{pet.distance} away</Text>
-        </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
