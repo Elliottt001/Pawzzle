@@ -11,7 +11,7 @@
     *   **状态管理**: Spring StateMachine (Order flow)
 
 2.  **Frontend (前端)**:
-    *   **框架**: Next.js (React)
+    *   **框架**: React Native
     *   **UI**: Tailwind CSS + Shadcn/UI
     *   **交互**: Vercel AI SDK / WebSocket
 
