@@ -56,6 +56,21 @@ public class Pet {
 	@Column(nullable = false)
 	private Status status;
 
+	private String breed;
+
+	private String age;
+
+	private String energy;
+
+	@Column(columnDefinition = "text")
+	private String trait;
+
+	private String distance;
+
+	private String icon;
+
+	private String tone;
+
 	@Column(name = "raw_description", columnDefinition = "text")
 	private String rawDescription;
 

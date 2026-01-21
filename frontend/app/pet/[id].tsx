@@ -5,12 +5,9 @@ import { ActivityIndicator, Image, Platform, ScrollView, StyleSheet } from 'reac
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 
-// Helper for localhost on Android
-const API_URL = Platform.select({
-  android: 'http://10.0.2.2:8080',
-  ios: 'http://localhost:8080',
-  default: 'http://localhost:8080',
-});
+const API_URL =
+  process.env.EXPO_PUBLIC_API_URL ??
+  (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 
 type Pet = {
   id: number;
@@ -30,9 +27,15 @@ export default function PetDetailsScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const rawId = Array.isArray(id) ? id[0] : id;
+    const apiId = normalizePetId(rawId);
+
     async function fetchPet() {
       try {
-        const response = await fetch(`${API_URL}/api/pets/${id}`);
+        if (!apiId) {
+          throw new Error('Missing pet id');
+        }
+        const response = await fetch(`${API_URL}/api/pets/${apiId}`);
         if (!response.ok) {
           throw new Error('Failed to fetch pet details');
         }
@@ -45,8 +48,10 @@ export default function PetDetailsScreen() {
       }
     }
 
-    if (id) {
+    if (apiId) {
       fetchPet();
+    } else {
+      setLoading(false);
     }
   }, [id]);
 
@@ -96,6 +101,20 @@ export default function PetDetailsScreen() {
       </ThemedView>
     </ScrollView>
   );
+}
+
+function normalizePetId(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (trimmed.startsWith('p') && trimmed.length > 1) {
+    return trimmed.slice(1);
+  }
+  return trimmed;
 }
 
 const styles = StyleSheet.create({

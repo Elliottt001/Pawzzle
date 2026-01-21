@@ -7,6 +7,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface PetRepository extends JpaRepository<Pet, Long> {
+	boolean existsByName(String name);
+
+	List<Pet> findByStatus(Pet.Status status);
+
 	@Query(value = """
 		select *
 		from pets p

@@ -1,11 +1,18 @@
 import * as React from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
 
 import { PetCard } from '@/components/pet-card';
-import { petCards } from '@/data/pets';
+import type { PetCardData } from '@/types/pet';
 
 type Intent = 'adopt' | 'rehome';
+type QuestionAnswer = { question: string; answer: string };
+type AgentDecisionItem = { id: string; confidence?: number };
+type AgentDecisionResponse = { items: AgentDecisionItem[]; rawResponse?: string };
+
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL ??
+  (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 
 const colorOptions = ['Golden', 'Black', 'White', 'Mixed'];
 const personalityOptions = ['Calm', 'Playful', 'Independent', 'Smart'];
@@ -16,11 +23,132 @@ export default function AgentScreen() {
   const [color, setColor] = React.useState<string | null>(null);
   const [personality, setPersonality] = React.useState<string | null>(null);
   const [expectation, setExpectation] = React.useState<string | null>(null);
+  const [petCards, setPetCards] = React.useState<PetCardData[]>([]);
+  const [petCardsStatus, setPetCardsStatus] = React.useState<'loading' | 'ready' | 'error'>(
+    'loading'
+  );
+  const [petCardsError, setPetCardsError] = React.useState<string | null>(null);
+  const [recommendationStatus, setRecommendationStatus] = React.useState<
+    'idle' | 'loading' | 'done' | 'error'
+  >('idle');
+  const [recommendedItems, setRecommendedItems] = React.useState<AgentDecisionItem[]>([]);
+  const [modelRawResponse, setModelRawResponse] = React.useState<string | null>(null);
   const scrollRef = React.useRef<ScrollView | null>(null);
 
   React.useEffect(() => {
+    let isActive = true;
+    setPetCardsStatus('loading');
+    setPetCardsError(null);
+
+    fetch(`${API_BASE_URL}/api/pets`)
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('Failed to load pet cards');
+        }
+        return (await response.json()) as PetCardData[];
+      })
+      .then((data) => {
+        if (!isActive) {
+          return;
+        }
+        setPetCards(data ?? []);
+        setPetCardsStatus('ready');
+      })
+      .catch((error) => {
+        if (!isActive) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : 'Failed to load pet cards';
+        setPetCardsStatus('error');
+        setPetCardsError(message);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  React.useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: true });
-  }, [intent, color, personality, expectation]);
+  }, [intent, color, personality, expectation, recommendationStatus]);
+
+  React.useEffect(() => {
+    if (intent !== 'adopt' || !color || !personality || !expectation) {
+      return;
+    }
+
+    if (petCardsStatus === 'loading') {
+      setRecommendationStatus('loading');
+      return;
+    }
+
+    if (petCardsStatus === 'error' || !petCards.length) {
+      setRecommendationStatus('error');
+      setModelRawResponse(petCardsError ?? 'No pet cards available yet.');
+      setRecommendedItems([]);
+      return;
+    }
+
+    const questionAnswers: QuestionAnswer[] = [
+      { question: 'Do you want to adopt or rehome?', answer: intent === 'adopt' ? 'Adopt a pet' : 'Rehome a pet' },
+      { question: 'What coat color do you like?', answer: color },
+      { question: 'What personality do you like?', answer: personality },
+      { question: 'Any other expectations?', answer: expectation },
+    ];
+
+    let isActive = true;
+    const fallbackItems = petCards.slice(0, 3).map((pet) => ({ id: pet.id, confidence: 0.5 }));
+
+    setRecommendationStatus('loading');
+    setRecommendedItems([]);
+    setModelRawResponse(null);
+
+    request<AgentDecisionResponse>('/api/agent/recommend', {
+      questionAnswers,
+      pets: petCards,
+    })
+      .then((data) => {
+        if (!isActive) {
+          return;
+        }
+        const items = data?.items?.length ? data.items : fallbackItems;
+        setRecommendedItems(items);
+        setModelRawResponse(data?.rawResponse ?? '');
+        setRecommendationStatus('done');
+      })
+      .catch(() => {
+        if (!isActive) {
+          return;
+        }
+        setRecommendedItems(fallbackItems);
+        setModelRawResponse(null);
+        setRecommendationStatus('error');
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [intent, color, personality, expectation, petCards, petCardsStatus, petCardsError]);
+
+  const visiblePets = React.useMemo(() => {
+    if (recommendationStatus === 'loading' || recommendationStatus === 'idle') {
+      return [] as { pet: PetCardData; confidence?: number }[];
+    }
+    if (!petCards.length) {
+      return [] as { pet: PetCardData; confidence?: number }[];
+    }
+    const petById = new Map(petCards.map((pet) => [pet.id, pet]));
+    const selected = recommendedItems
+      .map((item) => {
+        const pet = petById.get(item.id);
+        return pet ? { pet, confidence: item.confidence } : null;
+      })
+      .filter((item): item is { pet: PetCardData; confidence?: number } => Boolean(item));
+    if (selected.length) {
+      return selected;
+    }
+    return petCards.slice(0, 3).map((pet) => ({ pet, confidence: 0.5 }));
+  }, [recommendationStatus, recommendedItems, petCards]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -115,12 +243,28 @@ export default function AgentScreen() {
 
             {expectation ? (
               <>
-                <ChatBubble role="ai" text="Here are your top matches." />
-                <View style={styles.matchList}>
-                  {petCards.slice(0, 3).map((pet) => (
-                    <PetCard key={pet.id} pet={pet} />
-                  ))}
-                </View>
+                <ChatBubble
+                  role="ai"
+                  text={
+                    recommendationStatus === 'loading'
+                      ? 'Picking the best matches for you...'
+                      : recommendationStatus === 'error'
+                        ? 'I could not load matches yet. Please try again soon.'
+                        : 'Here are your top matches.'
+                  }
+                />
+                {recommendationStatus === 'loading' ? null : (
+                  <>
+                    <View style={styles.matchList}>
+                      {visiblePets.map(({ pet, confidence }) => (
+                        <PetCard key={pet.id} pet={pet} confidence={confidence} />
+                      ))}
+                    </View>
+                    {modelRawResponse !== null ? (
+                      <ChatBubble role="ai" text={modelRawResponse} />
+                    ) : null}
+                  </>
+                )}
               </>
             ) : null}
           </>
@@ -175,6 +319,40 @@ function OptionButton({
       </Text>
     </Pressable>
   );
+}
+
+async function request<T = unknown>(path: string, payload?: Record<string, unknown>) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: payload ? JSON.stringify(payload) : undefined,
+  });
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const text = await response.text();
+  let data: T | undefined;
+  if (text) {
+    try {
+      data = JSON.parse(text) as T;
+    } catch {
+      data = undefined;
+    }
+  }
+
+  if (!response.ok) {
+    const message =
+      typeof data === 'object' && data && 'message' in data
+        ? String((data as { message?: string }).message)
+        : response.statusText;
+    throw new Error(message || 'Request failed');
+  }
+
+  return data;
 }
 
 const styles = StyleSheet.create({
