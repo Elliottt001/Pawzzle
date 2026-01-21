@@ -25,10 +25,17 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
         }
 
+        User.UserIntent finalIntent = request.userIntent();
+        if (request.userType() == User.UserType.INSTITUTION) {
+            finalIntent = User.UserIntent.GIVER;
+        }
+
         User user = User.builder()
             .name(request.name().trim())
             .email(email)
             .passwordHash(passwordEncoder.encode(request.password()))
+            .userType(request.userType())
+            .userIntent(finalIntent)
             .build();
 
         userRepository.save(user);
@@ -82,10 +89,10 @@ public class AuthService {
     }
 
     private UserResponse toUserResponse(User user) {
-        return new UserResponse(user.getId(), user.getName(), user.getEmail());
+        return new UserResponse(user.getId(), user.getName(), user.getEmail(), user.getUserType(), user.getUserIntent());
     }
 
-    public record RegisterRequest(String name, String email, String password) {
+    public record RegisterRequest(String name, String email, String password, User.UserType userType, User.UserIntent userIntent) {
     }
 
     public record LoginRequest(String email, String password) {
@@ -94,6 +101,6 @@ public class AuthService {
     public record AuthResponse(String token, UserResponse user) {
     }
 
-    public record UserResponse(Long id, String name, String email) {
+    public record UserResponse(Long id, String name, String email, User.UserType userType, User.UserIntent userIntent) {
     }
 }

@@ -2,6 +2,7 @@ package com.pawzzle.domain.pet;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.pawzzle.domain.vector.VectorStringConverter;
+import com.pawzzle.domain.user.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
@@ -10,6 +11,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.util.List;
 import lombok.AllArgsConstructor;
@@ -64,4 +67,8 @@ public class Pet {
 	@ColumnTransformer(write = "?::vector")
 	@Column(name = "personality_vector", columnDefinition = "vector(1536)")
 	private List<Double> personalityVector;
+
+	@ManyToOne
+	@JoinColumn(name = "owner_id")
+	private User owner;
 }

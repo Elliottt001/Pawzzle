@@ -4,6 +4,8 @@ import com.pawzzle.domain.vector.VectorStringConverter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -24,6 +26,16 @@ import org.hibernate.annotations.ColumnTransformer;
 @NoArgsConstructor
 @AllArgsConstructor
 public class User {
+	public enum UserType {
+		INDIVIDUAL,
+		INSTITUTION
+	}
+
+	public enum UserIntent {
+		GIVER,
+		ADOPTER
+	}
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
@@ -36,6 +48,14 @@ public class User {
 
 	@Column(name = "password_hash", nullable = false)
 	private String passwordHash;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "user_type")
+	private UserType userType;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "user_intent")
+	private UserIntent userIntent;
 
 	@Column(columnDefinition = "text")
 	private String preferenceSummary;
