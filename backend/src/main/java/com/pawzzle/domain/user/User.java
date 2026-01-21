@@ -15,6 +15,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnTransformer;
 
 @Entity
 @Table(name = "users")
@@ -40,6 +41,7 @@ public class User {
 	private String preferenceSummary;
 
 	@Convert(converter = VectorStringConverter.class)
+	@ColumnTransformer(write = "?::vector")
 	@Column(name = "preference_vector", columnDefinition = "vector(1536)")
 	private List<Double> preferenceVector;
 

@@ -16,6 +16,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnTransformer;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -60,6 +61,7 @@ public class Pet {
 	private JsonNode structuredTags;
 
 	@Convert(converter = VectorStringConverter.class)
+	@ColumnTransformer(write = "?::vector")
 	@Column(name = "personality_vector", columnDefinition = "vector(1536)")
 	private List<Double> personalityVector;
 }
