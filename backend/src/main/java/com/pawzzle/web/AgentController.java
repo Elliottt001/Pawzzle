@@ -22,9 +22,27 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/agent")
 @RequiredArgsConstructor
 public class AgentController {
-    private static final String SYSTEM_PROMPT = """
+    private static final String EVALUATION_SYSTEM_PROMPT = """
+        You are a pet adoption interview evaluator.
+        Determine if the conversation covers ALL four dimensions:
+        1) Living environment & safety (space, layout, elevator, window safety, neighborhood, vet access, housing stability)
+        2) Time & energy cost (work hours, travel frequency, routine)
+        3) Financial support (budget, medical reserve, grooming, ongoing costs)
+        4) Psychological expectations (tolerance for shedding/noise/destruction/toileting, experience, temperament needs, breed preference)
+
+        If all are covered, return ONLY valid JSON:
+        {"endverification":true,"environmentScore":0.72,"timeScore":0.63,"financeScore":0.58,"psychProfile":"~50 Chinese chars","nextQuestion":null}
+
+        If NOT all are covered, return ONLY valid JSON:
+        {"endverification":false,"nextQuestion":"one gentle open-ended question in Chinese","environmentScore":null,"timeScore":null,"financeScore":null,"psychProfile":null}
+
+        Scores must be 0-1. Ask only about missing dimensions.
+        Do NOT ask about adopt vs rehome, and do NOT ask about names or contact info.
+        """;
+
+    private static final String RECOMMEND_SYSTEM_PROMPT = """
         You are a pet adoption match assistant.
-        Given the user's Q&A and a list of pet cards, pick the best 3 pet ids.
+        Given the evaluation summary and a list of pet cards, pick the best 3 pet ids.
         Return ONLY valid JSON: {"items":[{"id":"1","confidence":0.82},{"id":"2","confidence":0.71},{"id":"3","confidence":0.63}]}.
         Confidence must be between 0 and 1.
         Use only ids that exist in the provided list, ordered from best to third.
@@ -33,27 +51,74 @@ public class AgentController {
     private final OpenAiChatClient chatClient;
     private final ObjectMapper objectMapper;
 
+    @PostMapping("/evaluate")
+    public EvaluationResponse evaluate(@RequestBody EvaluationRequest request) {
+        List<AgentMessage> messages = request.messages() == null ? List.of() : request.messages();
+        String prompt = buildEvaluationPrompt(messages);
+        ChatResponse response = chatClient.call(new Prompt(List.of(
+            new SystemMessage(EVALUATION_SYSTEM_PROMPT),
+            new UserMessage(prompt)
+        )));
+
+        String content = response.getResult().getOutput().getContent();
+        EvaluationResult result = parseEvaluation(content);
+        return new EvaluationResponse(
+            result.endverification(),
+            result.environmentScore(),
+            result.timeScore(),
+            result.financeScore(),
+            result.psychProfile(),
+            result.nextQuestion(),
+            prompt,
+            content == null ? "" : content
+        );
+    }
+
     @PostMapping("/recommend")
     public RecommendationResponse recommend(@RequestBody RecommendationRequest request) {
         List<PetCard> pets = request.pets() == null ? List.of() : request.pets();
         if (pets.isEmpty()) {
-            return new RecommendationResponse(List.of(), "");
+            return new RecommendationResponse(List.of(), "", "");
         }
 
-        String userPrompt = buildUserPrompt(request.questionAnswers(), pets);
+        String userPrompt = buildRecommendationPrompt(request, pets);
         ChatResponse response = chatClient.call(new Prompt(List.of(
-            new SystemMessage(SYSTEM_PROMPT),
+            new SystemMessage(RECOMMEND_SYSTEM_PROMPT),
             new UserMessage(userPrompt)
         )));
 
         String content = response.getResult().getOutput().getContent();
         List<RecommendationItem> items = parseItems(content, pets);
-        return new RecommendationResponse(items, content == null ? "" : content);
+        return new RecommendationResponse(items, content == null ? "" : content, userPrompt);
     }
 
-    private String buildUserPrompt(List<QuestionAnswer> questionAnswers, List<PetCard> pets) {
-        String qaText = formatQuestionAnswers(questionAnswers);
+    private String buildEvaluationPrompt(List<AgentMessage> messages) {
+        String conversation = formatMessages(messages);
+        return """
+            Conversation so far:
+            %s
+            """.formatted(conversation);
+    }
+
+    private String buildRecommendationPrompt(RecommendationRequest request, List<PetCard> pets) {
+        EvaluationSummary evaluation = request.evaluation();
         String petsJson = toJson(pets);
+        if (evaluation != null) {
+            String evaluationJson = toJson(evaluation);
+            String conversation = formatMessages(request.messages());
+            return """
+                Evaluation Summary:
+                %s
+
+                Conversation:
+                %s
+
+                Pet Cards:
+                %s
+                """.formatted(evaluationJson, conversation, petsJson);
+        }
+
+        String qaText = formatQuestionAnswers(request.questionAnswers());
         return """
             User Q&A:
             %s
@@ -85,6 +150,32 @@ public class AgentController {
         return String.join("\n", lines);
     }
 
+    private String formatMessages(List<AgentMessage> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return "No conversation yet.";
+        }
+        List<String> lines = new ArrayList<>();
+        for (AgentMessage message : messages) {
+            if (message == null) {
+                continue;
+            }
+            String content = normalizeText(message.content());
+            if (content == null) {
+                continue;
+            }
+            String role = normalizeText(message.role());
+            String label = "assistant";
+            if ("user".equalsIgnoreCase(role)) {
+                label = "user";
+            }
+            lines.add(label + ": " + content);
+        }
+        if (lines.isEmpty()) {
+            return "No conversation yet.";
+        }
+        return String.join("\n", lines);
+    }
+
     private String normalizeText(String value) {
         if (value == null) {
             return null;
@@ -99,6 +190,88 @@ public class AgentController {
         } catch (JsonProcessingException ex) {
             return String.valueOf(value);
         }
+    }
+
+    private EvaluationResult parseEvaluation(String response) {
+        String cleaned = stripCodeFences(response);
+        try {
+            JsonNode root = objectMapper.readTree(cleaned);
+            boolean endverification = root.path("endverification").asBoolean(false);
+            Double environmentScore = readScore(root.get("environmentScore"));
+            Double timeScore = readScore(root.get("timeScore"));
+            Double financeScore = readScore(root.get("financeScore"));
+            String psychProfile = readText(root.get("psychProfile"));
+            if (psychProfile == null) {
+                psychProfile = readText(root.get("psychologicalProfile"));
+            }
+            String nextQuestion = readText(root.get("nextQuestion"));
+            if (nextQuestion == null) {
+                nextQuestion = readText(root.get("question"));
+            }
+            if (nextQuestion == null) {
+                nextQuestion = readText(root.get("followUp"));
+            }
+            if (nextQuestion == null) {
+                nextQuestion = readText(root.get("next"));
+            }
+
+            if (endverification) {
+                environmentScore = normalizeScore(environmentScore);
+                timeScore = normalizeScore(timeScore);
+                financeScore = normalizeScore(financeScore);
+                if (psychProfile == null) {
+                    psychProfile = "No profile summary provided.";
+                }
+                return new EvaluationResult(true, environmentScore, timeScore, financeScore, psychProfile, null);
+            }
+
+            if (nextQuestion == null) {
+                nextQuestion = fallbackQuestion(cleaned);
+            }
+            return new EvaluationResult(false, null, null, null, null, nextQuestion);
+        } catch (JsonProcessingException ex) {
+            String fallback = fallbackQuestion(cleaned);
+            return new EvaluationResult(false, null, null, null, null, fallback);
+        }
+    }
+
+    private String fallbackQuestion(String cleaned) {
+        String normalized = normalizeText(cleaned);
+        if (normalized == null) {
+            return null;
+        }
+        if (normalized.startsWith("{") || normalized.startsWith("[")) {
+            return null;
+        }
+        return normalized;
+    }
+
+    private Double readScore(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (node.isNumber()) {
+            return node.asDouble();
+        }
+        if (node.isTextual()) {
+            try {
+                return Double.parseDouble(node.asText().trim());
+            } catch (NumberFormatException ex) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private String readText(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (node.isTextual()) {
+            String value = node.asText().trim();
+            return value.isEmpty() ? null : value;
+        }
+        return node.toString();
     }
 
     private List<RecommendationItem> parseItems(String response, List<PetCard> pets) {
@@ -141,6 +314,22 @@ public class AgentController {
             }
         }
         return null;
+    }
+
+    private Double normalizeScore(Double value) {
+        if (value == null) {
+            return 0.5;
+        }
+        double normalized = value;
+        if (normalized > 1 && normalized <= 100) {
+            normalized = normalized / 100.0;
+        }
+        if (normalized < 0) {
+            normalized = 0;
+        } else if (normalized > 1) {
+            normalized = 1;
+        }
+        return normalized;
     }
 
     private List<RecommendationItem> normalizeItems(List<RecommendationItem> items, List<PetCard> pets) {
@@ -211,16 +400,57 @@ public class AgentController {
         return trimmed.trim();
     }
 
-    public record RecommendationRequest(List<QuestionAnswer> questionAnswers, List<PetCard> pets) {
+    public record EvaluationRequest(List<AgentMessage> messages) {
     }
 
-    public record RecommendationResponse(List<RecommendationItem> items, String rawResponse) {
+    public record EvaluationResponse(
+        boolean endverification,
+        Double environmentScore,
+        Double timeScore,
+        Double financeScore,
+        String psychProfile,
+        String nextQuestion,
+        String prompt,
+        String rawResponse
+    ) {
+    }
+
+    public record EvaluationSummary(
+        Double environmentScore,
+        Double timeScore,
+        Double financeScore,
+        String psychProfile
+    ) {
+    }
+
+    public record RecommendationRequest(
+        List<QuestionAnswer> questionAnswers,
+        List<AgentMessage> messages,
+        EvaluationSummary evaluation,
+        List<PetCard> pets
+    ) {
+    }
+
+    public record RecommendationResponse(List<RecommendationItem> items, String rawResponse, String prompt) {
     }
 
     public record QuestionAnswer(String question, String answer) {
     }
 
     public record RecommendationItem(String id, Double confidence) {
+    }
+
+    public record AgentMessage(String role, String content) {
+    }
+
+    private record EvaluationResult(
+        boolean endverification,
+        Double environmentScore,
+        Double timeScore,
+        Double financeScore,
+        String psychProfile,
+        String nextQuestion
+    ) {
     }
 
     public record PetCard(

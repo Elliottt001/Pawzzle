@@ -1,154 +1,247 @@
 import * as React from 'react';
-import { Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { FontAwesome5 } from '@expo/vector-icons';
+import {
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { Feather, FontAwesome5 } from '@expo/vector-icons';
 
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
 
-type Intent = 'adopt' | 'rehome';
-type QuestionAnswer = { question: string; answer: string };
+type ChatRole = 'user' | 'ai' | 'debug';
+
+type ChatMessage = {
+  id: string;
+  role: ChatRole;
+  content: string;
+};
+
+type AgentMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+type EvaluationResponse = {
+  endverification: boolean;
+  environmentScore?: number | null;
+  timeScore?: number | null;
+  financeScore?: number | null;
+  psychProfile?: string | null;
+  nextQuestion?: string | null;
+  prompt?: string | null;
+  rawResponse?: string | null;
+};
+
+type EvaluationSummary = {
+  environmentScore: number;
+  timeScore: number;
+  financeScore: number;
+  psychProfile: string;
+};
+
 type AgentDecisionItem = { id: string; confidence?: number };
-type AgentDecisionResponse = { items: AgentDecisionItem[]; rawResponse?: string };
+
+type AgentDecisionResponse = {
+  items: AgentDecisionItem[];
+  rawResponse?: string;
+  prompt?: string;
+};
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 
-const colorOptions = ['Golden', 'Black', 'White', 'Mixed'];
-const personalityOptions = ['Calm', 'Playful', 'Independent', 'Smart'];
-const expectationOptions = ['Good with cats', 'Low shed', 'Easy to train', 'No preference'];
+const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 export default function AgentScreen() {
-  const [intent, setIntent] = React.useState<Intent | null>(null);
-  const [color, setColor] = React.useState<string | null>(null);
-  const [personality, setPersonality] = React.useState<string | null>(null);
-  const [expectation, setExpectation] = React.useState<string | null>(null);
+  const [messages, setMessages] = React.useState<ChatMessage[]>([]);
+  const [input, setInput] = React.useState('');
+  const [status, setStatus] = React.useState<'idle' | 'evaluating' | 'recommending' | 'error'>(
+    'idle'
+  );
   const [petCards, setPetCards] = React.useState<PetCardData[]>([]);
   const [petCardsStatus, setPetCardsStatus] = React.useState<'loading' | 'ready' | 'error'>(
     'loading'
   );
-  const [petCardsError, setPetCardsError] = React.useState<string | null>(null);
-  const [recommendationStatus, setRecommendationStatus] = React.useState<
-    'idle' | 'loading' | 'done' | 'error'
-  >('idle');
+  const [evaluation, setEvaluation] = React.useState<EvaluationSummary | null>(null);
   const [recommendedItems, setRecommendedItems] = React.useState<AgentDecisionItem[]>([]);
-  const [modelRawResponse, setModelRawResponse] = React.useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const scrollRef = React.useRef<ScrollView | null>(null);
+  const hasStartedRef = React.useRef(false);
 
-  React.useEffect(() => {
-    let isActive = true;
-    setPetCardsStatus('loading');
-    setPetCardsError(null);
+  const isBusy = status === 'evaluating' || status === 'recommending';
+  const canSend = input.trim().length > 0 && !isBusy && !evaluation;
 
-    fetch(`${API_BASE_URL}/api/pets`)
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error('Failed to load pet cards');
-        }
-        return (await response.json()) as PetCardData[];
-      })
-      .then((data) => {
-        if (!isActive) {
-          return;
-        }
-        setPetCards(data ?? []);
-        setPetCardsStatus('ready');
-      })
-      .catch((error) => {
-        if (!isActive) {
-          return;
-        }
-        const message = error instanceof Error ? error.message : 'Failed to load pet cards';
-        setPetCardsStatus('error');
-        setPetCardsError(message);
-      });
-
-    return () => {
-      isActive = false;
-    };
+  const appendMessage = React.useCallback((role: ChatRole, content: string) => {
+    setMessages((prev) => [...prev, { id: createId(), role, content }]);
   }, []);
 
+  const appendDebug = React.useCallback(
+    (title: string, payload?: string | null) => {
+      const normalized = payload && payload.trim().length > 0 ? payload : '[empty]';
+      appendMessage('debug', `${title}\n${normalized}`);
+    },
+    [appendMessage]
+  );
+
+  const buildAgentMessages = React.useCallback((items: ChatMessage[]) => {
+    return items
+      .filter((item) => item.role !== 'debug')
+      .map<AgentMessage>((item) => ({
+        role: item.role === 'user' ? 'user' : 'assistant',
+        content: item.content,
+      }));
+  }, []);
+
+  const formatEvaluationSummary = React.useCallback((summary: EvaluationSummary) => {
+    return [
+      'Evaluation complete:',
+      `Living environment & safety: ${summary.environmentScore.toFixed(2)}`,
+      `Time & energy cost: ${summary.timeScore.toFixed(2)}`,
+      `Financial support: ${summary.financeScore.toFixed(2)}`,
+      `Psychological expectations: ${summary.psychProfile}`,
+    ].join('\n');
+  }, []);
+
+  const loadPetCards = React.useCallback(async () => {
+    if (petCardsStatus === 'ready' && petCards.length) {
+      return petCards;
+    }
+    setPetCardsStatus('loading');
+    try {
+      const data = await getJson<PetCardData[]>('/api/pets');
+      setPetCards(data ?? []);
+      setPetCardsStatus('ready');
+      return data ?? [];
+    } catch (error) {
+      setPetCardsStatus('error');
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to load pet cards');
+      return [] as PetCardData[];
+    }
+  }, [petCards, petCardsStatus]);
+
   React.useEffect(() => {
-    scrollRef.current?.scrollToEnd({ animated: true });
-  }, [intent, color, personality, expectation, recommendationStatus]);
+    loadPetCards();
+  }, [loadPetCards]);
 
   React.useEffect(() => {
-    if (intent !== 'adopt' || !color || !personality || !expectation) {
+    if (hasStartedRef.current) {
       return;
     }
+    hasStartedRef.current = true;
+    setStatus('evaluating');
+    setErrorMessage(null);
 
-    if (petCardsStatus === 'loading') {
-      setRecommendationStatus('loading');
-      return;
-    }
-
-    if (petCardsStatus === 'error' || !petCards.length) {
-      setRecommendationStatus('error');
-      setModelRawResponse(petCardsError ?? 'No pet cards available yet.');
-      setRecommendedItems([]);
-      return;
-    }
-
-    const questionAnswers: QuestionAnswer[] = [
-      { question: 'Do you want to adopt or rehome?', answer: intent === 'adopt' ? 'Adopt a pet' : 'Rehome a pet' },
-      { question: 'What coat color do you like?', answer: color },
-      { question: 'What personality do you like?', answer: personality },
-      { question: 'Any other expectations?', answer: expectation },
-    ];
-
-    let isActive = true;
-    const fallbackItems = petCards.slice(0, 3).map((pet) => ({ id: pet.id, confidence: 0.5 }));
-
-    setRecommendationStatus('loading');
-    setRecommendedItems([]);
-    setModelRawResponse(null);
-
-    request<AgentDecisionResponse>('/api/agent/recommend', {
-      questionAnswers,
-      pets: petCards,
-    })
+    requestEvaluation([])
       .then((data) => {
-        if (!isActive) {
-          return;
-        }
-        const items = data?.items?.length ? data.items : fallbackItems;
-        setRecommendedItems(items);
-        setModelRawResponse(data?.rawResponse ?? '');
-        setRecommendationStatus('done');
-      })
-      .catch(() => {
-        if (!isActive) {
-          return;
-        }
-        setRecommendedItems(fallbackItems);
-        setModelRawResponse(null);
-        setRecommendationStatus('error');
-      });
+        appendDebug('DEBUG: evaluation prompt', data?.prompt ?? '');
+        appendDebug('DEBUG: evaluation response', data?.rawResponse ?? '');
 
-    return () => {
-      isActive = false;
+        if (data?.endverification) {
+          const summary = buildEvaluationSummary(data);
+          setEvaluation(summary);
+          appendMessage('ai', formatEvaluationSummary(summary));
+          setStatus('recommending');
+          return loadPetCards().then((pets) => requestRecommendation(summary, [], pets)).then((decision) => {
+            appendDebug('DEBUG: recommend prompt', decision?.prompt ?? '');
+            appendDebug('DEBUG: recommend response', decision?.rawResponse ?? '');
+            setRecommendedItems(decision?.items ?? []);
+          });
+        }
+
+        const nextQuestion = data?.nextQuestion?.trim();
+        if (nextQuestion) {
+          appendMessage('ai', nextQuestion);
+        } else {
+          appendDebug('DEBUG: evaluation missing nextQuestion', data?.rawResponse ?? '');
+        }
+        return undefined;
+      })
+      .catch((error) => {
+        setStatus('error');
+        setErrorMessage(error instanceof Error ? error.message : 'Failed to start the chat');
+      })
+      .finally(() => {
+        setStatus('idle');
+      });
+  }, [appendDebug, appendMessage, buildEvaluationSummary, formatEvaluationSummary]);
+
+  React.useEffect(() => {
+    const timeout = setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 0);
+    return () => clearTimeout(timeout);
+  }, [messages, recommendedItems]);
+
+  const handleSend = async () => {
+    const trimmed = input.trim();
+    if (!trimmed || isBusy || evaluation) {
+      return;
+    }
+
+    const userMessage: ChatMessage = {
+      id: createId(),
+      role: 'user',
+      content: trimmed,
     };
-  }, [intent, color, personality, expectation, petCards, petCardsStatus, petCardsError]);
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInput('');
+    setStatus('evaluating');
+    setErrorMessage(null);
+
+    const nextMessages = [...messages, userMessage];
+
+    try {
+      const data = await requestEvaluation(buildAgentMessages(nextMessages));
+      appendDebug('DEBUG: evaluation prompt', data?.prompt ?? '');
+      appendDebug('DEBUG: evaluation response', data?.rawResponse ?? '');
+
+      if (data?.endverification) {
+        const summary = buildEvaluationSummary(data);
+        setEvaluation(summary);
+        appendMessage('ai', formatEvaluationSummary(summary));
+
+        setStatus('recommending');
+        const pets = await loadPetCards();
+        const decision = await requestRecommendation(summary, buildAgentMessages(nextMessages), pets);
+        appendDebug('DEBUG: recommend prompt', decision?.prompt ?? '');
+        appendDebug('DEBUG: recommend response', decision?.rawResponse ?? '');
+        setRecommendedItems(decision?.items ?? []);
+      } else {
+        const nextQuestion = data?.nextQuestion?.trim();
+        if (nextQuestion) {
+          appendMessage('ai', nextQuestion);
+        } else {
+          appendDebug('DEBUG: evaluation missing nextQuestion', data?.rawResponse ?? '');
+        }
+      }
+    } catch (error) {
+      setStatus('error');
+      setErrorMessage(error instanceof Error ? error.message : 'Something went wrong.');
+    } finally {
+      setStatus('idle');
+    }
+  };
 
   const visiblePets = React.useMemo(() => {
-    if (recommendationStatus === 'loading' || recommendationStatus === 'idle') {
-      return [] as { pet: PetCardData; confidence?: number }[];
-    }
-    if (!petCards.length) {
+    if (!recommendedItems.length || !petCards.length) {
       return [] as { pet: PetCardData; confidence?: number }[];
     }
     const petById = new Map(petCards.map((pet) => [pet.id, pet]));
-    const selected = recommendedItems
+    return recommendedItems
       .map((item) => {
         const pet = petById.get(item.id);
         return pet ? { pet, confidence: item.confidence } : null;
       })
       .filter((item): item is { pet: PetCardData; confidence?: number } => Boolean(item));
-    if (selected.length) {
-      return selected;
-    }
-    return petCards.slice(0, 3).map((pet) => ({ pet, confidence: 0.5 }));
-  }, [recommendationStatus, recommendedItems, petCards]);
+  }, [petCards, recommendedItems]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -164,170 +257,133 @@ export default function AgentScreen() {
       </View>
 
       <ScrollView ref={scrollRef} contentContainerStyle={styles.chatList}>
-        <ChatBubble role="ai" text="Do you want to adopt or rehome?" />
-        {!intent ? (
-          <View style={styles.optionRow}>
-            <OptionButton label="Adopt a pet" variant="primary" onPress={() => setIntent('adopt')} />
-            <OptionButton label="Rehome a pet" variant="outline" onPress={() => setIntent('rehome')} />
+        {messages.map((message) => (
+          <ChatBubble key={message.id} role={message.role} text={message.content} />
+        ))}
+
+        {status === 'evaluating' ? (
+          <ChatBubble role="ai" text="Reviewing your details..." />
+        ) : null}
+        {status === 'recommending' ? (
+          <ChatBubble role="ai" text="Picking the best matches..." />
+        ) : null}
+
+        {errorMessage ? <ChatBubble role="debug" text={`Error: ${errorMessage}`} /> : null}
+
+        {evaluation && petCardsStatus === 'error' ? (
+          <ChatBubble role="debug" text="Pet cards are unavailable right now." />
+        ) : null}
+
+        {visiblePets.length ? (
+          <View style={styles.matchList}>
+            {visiblePets.map(({ pet, confidence }) => (
+              <PetCard key={pet.id} pet={pet} confidence={confidence} />
+            ))}
           </View>
         ) : null}
-
-        {intent ? (
-          <ChatBubble role="user" text={intent === 'adopt' ? 'Adopt a pet' : 'Rehome a pet'} />
-        ) : null}
-
-        {intent === 'rehome' ? (
-          <ChatBubble
-            role="ai"
-            text="Rehome flow is coming soon. For now, I can help with adoption."
-          />
-        ) : null}
-
-        {intent === 'adopt' ? (
-          <>
-            <ChatBubble role="ai" text="What coat color do you like?" />
-            {!color ? (
-              <View style={styles.optionRow}>
-                {colorOptions.map((option) => (
-                  <OptionButton
-                    key={option}
-                    label={option}
-                    variant="chip"
-                    onPress={() => setColor(option)}
-                  />
-                ))}
-              </View>
-            ) : (
-              <ChatBubble role="user" text={color} />
-            )}
-
-            {color ? (
-              <>
-                <ChatBubble role="ai" text="What personality do you like?" />
-                {!personality ? (
-                  <View style={styles.optionRow}>
-                    {personalityOptions.map((option) => (
-                      <OptionButton
-                        key={option}
-                        label={option}
-                        variant="chip"
-                        onPress={() => setPersonality(option)}
-                      />
-                    ))}
-                  </View>
-                ) : (
-                  <ChatBubble role="user" text={personality} />
-                )}
-              </>
-            ) : null}
-
-            {personality ? (
-              <>
-                <ChatBubble role="ai" text="Any other expectations?" />
-                {!expectation ? (
-                  <View style={styles.optionRow}>
-                    {expectationOptions.map((option) => (
-                      <OptionButton
-                        key={option}
-                        label={option}
-                        variant="chip"
-                        onPress={() => setExpectation(option)}
-                      />
-                    ))}
-                  </View>
-                ) : (
-                  <ChatBubble role="user" text={expectation} />
-                )}
-              </>
-            ) : null}
-
-            {expectation ? (
-              <>
-                <ChatBubble
-                  role="ai"
-                  text={
-                    recommendationStatus === 'loading'
-                      ? 'Picking the best matches for you...'
-                      : recommendationStatus === 'error'
-                        ? 'I could not load matches yet. Please try again soon.'
-                        : 'Here are your top matches.'
-                  }
-                />
-                {recommendationStatus === 'loading' ? null : (
-                  <>
-                    <View style={styles.matchList}>
-                      {visiblePets.map(({ pet, confidence }) => (
-                        <PetCard key={pet.id} pet={pet} confidence={confidence} />
-                      ))}
-                    </View>
-                    {modelRawResponse !== null ? (
-                      <ChatBubble role="ai" text={modelRawResponse} />
-                    ) : null}
-                  </>
-                )}
-              </>
-            ) : null}
-          </>
-        ) : null}
       </ScrollView>
+
+      {!evaluation ? (
+        <View style={styles.inputDock}>
+          <View style={styles.inputRow}>
+            <TextInput
+              value={input}
+              onChangeText={setInput}
+              placeholder="Share details about your home and lifestyle..."
+              placeholderTextColor="#9CA3AF"
+              style={styles.input}
+              returnKeyType="send"
+              onSubmitEditing={handleSend}
+              editable={!isBusy}
+            />
+            <Pressable
+              onPress={handleSend}
+              disabled={!canSend}
+              style={({ pressed }) => [
+                styles.sendButton,
+                !canSend && styles.sendButtonDisabled,
+                pressed && canSend && styles.sendButtonPressed,
+              ]}>
+              <Feather name="send" size={18} color="#FFFFFF" />
+            </Pressable>
+          </View>
+          <Text style={styles.helperText}>
+            The agent will keep asking until the profile is complete.
+          </Text>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
 
-function ChatBubble({ role, text }: { role: 'user' | 'ai'; text: string }) {
+function ChatBubble({ role, text }: { role: ChatRole; text: string }) {
   const isUser = role === 'user';
+  const isDebug = role === 'debug';
+
   return (
-    <View style={[styles.messageRow, isUser ? styles.messageRowUser : styles.messageRowAi]}>
-      {!isUser ? (
+    <View
+      style={[
+        styles.messageRow,
+        isUser ? styles.messageRowUser : styles.messageRowAi,
+        isDebug && styles.messageRowDebug,
+      ]}>
+      {!isUser && !isDebug ? (
         <View style={styles.avatar}>
           <FontAwesome5 name="paw" size={16} color="#15803D" />
         </View>
       ) : null}
-      <View style={[styles.bubble, isUser ? styles.userBubble : styles.aiBubble]}>
-        <Text style={[styles.messageText, isUser ? styles.userText : styles.aiText]}>{text}</Text>
+      <View
+        style={[
+          styles.bubble,
+          isUser && styles.userBubble,
+          isDebug && styles.debugBubble,
+          !isUser && !isDebug && styles.aiBubble,
+        ]}>
+        <Text
+          style={[
+            styles.messageText,
+            isUser && styles.userText,
+            isDebug && styles.debugText,
+            !isUser && !isDebug && styles.aiText,
+          ]}>
+          {text}
+        </Text>
       </View>
     </View>
   );
 }
 
-function OptionButton({
-  label,
-  variant,
-  onPress,
-}: {
-  label: string;
-  variant: 'primary' | 'outline' | 'chip';
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.optionButton,
-        variant === 'primary' && styles.optionPrimary,
-        variant === 'outline' && styles.optionOutline,
-        variant === 'chip' && styles.optionChip,
-        pressed && styles.optionPressed,
-      ]}>
-      <Text
-        style={[
-          styles.optionText,
-          variant === 'primary' && styles.optionTextPrimary,
-          variant === 'outline' && styles.optionTextOutline,
-        ]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
+async function requestEvaluation(messages: AgentMessage[]) {
+  return postJson<EvaluationResponse>('/api/agent/evaluate', { messages });
 }
 
-async function request<T = unknown>(path: string, payload?: Record<string, unknown>) {
+async function requestRecommendation(
+  summary: EvaluationSummary,
+  messages: AgentMessage[],
+  pets: PetCardData[]
+) {
+  return postJson<AgentDecisionResponse>('/api/agent/recommend', {
+    messages,
+    evaluation: summary,
+    pets,
+  });
+}
+
+async function getJson<T = unknown>(path: string) {
+  const response = await fetch(`${API_BASE_URL}${path}`);
+  if (!response.ok) {
+    throw new Error(response.statusText || 'Request failed');
+  }
+  return (await response.json()) as T;
+}
+
+async function postJson<T = unknown>(path: string, payload: Record<string, unknown>) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: payload ? JSON.stringify(payload) : undefined,
+    body: JSON.stringify(payload),
   });
 
   if (response.status === 204) {
@@ -353,6 +409,22 @@ async function request<T = unknown>(path: string, payload?: Record<string, unkno
   }
 
   return data;
+}
+
+function buildEvaluationSummary(data: EvaluationResponse): EvaluationSummary {
+  return {
+    environmentScore: clampScore(data.environmentScore),
+    timeScore: clampScore(data.timeScore),
+    financeScore: clampScore(data.financeScore),
+    psychProfile: data.psychProfile?.trim() || 'No profile summary provided.',
+  };
+}
+
+function clampScore(value?: number | null) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return 0.5;
+  }
+  return Math.max(0, Math.min(1, value));
 }
 
 const styles = StyleSheet.create({
@@ -418,6 +490,9 @@ const styles = StyleSheet.create({
   messageRowAi: {
     justifyContent: 'flex-start',
   },
+  messageRowDebug: {
+    justifyContent: 'flex-start',
+  },
   avatar: {
     width: 34,
     height: 34,
@@ -430,7 +505,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   bubble: {
-    maxWidth: '78%',
+    maxWidth: '80%',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 18,
@@ -450,6 +525,12 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 2,
   },
+  debugBubble: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderTopLeftRadius: 6,
+  },
   messageText: {
     fontSize: 15,
     lineHeight: 20,
@@ -460,47 +541,61 @@ const styles = StyleSheet.create({
   aiText: {
     color: '#111827',
   },
-  optionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    paddingLeft: 42,
-    marginBottom: 12,
-  },
-  optionButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  optionPrimary: {
-    backgroundColor: '#157B57',
-    borderColor: '#157B57',
-  },
-  optionOutline: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderColor: '#EFE3D6',
-  },
-  optionChip: {
-    backgroundColor: '#F3F4F6',
-    borderColor: '#E5E7EB',
-  },
-  optionPressed: {
-    transform: [{ scale: 0.98 }],
-  },
-  optionText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  optionTextPrimary: {
-    color: '#FFFFFF',
-  },
-  optionTextOutline: {
-    color: '#1F2937',
+  debugText: {
+    color: '#4B5563',
+    fontSize: 12,
+    lineHeight: 16,
   },
   matchList: {
     marginTop: 6,
     gap: 14,
+  },
+  inputDock: {
+    borderTopWidth: 1,
+    borderTopColor: '#EFEAE3',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 12,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  input: {
+    flex: 1,
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: '#EEE6DC',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: '#111827',
+  },
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#157B57',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  sendButtonDisabled: {
+    opacity: 0.5,
+  },
+  sendButtonPressed: {
+    transform: [{ scale: 0.97 }],
+  },
+  helperText: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#6B7280',
   },
 });
