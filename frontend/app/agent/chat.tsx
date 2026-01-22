@@ -1,97 +1,98 @@
 import * as React from 'react';
 import {
+  FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { Theme } from '../../constants/theme';
-
-const AI_RESPONSE_DELAY_MS = 600;
-
-const MOCK_PET = {
-  name: '麻糬',
-  breed: '英短',
-  age: '2岁',
-  distance: '3公里',
-  housing: '适合公寓',
-  reason: '基于距离与居住条件匹配',
-};
+import { streamAiResponse } from '../../services/aiStream';
 
 type ChatMessage = {
   id: string;
-  role: 'user' | 'ai';
   text: string;
-  showCard?: boolean;
+  isUser: boolean;
 };
 
 const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-export default function AgentChatScreen() {
-  const router = useRouter();
-  const scrollRef = React.useRef<ScrollView | null>(null);
-  const typingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+export default function ChatScreen() {
+  const listRef = React.useRef<FlatList<ChatMessage> | null>(null);
+  const streamRef = React.useRef<ReturnType<typeof streamAiResponse> | null>(null);
+  const streamingTextRef = React.useRef('');
 
-  const [messages, setMessages] = React.useState<ChatMessage[]>([
-    {
-      id: 'intro',
-      role: 'ai',
-      text: '请描述你的居住情况和日常作息，方便匹配。',
-    },
-  ]);
+  const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [input, setInput] = React.useState('');
-  const [isTyping, setIsTyping] = React.useState(false);
+  const [streamingText, setStreamingText] = React.useState('');
+  const [isStreaming, setIsStreaming] = React.useState(false);
 
-  const canSend = input.trim().length > 0 && !isTyping;
+  const canSend = input.trim().length > 0 && !isStreaming;
+
+  const finalizeStream = React.useCallback(() => {
+    const finalText = streamingTextRef.current;
+    if (finalText) {
+      setMessages((prev) => [...prev, { id: createId(), text: finalText, isUser: false }]);
+    }
+    streamingTextRef.current = '';
+    setStreamingText('');
+    setIsStreaming(false);
+    if (streamRef.current) {
+      streamRef.current.close();
+      streamRef.current = null;
+    }
+  }, []);
 
   const handleSend = () => {
     const trimmed = input.trim();
-    if (!trimmed || isTyping) {
+    if (!trimmed || isStreaming) {
       return;
     }
 
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: createId(),
-        role: 'user',
-        text: trimmed,
-      },
-    ]);
+    setMessages((prev) => [...prev, { id: createId(), text: trimmed, isUser: true }]);
     setInput('');
-    setIsTyping(true);
+    setIsStreaming(true);
+    streamingTextRef.current = '';
+    setStreamingText('');
 
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
+    if (streamRef.current) {
+      streamRef.current.close();
     }
-    typingTimeoutRef.current = setTimeout(() => {
-      setIsTyping(false);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: createId(),
-          role: 'ai',
-          text: MOCK_PET.reason,
-          showCard: true,
-        },
-      ]);
-    }, AI_RESPONSE_DELAY_MS);
+
+    streamRef.current = streamAiResponse(
+      trimmed,
+      (chunk) => {
+        setStreamingText((prev) => {
+          const next = prev + chunk;
+          streamingTextRef.current = next;
+          return next;
+        });
+      },
+      () => {
+        finalizeStream();
+      },
+      () => {
+        finalizeStream();
+      }
+    );
   };
 
   React.useEffect(() => {
-    scrollRef.current?.scrollToEnd({ animated: true });
-  }, [messages, isTyping]);
+    const frame = requestAnimationFrame(() => {
+      listRef.current?.scrollToEnd({ animated: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [messages, streamingText, isStreaming]);
 
   React.useEffect(() => {
     return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
+      if (streamRef.current) {
+        streamRef.current.close();
+        streamRef.current = null;
       }
     };
   }, []);
@@ -106,30 +107,37 @@ export default function AgentChatScreen() {
           <Text style={styles.subtitle}>描述你的需求，我们将给出推荐。</Text>
         </View>
 
-        <ScrollView
-          ref={scrollRef}
+        <FlatList
+          ref={listRef}
+          data={messages}
           contentContainerStyle={styles.chatList}
-          keyboardShouldPersistTaps="handled">
-          {messages.map((message) => {
-            const isUser = message.role === 'user';
+          keyboardShouldPersistTaps="handled"
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => {
             return (
               <View
-                key={message.id}
-                style={[styles.messageRow, isUser ? styles.messageRowUser : styles.messageRowAi]}>
-                <View style={[styles.bubble, isUser ? styles.userBubble : styles.aiBubble]}>
-                  <Text style={[styles.messageText, isUser ? styles.userText : styles.aiText]}>
-                    {message.text}
+                style={[
+                  styles.messageRow,
+                  item.isUser ? styles.messageRowUser : styles.messageRowAi,
+                ]}>
+                <View style={[styles.bubble, item.isUser ? styles.userBubble : styles.aiBubble]}>
+                  <Text style={[styles.messageText, item.isUser ? styles.userText : styles.aiText]}>
+                    {item.text}
                   </Text>
                 </View>
-                {message.showCard ? (
-                  <PetRecommendationCard onPress={() => router.push('/pet/profile')} />
-                ) : null}
               </View>
             );
-          })}
-
-          {isTyping ? <Text style={styles.typingText}>分析中...</Text> : null}
-        </ScrollView>
+          }}
+          ListFooterComponent={
+            isStreaming ? (
+              <View style={[styles.messageRow, styles.messageRowAi]}>
+                <View style={[styles.bubble, styles.aiBubble]}>
+                  <Text style={[styles.messageText, styles.aiText]}>{streamingText}</Text>
+                </View>
+              </View>
+            ) : null
+          }
+        />
 
         <View style={styles.inputDock}>
           <View style={styles.inputRow}>
@@ -141,6 +149,7 @@ export default function AgentChatScreen() {
               style={styles.input}
               returnKeyType="send"
               onSubmitEditing={handleSend}
+              editable={!isStreaming}
             />
             <Pressable
               onPress={handleSend}
@@ -156,30 +165,6 @@ export default function AgentChatScreen() {
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
-  );
-}
-
-function PetRecommendationCard({ onPress }: { onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
-      <Text style={styles.cardTitle}>{MOCK_PET.name}</Text>
-      <Text style={styles.cardMeta}>
-        {MOCK_PET.breed} - {MOCK_PET.age}
-      </Text>
-      <View style={styles.cardDetailRow}>
-        <Text style={styles.cardDetailLabel}>距离</Text>
-        <Text style={styles.cardDetailValue}>{MOCK_PET.distance}</Text>
-      </View>
-      <View style={styles.cardDetailRow}>
-        <Text style={styles.cardDetailLabel}>居住情况</Text>
-        <Text style={styles.cardDetailValue}>{MOCK_PET.housing}</Text>
-      </View>
-      <View style={styles.cardTag}>
-        <Text style={styles.cardTagText}>{MOCK_PET.reason}</Text>
-      </View>
-    </Pressable>
   );
 }
 
@@ -244,58 +229,6 @@ const styles = StyleSheet.create({
   },
   aiText: {
     color: Theme.colors.text,
-  },
-  typingText: {
-    color: Theme.colors.textSecondary,
-    fontSize: Theme.typography.size.s12,
-  },
-  card: {
-    width: Theme.percent.p80,
-    backgroundColor: Theme.colors.cardTranslucentSoft,
-    borderRadius: Theme.layout.radius,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarm,
-    padding: Theme.spacing.m,
-    gap: Theme.spacing.s,
-  },
-  cardPressed: {
-    transform: [{ scale: Theme.scale.pressedSoft }],
-  },
-  cardTitle: {
-    color: Theme.colors.text,
-    fontSize: Theme.typography.size.s18,
-    fontWeight: Theme.typography.weight.semiBold,
-  },
-  cardMeta: {
-    color: Theme.colors.textSecondary,
-    fontSize: Theme.typography.size.s13,
-  },
-  cardDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  cardDetailLabel: {
-    color: Theme.colors.textSubtle,
-    fontSize: Theme.typography.size.s12,
-  },
-  cardDetailValue: {
-    color: Theme.colors.text,
-    fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
-  },
-  cardTag: {
-    alignSelf: 'flex-start',
-    backgroundColor: Theme.colors.surfaceNeutral,
-    borderRadius: Theme.layout.radius,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderNeutral,
-    paddingVertical: Theme.spacing.s,
-    paddingHorizontal: Theme.spacing.m,
-  },
-  cardTagText: {
-    color: Theme.colors.text,
-    fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
   },
   inputDock: {
     borderTopWidth: Theme.borderWidth.hairline,
