@@ -30,20 +30,15 @@ type AgentMessage = {
 
 type EvaluationResponse = {
   endverification: boolean;
-  environmentScore?: number | null;
-  timeScore?: number | null;
-  financeScore?: number | null;
-  psychProfile?: string | null;
+  profile?: string | null;
+  nextQuestions?: string[] | null;
   nextQuestion?: string | null;
   prompt?: string | null;
   rawResponse?: string | null;
 };
 
 type EvaluationSummary = {
-  environmentScore: number;
-  timeScore: number;
-  financeScore: number;
-  psychProfile: string;
+  profile: string;
 };
 
 type AgentDecisionItem = { id: string; confidence?: number };
@@ -73,6 +68,7 @@ export default function AgentScreen() {
     'loading'
   );
   const [evaluation, setEvaluation] = React.useState<EvaluationSummary | null>(null);
+  const [pendingQuestions, setPendingQuestions] = React.useState<string[]>([]);
   const [recommendedItems, setRecommendedItems] = React.useState<AgentDecisionItem[]>([]);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const scrollRef = React.useRef<ScrollView | null>(null);
@@ -105,10 +101,7 @@ export default function AgentScreen() {
   const formatEvaluationSummary = React.useCallback((summary: EvaluationSummary) => {
     return [
       '评估完成：',
-      `居住环境与安全：${summary.environmentScore.toFixed(2)}`,
-      `时间与精力成本：${summary.timeScore.toFixed(2)}`,
-      `经济支持：${summary.financeScore.toFixed(2)}`,
-      `心理预期：${summary.psychProfile}`,
+      summary.profile,
     ].join('\n');
   }, []);
 
@@ -150,6 +143,7 @@ export default function AgentScreen() {
         if (data?.endverification) {
           const summary = buildEvaluationSummary(data);
           setEvaluation(summary);
+          setPendingQuestions([]);
           appendMessage('ai', formatEvaluationSummary(summary));
           setStatus('recommending');
           return loadPetCards().then((pets) => requestRecommendation(summary, [], pets)).then((decision) => {
@@ -159,9 +153,11 @@ export default function AgentScreen() {
           });
         }
 
-        const nextQuestion = data?.nextQuestion?.trim();
-        if (nextQuestion) {
-          appendMessage('ai', nextQuestion);
+        const questions = normalizeQuestions(data);
+        if (questions.length) {
+          const [first, ...rest] = questions;
+          setPendingQuestions(rest);
+          appendMessage('ai', first);
         } else {
           appendDebug('调试：评估缺少下一问', data?.rawResponse ?? '');
         }
@@ -198,9 +194,16 @@ export default function AgentScreen() {
 
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
-    setStatus('evaluating');
     setErrorMessage(null);
 
+    if (pendingQuestions.length) {
+      const [nextQuestion, ...rest] = pendingQuestions;
+      setPendingQuestions(rest);
+      appendMessage('ai', nextQuestion);
+      return;
+    }
+
+    setStatus('evaluating');
     const nextMessages = [...messages, userMessage];
 
     try {
@@ -211,6 +214,7 @@ export default function AgentScreen() {
       if (data?.endverification) {
         const summary = buildEvaluationSummary(data);
         setEvaluation(summary);
+        setPendingQuestions([]);
         appendMessage('ai', formatEvaluationSummary(summary));
 
         setStatus('recommending');
@@ -220,9 +224,11 @@ export default function AgentScreen() {
         appendDebug('调试：推荐响应', decision?.rawResponse ?? '');
         setRecommendedItems(decision?.items ?? []);
       } else {
-        const nextQuestion = data?.nextQuestion?.trim();
-        if (nextQuestion) {
-          appendMessage('ai', nextQuestion);
+        const questions = normalizeQuestions(data);
+        if (questions.length) {
+          const [first, ...rest] = questions;
+          setPendingQuestions(rest);
+          appendMessage('ai', first);
         } else {
           appendDebug('调试：评估缺少下一问', data?.rawResponse ?? '');
         }
@@ -295,7 +301,7 @@ export default function AgentScreen() {
             <TextInput
               value={input}
               onChangeText={setInput}
-              placeholder="请描述你的居住情况和生活方式..."
+              placeholder="请用自己的话回答问题..."
               placeholderTextColor={Theme.colors.placeholder}
               style={styles.input}
               returnKeyType="send"
@@ -313,7 +319,7 @@ export default function AgentScreen() {
               <Feather name="send" size={Theme.sizes.s18} color={Theme.colors.textInverse} />
             </Pressable>
           </View>
-          <Text style={styles.helperText}>顾问会持续提问直到资料完善。</Text>
+          <Text style={styles.helperText}>顾问会分批提问（共15题）直到资料完善。</Text>
         </View>
       ) : null}
     </SafeAreaView>
@@ -417,18 +423,27 @@ async function postJson<T = unknown>(path: string, payload: Record<string, unkno
 
 function buildEvaluationSummary(data: EvaluationResponse): EvaluationSummary {
   return {
-    environmentScore: clampScore(data.environmentScore),
-    timeScore: clampScore(data.timeScore),
-    financeScore: clampScore(data.financeScore),
-    psychProfile: data.psychProfile?.trim() || '暂无评估总结。',
+    profile: data.profile?.trim() || '暂无评估总结。',
   };
 }
 
-function clampScore(value?: number | null) {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return 0.5;
+function normalizeQuestions(data?: EvaluationResponse | null) {
+  if (!data) {
+    return [];
   }
-  return Math.max(0, Math.min(1, value));
+  const fromList = Array.isArray(data.nextQuestions) ? data.nextQuestions : [];
+  const raw = fromList.length ? fromList : data.nextQuestion ? [data.nextQuestion] : [];
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const trimmed = typeof item === 'string' ? item.trim() : '';
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+    seen.add(trimmed);
+    result.push(trimmed);
+  }
+  return result;
 }
 
 const styles = StyleSheet.create({

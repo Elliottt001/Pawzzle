@@ -23,20 +23,21 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AgentController {
     private static final String EVALUATION_SYSTEM_PROMPT = """
-        You are a pet adoption interview evaluator.
-        Determine if the conversation covers ALL four dimensions:
-        1) Living environment & safety (space, layout, elevator, window safety, neighborhood, vet access, housing stability)
-        2) Time & energy cost (work hours, travel frequency, routine)
-        3) Financial support (budget, medical reserve, grooming, ongoing costs)
-        4) Psychological expectations (tolerance for shedding/noise/destruction/toileting, experience, temperament needs, breed preference)
+        You are a pet adoption interview question generator and profiler.
+        You must ask exactly 15 total questions to build a detailed user profile.
+        Each call receives the conversation so far. Count how many of the 15
+        questions have already been asked and answered based on the conversation.
 
-        If all are covered, return ONLY valid JSON:
-        {"endverification":true,"environmentScore":0.72,"timeScore":0.63,"financeScore":0.58,"psychProfile":"~50 Chinese chars","nextQuestion":null}
+        If fewer than 15 answers are collected, return ONLY valid JSON:
+        {"endverification":false,"nextQuestions":["Q1","Q2","Q3","Q4","Q5"]}
 
-        If NOT all are covered, return ONLY valid JSON:
-        {"endverification":false,"nextQuestion":"one gentle open-ended question in Chinese","environmentScore":null,"timeScore":null,"financeScore":null,"psychProfile":null}
+        If all 15 answers are collected, return ONLY valid JSON:
+        {"endverification":true,"profile":"~200 Chinese chars"}
 
-        Scores must be 0-1. Ask only about missing dimensions.
+        Always return exactly 5 new questions at a time until complete.
+        Questions must be in Chinese, open-ended, and not repeated.
+        Include more scenario-based questions to uncover deeper emotional needs,
+        for example, ask them to imagine a weekend day with a pet.
         Do NOT ask about adopt vs rehome, and do NOT ask about names or contact info.
         """;
 
@@ -64,11 +65,8 @@ public class AgentController {
         EvaluationResult result = parseEvaluation(content);
         return new EvaluationResponse(
             result.endverification(),
-            result.environmentScore(),
-            result.timeScore(),
-            result.financeScore(),
-            result.psychProfile(),
-            result.nextQuestion(),
+            result.profile(),
+            result.nextQuestions(),
             prompt,
             content == null ? "" : content
         );
@@ -197,70 +195,97 @@ public class AgentController {
         try {
             JsonNode root = objectMapper.readTree(cleaned);
             boolean endverification = root.path("endverification").asBoolean(false);
-            Double environmentScore = readScore(root.get("environmentScore"));
-            Double timeScore = readScore(root.get("timeScore"));
-            Double financeScore = readScore(root.get("financeScore"));
-            String psychProfile = readText(root.get("psychProfile"));
-            if (psychProfile == null) {
-                psychProfile = readText(root.get("psychologicalProfile"));
+            String profile = readText(root.get("profile"));
+            if (profile == null) {
+                profile = readText(root.get("psychProfile"));
             }
-            String nextQuestion = readText(root.get("nextQuestion"));
-            if (nextQuestion == null) {
-                nextQuestion = readText(root.get("question"));
+            if (profile == null) {
+                profile = readText(root.get("psychologicalProfile"));
             }
-            if (nextQuestion == null) {
-                nextQuestion = readText(root.get("followUp"));
+
+            List<String> questions = readQuestions(root.get("nextQuestions"));
+            if (questions.isEmpty()) {
+                questions = readQuestions(root.get("questions"));
             }
-            if (nextQuestion == null) {
-                nextQuestion = readText(root.get("next"));
+            if (questions.isEmpty()) {
+                String single = readText(root.get("nextQuestion"));
+                if (single == null) {
+                    single = readText(root.get("question"));
+                }
+                if (single == null) {
+                    single = readText(root.get("followUp"));
+                }
+                if (single == null) {
+                    single = readText(root.get("next"));
+                }
+                if (single != null) {
+                    questions = List.of(single);
+                }
             }
 
             if (endverification) {
-                environmentScore = normalizeScore(environmentScore);
-                timeScore = normalizeScore(timeScore);
-                financeScore = normalizeScore(financeScore);
-                if (psychProfile == null) {
-                    psychProfile = "No profile summary provided.";
+                if (profile == null) {
+                    profile = "No profile summary provided.";
                 }
-                return new EvaluationResult(true, environmentScore, timeScore, financeScore, psychProfile, null);
+                return new EvaluationResult(true, profile, List.of());
             }
 
-            if (nextQuestion == null) {
-                nextQuestion = fallbackQuestion(cleaned);
+            if (questions.isEmpty()) {
+                questions = fallbackQuestions(cleaned);
             }
-            return new EvaluationResult(false, null, null, null, null, nextQuestion);
+            return new EvaluationResult(false, null, limitQuestions(questions));
         } catch (JsonProcessingException ex) {
-            String fallback = fallbackQuestion(cleaned);
-            return new EvaluationResult(false, null, null, null, null, fallback);
+            List<String> fallback = fallbackQuestions(cleaned);
+            return new EvaluationResult(false, null, limitQuestions(fallback));
         }
     }
 
-    private String fallbackQuestion(String cleaned) {
+    private List<String> fallbackQuestions(String cleaned) {
         String normalized = normalizeText(cleaned);
         if (normalized == null) {
-            return null;
+            return List.of();
         }
         if (normalized.startsWith("{") || normalized.startsWith("[")) {
-            return null;
+            return List.of();
         }
-        return normalized;
-    }
-
-    private Double readScore(JsonNode node) {
-        if (node == null || node.isNull()) {
-            return null;
-        }
-        if (node.isNumber()) {
-            return node.asDouble();
-        }
-        if (node.isTextual()) {
-            try {
-                return Double.parseDouble(node.asText().trim());
-            } catch (NumberFormatException ex) {
-                return null;
+        String[] lines = normalized.split("\\r?\\n");
+        List<String> questions = new ArrayList<>();
+        for (String line : lines) {
+            String trimmed = normalizeText(line);
+            if (trimmed == null) {
+                continue;
+            }
+            trimmed = trimmed.replaceFirst("^(\\d+\\.|[-*])\\s*", "");
+            trimmed = normalizeText(trimmed);
+            if (trimmed != null) {
+                questions.add(trimmed);
             }
         }
-        return null;
+        if (questions.isEmpty()) {
+            questions.add(normalized);
+        }
+        return questions;
+    }
+
+    private List<String> readQuestions(JsonNode node) {
+        List<String> result = new ArrayList<>();
+        if (node == null || node.isNull()) {
+            return result;
+        }
+        if (node.isArray()) {
+            for (JsonNode item : node) {
+                String text = readText(item);
+                if (text != null) {
+                    result.add(text);
+                }
+            }
+        } else {
+            String text = readText(node);
+            if (text != null) {
+                result.add(text);
+            }
+        }
+        return result;
     }
 
     private String readText(JsonNode node) {
@@ -316,20 +341,22 @@ public class AgentController {
         return null;
     }
 
-    private Double normalizeScore(Double value) {
-        if (value == null) {
-            return 0.5;
+    private List<String> limitQuestions(List<String> questions) {
+        if (questions == null || questions.isEmpty()) {
+            return List.of();
         }
-        double normalized = value;
-        if (normalized > 1 && normalized <= 100) {
-            normalized = normalized / 100.0;
+        List<String> cleaned = new ArrayList<>();
+        for (String question : questions) {
+            String trimmed = normalizeText(question);
+            if (trimmed != null) {
+                cleaned.add(trimmed);
+            }
         }
-        if (normalized < 0) {
-            normalized = 0;
-        } else if (normalized > 1) {
-            normalized = 1;
+        if (cleaned.isEmpty()) {
+            return List.of();
         }
-        return normalized;
+        int limit = Math.min(5, cleaned.size());
+        return new ArrayList<>(cleaned.subList(0, limit));
     }
 
     private List<RecommendationItem> normalizeItems(List<RecommendationItem> items, List<PetCard> pets) {
@@ -405,22 +432,14 @@ public class AgentController {
 
     public record EvaluationResponse(
         boolean endverification,
-        Double environmentScore,
-        Double timeScore,
-        Double financeScore,
-        String psychProfile,
-        String nextQuestion,
+        String profile,
+        List<String> nextQuestions,
         String prompt,
         String rawResponse
     ) {
     }
 
-    public record EvaluationSummary(
-        Double environmentScore,
-        Double timeScore,
-        Double financeScore,
-        String psychProfile
-    ) {
+    public record EvaluationSummary(String profile) {
     }
 
     public record RecommendationRequest(
@@ -445,11 +464,8 @@ public class AgentController {
 
     private record EvaluationResult(
         boolean endverification,
-        Double environmentScore,
-        Double timeScore,
-        Double financeScore,
-        String psychProfile,
-        String nextQuestion
+        String profile,
+        List<String> nextQuestions
     ) {
     }
 
