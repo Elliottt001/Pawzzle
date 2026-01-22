@@ -48,7 +48,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
 
 function TypingIndicator() {
   return (
-    <div className="flex items-center gap-1" role="status" aria-label="AI is typing">
+    <div className="flex items-center gap-1" role="status" aria-label="AI 正在输入">
       <span
         className="inline-block h-2 w-2 animate-bounce rounded-full bg-neutral-400"
         style={{ animationDelay: "0ms" }}
@@ -71,7 +71,7 @@ type IconProps = {
 
 function PawIcon({ className }: IconProps) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" role="img" aria-label="Pet paw">
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" role="img" aria-label="宠物爪印">
       <circle cx="7.5" cy="7.5" r="2.2" />
       <circle cx="16.5" cy="7.5" r="2.2" />
       <circle cx="5.8" cy="13" r="2" />

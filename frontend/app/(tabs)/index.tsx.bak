@@ -13,29 +13,28 @@ import { Feather } from '@expo/vector-icons';
 
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
-import { Theme } from '@/constants/theme';
 
 const categories = [
-  { id: 'all', label: '全部' },
-  { id: 'cards', label: '宠物卡片' },
-  { id: 'updates', label: '动态' },
-  { id: 'guides', label: '指南' },
+  { id: 'all', label: 'All' },
+  { id: 'cards', label: 'Pet Cards' },
+  { id: 'updates', label: 'Updates' },
+  { id: 'guides', label: 'Guides' },
 ] as const;
 
 const uploadTypes = [
-  { id: 'card', label: '卡片' },
-  { id: 'update', label: '动态' },
-  { id: 'guide', label: '指南' },
+  { id: 'card', label: 'Card' },
+  { id: 'update', label: 'Update' },
+  { id: 'guide', label: 'Guide' },
 ] as const;
 
 const speciesOptions = [
-  { id: 'CAT', label: '猫' },
-  { id: 'DOG', label: '狗' },
+  { id: 'CAT', label: 'Cat' },
+  { id: 'DOG', label: 'Dog' },
 ] as const;
 
 const breedOptions = {
-  CAT: ['英短', '布偶', '暹罗'],
-  DOG: ['柯基', '柴犬', '迷你贵宾'],
+  CAT: ['British Shorthair', 'Ragdoll', 'Siamese'],
+  DOG: ['Corgi', 'Shiba Inu', 'Mini Poodle'],
 } as const;
 
 const locationOptions = ['杭州', '北京', '上海'] as const;
@@ -43,8 +42,6 @@ const locationOptions = ['杭州', '北京', '上海'] as const;
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
-const ensureChinese = (message: string, fallback: string) =>
-  /[\u4e00-\u9fff]/.test(message) ? message : fallback;
 
 type CategoryId = (typeof categories)[number]['id'];
 type UploadType = (typeof uploadTypes)[number]['id'];
@@ -96,7 +93,7 @@ export default function HomeScreen() {
     fetch(`${API_BASE_URL}/api/home`)
       .then(async (response) => {
         if (!response.ok) {
-          throw new Error('首页数据加载失败');
+          throw new Error('Failed to load home data');
         }
         return (await response.json()) as HomeResponse;
       })
@@ -112,8 +109,8 @@ export default function HomeScreen() {
         if (!isActive) {
           return;
         }
-        const message = error instanceof Error ? error.message : '';
-        setLoadError(ensureChinese(message, '首页数据加载失败'));
+        const message = error instanceof Error ? error.message : 'Failed to load home data';
+        setLoadError(message);
       })
       .finally(() => {
         if (isActive) {
@@ -158,7 +155,7 @@ export default function HomeScreen() {
         );
   const selectedBreeds = cardSpecies ? breedOptions[cardSpecies] : [];
   const isSubmitting = submitStatus === 'submitting';
-  const contentLabel = uploadType === 'update' ? '动态' : '指南';
+  const contentLabel = uploadType === 'update' ? 'Update' : 'Guide';
 
   const handleCreateCard = async () => {
     if (isSubmitting) {
@@ -175,37 +172,37 @@ export default function HomeScreen() {
 
     if (!name) {
       setSubmitStatus('error');
-      setSubmitMessage('请输入名字。');
+      setSubmitMessage('Name is required.');
       return;
     }
     if (!cardSpecies) {
       setSubmitStatus('error');
-      setSubmitMessage('请选择物种。');
+      setSubmitMessage('Please pick a species.');
       return;
     }
     if (!cardBreed) {
       setSubmitStatus('error');
-      setSubmitMessage('请选择品种。');
+      setSubmitMessage('Please pick a breed.');
       return;
     }
     if (!cardAge || Number.isNaN(ageValue) || ageValue <= 0) {
       setSubmitStatus('error');
-      setSubmitMessage('年龄必须为正数。');
+      setSubmitMessage('Age must be a positive number.');
       return;
     }
     if (!location) {
       setSubmitStatus('error');
-      setSubmitMessage('请选择城市。');
+      setSubmitMessage('Please pick a location.');
       return;
     }
     if (!personalityTag) {
       setSubmitStatus('error');
-      setSubmitMessage('请填写性格标签。');
+      setSubmitMessage('Personality tag is required.');
       return;
     }
     if (/\s/.test(personalityTag)) {
       setSubmitStatus('error');
-      setSubmitMessage('性格标签请填写一个词。');
+      setSubmitMessage('Personality tag must be a single word.');
       return;
     }
 
@@ -220,7 +217,7 @@ export default function HomeScreen() {
         description: description || undefined,
       });
       setSubmitStatus('success');
-      setSubmitMessage('卡片已发布。');
+      setSubmitMessage('Card published.');
       setCardName('');
       setCardSpecies(null);
       setCardBreed(null);
@@ -230,9 +227,9 @@ export default function HomeScreen() {
       setCardDescription('');
       loadHomeData();
     } catch (error) {
-      const message = error instanceof Error ? error.message : '';
+      const message = error instanceof Error ? error.message : 'Failed to publish card.';
       setSubmitStatus('error');
-      setSubmitMessage(ensureChinese(message, '发布卡片失败。'));
+      setSubmitMessage(message);
     }
   };
 
@@ -252,7 +249,7 @@ export default function HomeScreen() {
 
     if (!title || !subtitle) {
       setSubmitStatus('error');
-      setSubmitMessage('标题和副标题必填。');
+      setSubmitMessage('Title and subtitle are required.');
       return;
     }
 
@@ -264,15 +261,15 @@ export default function HomeScreen() {
         tag: tag || undefined,
       });
       setSubmitStatus('success');
-      setSubmitMessage(`已发布${contentLabel}`);
+      setSubmitMessage(`${contentLabel} published.`);
       setContentTitle('');
       setContentSubtitle('');
       setContentTag('');
       loadHomeData();
     } catch (error) {
-      const message = error instanceof Error ? error.message : '';
+      const message = error instanceof Error ? error.message : `Failed to publish ${contentLabel}.`;
       setSubmitStatus('error');
-      setSubmitMessage(ensureChinese(message, `发布${contentLabel}失败。`));
+      setSubmitMessage(message);
     }
   };
 
@@ -285,23 +282,23 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.header}>
-        <Text style={styles.overline}>寻找伙伴</Text>
-        <Text style={styles.title}>缘分首页</Text>
+        <Text style={styles.overline}>Find a Companion</Text>
+        <Text style={styles.title}>Pet Match Home</Text>
       </View>
 
       <View style={styles.searchRow}>
         <View style={styles.searchBox}>
-          <Feather name="search" size={Theme.sizes.s18} color={Theme.colors.textSecondary} />
+          <Feather name="search" size={18} color="#6B7280" />
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="按品种、体型或性格搜索..."
-            placeholderTextColor={Theme.colors.placeholder}
+            placeholder="Search by breed, size, or vibe..."
+            placeholderTextColor="#9CA3AF"
             style={styles.searchInput}
           />
         </View>
         <View style={styles.filterButton}>
-          <Feather name="sliders" size={Theme.sizes.s18} color={Theme.colors.text} />
+          <Feather name="sliders" size={18} color="#111827" />
         </View>
       </View>
 
@@ -328,7 +325,7 @@ export default function HomeScreen() {
       {loadError ? <Text style={styles.errorText}>{loadError}</Text> : null}
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Section title="上传" subtitle="新增卡片和内容">
+        <Section title="Upload" subtitle="Add new cards and content">
           <View style={styles.formCard}>
             <View style={styles.uploadTypeRow}>
               {uploadTypes.map((type) => {
@@ -352,16 +349,16 @@ export default function HomeScreen() {
 
             {uploadType === 'card' ? (
               <View style={styles.formFields}>
-                <FieldLabel text="名字" />
+                <FieldLabel text="Name" />
                 <TextInput
                   value={cardName}
                   onChangeText={setCardName}
-                  placeholder="宠物名字"
-                  placeholderTextColor={Theme.colors.placeholder}
+                  placeholder="Pet name"
+                  placeholderTextColor="#9CA3AF"
                   style={styles.formInput}
                 />
 
-                <FieldLabel text="物种" />
+                <FieldLabel text="Species" />
                 <View style={styles.choiceRow}>
                   {speciesOptions.map((option) => {
                     const isActive = cardSpecies === option.id;
@@ -382,7 +379,7 @@ export default function HomeScreen() {
                   })}
                 </View>
 
-                <FieldLabel text="品种" />
+                <FieldLabel text="Breed" />
                 {selectedBreeds.length ? (
                   <View style={styles.choiceRow}>
                     {selectedBreeds.map((breed) => {
@@ -404,20 +401,20 @@ export default function HomeScreen() {
                     })}
                   </View>
                 ) : (
-                  <Text style={styles.formHint}>请先选择物种以查看品种。</Text>
+                  <Text style={styles.formHint}>Select a species to see breeds.</Text>
                 )}
 
-                <FieldLabel text="年龄（岁）" />
+                <FieldLabel text="Age (years)" />
                 <TextInput
                   value={cardAge}
                   onChangeText={(value) => setCardAge(value.replace(/[^0-9]/g, ''))}
-                  placeholder="例如：2"
-                  placeholderTextColor={Theme.colors.placeholder}
+                  placeholder="e.g. 2"
+                  placeholderTextColor="#9CA3AF"
                   keyboardType="number-pad"
                   style={styles.formInput}
                 />
 
-                <FieldLabel text="城市" />
+                <FieldLabel text="Location" />
                 <View style={styles.choiceRow}>
                   {locationOptions.map((location) => {
                     const isActive = cardLocation === location;
@@ -438,22 +435,22 @@ export default function HomeScreen() {
                   })}
                 </View>
 
-                <FieldLabel text="性格标签（一个词）" />
+                <FieldLabel text="Personality tag (one word)" />
                 <TextInput
                   value={cardPersonality}
                   onChangeText={setCardPersonality}
-                  placeholder="活泼"
-                  placeholderTextColor={Theme.colors.placeholder}
+                  placeholder="Playful"
+                  placeholderTextColor="#9CA3AF"
                   style={styles.formInput}
                   autoCapitalize="none"
                 />
 
-                <FieldLabel text="描述（可选）" />
+                <FieldLabel text="Description (optional)" />
                 <TextInput
                   value={cardDescription}
                   onChangeText={setCardDescription}
-                  placeholder="简单介绍..."
-                  placeholderTextColor={Theme.colors.placeholder}
+                  placeholder="Short intro..."
+                  placeholderTextColor="#9CA3AF"
                   style={[styles.formInput, styles.formInputMultiline]}
                   multiline
                 />
@@ -467,36 +464,36 @@ export default function HomeScreen() {
                     pressed && !isSubmitting && styles.submitButtonPressed,
                   ]}>
                   <Text style={styles.submitButtonText}>
-                    {isSubmitting ? '发布中...' : '发布卡片'}
+                    {isSubmitting ? 'Publishing...' : 'Publish Card'}
                   </Text>
                 </Pressable>
               </View>
             ) : (
               <View style={styles.formFields}>
-                <FieldLabel text={`${contentLabel}标题`} />
+                <FieldLabel text={`${contentLabel} title`} />
                 <TextInput
                   value={contentTitle}
                   onChangeText={setContentTitle}
-                  placeholder={`请输入${contentLabel}标题`}
-                  placeholderTextColor={Theme.colors.placeholder}
+                  placeholder={`Enter a ${contentLabel.toLowerCase()} title`}
+                  placeholderTextColor="#9CA3AF"
                   style={styles.formInput}
                 />
 
-                <FieldLabel text={`${contentLabel}副标题`} />
+                <FieldLabel text={`${contentLabel} subtitle`} />
                 <TextInput
                   value={contentSubtitle}
                   onChangeText={setContentSubtitle}
-                  placeholder="简短摘要..."
-                  placeholderTextColor={Theme.colors.placeholder}
+                  placeholder="Short summary..."
+                  placeholderTextColor="#9CA3AF"
                   style={styles.formInput}
                 />
 
-                <FieldLabel text="标签（可选）" />
+                <FieldLabel text="Tag (optional)" />
                 <TextInput
                   value={contentTag}
                   onChangeText={setContentTag}
-                  placeholder="最新、活动、技巧..."
-                  placeholderTextColor={Theme.colors.placeholder}
+                  placeholder="New, Event, Tips..."
+                  placeholderTextColor="#9CA3AF"
                   style={styles.formInput}
                 />
 
@@ -509,7 +506,7 @@ export default function HomeScreen() {
                     pressed && !isSubmitting && styles.submitButtonPressed,
                   ]}>
                   <Text style={styles.submitButtonText}>
-                    {isSubmitting ? '发布中...' : `发布${contentLabel}`}
+                    {isSubmitting ? 'Publishing...' : `Publish ${contentLabel}`}
                   </Text>
                 </Pressable>
               </View>
@@ -529,10 +526,10 @@ export default function HomeScreen() {
 
         {activeCategory === 'all' || activeCategory === 'cards' ? (
           <Section
-            title="宠物卡片"
-            subtitle={isLoading ? '加载中...' : `${visiblePets.length}个匹配`}>
+            title="Pet Cards"
+            subtitle={isLoading ? 'Loading...' : `${visiblePets.length} matches`}>
             {isLoading ? (
-              <Text style={styles.emptyText}>加载宠物卡片中...</Text>
+              <Text style={styles.emptyText}>Loading pet cards...</Text>
             ) : visiblePets.length ? (
               <View style={styles.cardList}>
                 {visiblePets.map((pet) => (
@@ -540,15 +537,15 @@ export default function HomeScreen() {
                 ))}
               </View>
             ) : (
-              <Text style={styles.emptyText}>暂无宠物卡片。</Text>
+              <Text style={styles.emptyText}>No pet cards yet.</Text>
             )}
           </Section>
         ) : null}
 
         {activeCategory === 'all' || activeCategory === 'updates' ? (
-          <Section title="动态" subtitle="最新动态">
+          <Section title="Updates" subtitle="Latest activity">
             {isLoading ? (
-              <Text style={styles.emptyText}>加载动态中...</Text>
+              <Text style={styles.emptyText}>Loading updates...</Text>
             ) : updates.length ? (
               <View style={styles.infoList}>
                 {updates.map((item) => (
@@ -556,15 +553,15 @@ export default function HomeScreen() {
                 ))}
               </View>
             ) : (
-              <Text style={styles.emptyText}>暂无动态。</Text>
+              <Text style={styles.emptyText}>No updates yet.</Text>
             )}
           </Section>
         ) : null}
 
         {activeCategory === 'all' || activeCategory === 'guides' ? (
-          <Section title="指南" subtitle="快速知识">
+          <Section title="Guides" subtitle="Quick knowledge">
             {isLoading ? (
-              <Text style={styles.emptyText}>加载指南中...</Text>
+              <Text style={styles.emptyText}>Loading guides...</Text>
             ) : guides.length ? (
               <View style={styles.infoList}>
                 {guides.map((item) => (
@@ -572,7 +569,7 @@ export default function HomeScreen() {
                 ))}
               </View>
             ) : (
-              <Text style={styles.emptyText}>暂无指南。</Text>
+              <Text style={styles.emptyText}>No guides yet.</Text>
             )}
           </Section>
         ) : null}
@@ -597,7 +594,7 @@ function Section({
           <Text style={styles.sectionTitle}>{title}</Text>
           <Text style={styles.sectionSubtitle}>{subtitle}</Text>
         </View>
-        <Feather name="chevron-right" size={Theme.sizes.s18} color={Theme.colors.placeholder} />
+        <Feather name="chevron-right" size={18} color="#9CA3AF" />
       </View>
       {children}
     </View>
@@ -646,9 +643,9 @@ async function postJson<T = unknown>(path: string, payload: Record<string, unkno
   if (!response.ok) {
     const message =
       typeof data === 'object' && data && 'message' in data
-        ? String((data as { message?: string }).message ?? '')
-        : response.statusText ?? '';
-    throw new Error(ensureChinese(message, '请求失败'));
+        ? String((data as { message?: string }).message)
+        : response.statusText;
+    throw new Error(message || 'Request failed');
   }
 
   return data;
@@ -656,131 +653,139 @@ async function postJson<T = unknown>(path: string, payload: Record<string, unkno
 
 const styles = StyleSheet.create({
   safeArea: {
-    flex: Theme.layout.full,
-    backgroundColor: Theme.colors.backgroundWarmAlt,
+    flex: 1,
+    backgroundColor: '#FDF7F0',
   },
   background: {
     ...StyleSheet.absoluteFillObject,
   },
   blob: {
     position: 'absolute',
-    width: Theme.sizes.s220,
-    height: Theme.sizes.s220,
-    borderRadius: Theme.radius.r110,
-    opacity: Theme.opacity.o6,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    opacity: 0.6,
   },
   blobLeft: {
-    top: -Theme.sizes.s70,
-    left: -Theme.sizes.s40,
-    backgroundColor: Theme.colors.decorativePeachAlt,
+    top: -70,
+    left: -40,
+    backgroundColor: '#FCE6CE',
   },
   blobRight: {
-    top: Theme.spacing.s20,
-    right: -Theme.sizes.s50,
-    backgroundColor: Theme.colors.decorativeMint,
+    top: 20,
+    right: -50,
+    backgroundColor: '#DFF3E5',
   },
   blobBottom: {
-    bottom: -Theme.sizes.s70,
-    left: Theme.percent.p35,
-    backgroundColor: Theme.colors.decorativeSkyAlt,
+    bottom: -70,
+    left: '35%',
+    backgroundColor: '#DCEFFC',
   },
   header: {
-    paddingHorizontal: Theme.spacing.s20,
-    paddingTop: Theme.spacing.s12,
-    paddingBottom: Theme.spacing.s6,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 6,
   },
   overline: {
-    fontSize: Theme.typography.size.s11,
-    letterSpacing: Theme.typography.letterSpacing.s3,
+    fontSize: 11,
+    letterSpacing: 3,
     textTransform: 'uppercase',
-    color: Theme.colors.textSecondary,
-    marginBottom: Theme.spacing.s6,
+    color: '#6B7280',
+    marginBottom: 6,
   },
   title: {
-    fontSize: Theme.typography.size.s22,
-    fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.text,
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#111827',
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Theme.spacing.s12,
-    paddingHorizontal: Theme.spacing.s20,
-    paddingVertical: Theme.spacing.s12,
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
   searchBox: {
-    flex: Theme.layout.full,
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Theme.spacing.s10,
-    paddingHorizontal: Theme.spacing.s14,
-    paddingVertical: Theme.spacing.s10,
-    backgroundColor: Theme.colors.cardTranslucentSoft,
-    borderRadius: Theme.radius.pill,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarm,
-    ...Theme.shadows.elevated,
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#EFE3D6',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 10,
+    elevation: 2,
   },
   searchInput: {
-    flex: Theme.layout.full,
-    fontSize: Theme.typography.size.s15,
-    color: Theme.colors.text,
+    flex: 1,
+    fontSize: 15,
+    color: '#111827',
   },
   filterButton: {
-    width: Theme.sizes.s44,
-    height: Theme.sizes.s44,
-    borderRadius: Theme.radius.r22,
-    backgroundColor: Theme.colors.overlaySoft,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarm,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderWidth: 1,
+    borderColor: '#EFE3D6',
     alignItems: 'center',
     justifyContent: 'center',
-    ...Theme.shadows.elevated,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 10,
+    elevation: 2,
   },
   categoryRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Theme.spacing.s10,
-    paddingHorizontal: Theme.spacing.s20,
-    paddingBottom: Theme.spacing.s6,
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingBottom: 6,
   },
   errorText: {
-    marginTop: Theme.spacing.s6,
-    paddingHorizontal: Theme.spacing.s20,
-    fontSize: Theme.typography.size.s12,
-    color: Theme.colors.textError,
+    marginTop: 6,
+    paddingHorizontal: 20,
+    fontSize: 12,
+    color: '#B91C1C',
   },
   categoryPill: {
-    paddingHorizontal: Theme.spacing.s14,
-    paddingVertical: Theme.spacing.s8,
-    borderRadius: Theme.radius.pill,
-    backgroundColor: Theme.colors.cardTranslucentSoft,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarm,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderWidth: 1,
+    borderColor: '#EFE3D6',
   },
   categoryPillActive: {
-    backgroundColor: Theme.colors.successDeep,
-    borderColor: Theme.colors.successDeep,
+    backgroundColor: '#157B57',
+    borderColor: '#157B57',
   },
   categoryPillPressed: {
-    transform: [{ scale: Theme.scale.pressedSoft }],
+    transform: [{ scale: 0.98 }],
   },
   categoryText: {
-    fontSize: Theme.typography.size.s13,
-    fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.textEmphasis,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1F2937',
   },
   categoryTextActive: {
-    color: Theme.colors.textInverse,
+    color: '#FFFFFF',
   },
   content: {
-    paddingHorizontal: Theme.spacing.s20,
-    paddingTop: Theme.spacing.s8,
-    paddingBottom: Theme.sizes.s140,
-    gap: Theme.spacing.s18,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 140,
+    gap: 18,
   },
   section: {
-    gap: Theme.spacing.s12,
+    gap: 12,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -788,175 +793,183 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sectionTitle: {
-    fontSize: Theme.typography.size.s18,
-    fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.text,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
   },
   sectionSubtitle: {
-    fontSize: Theme.typography.size.s12,
-    color: Theme.colors.textSecondary,
-    marginTop: Theme.spacing.s2,
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
   },
   formCard: {
-    padding: Theme.spacing.s16,
-    borderRadius: Theme.radius.r20,
-    backgroundColor: Theme.colors.cardTranslucentSoft,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarm,
-    ...Theme.shadows.elevatedSoft,
+    padding: 16,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderWidth: 1,
+    borderColor: '#EFE3D6',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 2,
   },
   uploadTypeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Theme.spacing.s8,
-    marginBottom: Theme.spacing.s12,
+    gap: 8,
+    marginBottom: 12,
   },
   uploadTypePill: {
-    paddingHorizontal: Theme.spacing.s12,
-    paddingVertical: Theme.spacing.s6,
-    borderRadius: Theme.radius.pill,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderNeutral,
-    backgroundColor: Theme.colors.surfaceNeutral,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F3F4F6',
   },
   uploadTypePillActive: {
-    backgroundColor: Theme.colors.successDeep,
-    borderColor: Theme.colors.successDeep,
+    backgroundColor: '#157B57',
+    borderColor: '#157B57',
   },
   uploadTypePillPressed: {
-    transform: [{ scale: Theme.scale.pressedSoft }],
+    transform: [{ scale: 0.98 }],
   },
   uploadTypeText: {
-    fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.textEmphasis,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1F2937',
   },
   uploadTypeTextActive: {
-    color: Theme.colors.textInverse,
+    color: '#FFFFFF',
   },
   formFields: {
-    gap: Theme.spacing.s10,
+    gap: 10,
   },
   formLabel: {
-    fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.textSubtle,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
   },
   formInput: {
-    minHeight: Theme.sizes.s40,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmAlt,
-    backgroundColor: Theme.colors.card,
-    borderRadius: Theme.radius.r12,
-    paddingHorizontal: Theme.spacing.s12,
-    paddingVertical: Theme.spacing.s8,
-    fontSize: Theme.typography.size.s14,
-    color: Theme.colors.text,
+    minHeight: 40,
+    borderWidth: 1,
+    borderColor: '#EEE6DC',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#111827',
   },
   formInputMultiline: {
-    minHeight: Theme.sizes.s80,
+    minHeight: 80,
     textAlignVertical: 'top',
   },
   formHint: {
-    fontSize: Theme.typography.size.s12,
-    color: Theme.colors.textSecondary,
+    fontSize: 12,
+    color: '#6B7280',
   },
   choiceRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Theme.spacing.s8,
+    gap: 8,
   },
   choicePill: {
-    paddingHorizontal: Theme.spacing.s12,
-    paddingVertical: Theme.spacing.s6,
-    borderRadius: Theme.radius.pill,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderNeutral,
-    backgroundColor: Theme.colors.backgroundNeutral,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
   },
   choicePillActive: {
-    backgroundColor: Theme.colors.text,
-    borderColor: Theme.colors.text,
+    backgroundColor: '#111827',
+    borderColor: '#111827',
   },
   choicePillPressed: {
-    transform: [{ scale: Theme.scale.pressedSoft }],
+    transform: [{ scale: 0.98 }],
   },
   choiceText: {
-    fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.textEmphasis,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1F2937',
   },
   choiceTextActive: {
-    color: Theme.colors.textInverse,
+    color: '#FFFFFF',
   },
   submitButton: {
-    marginTop: Theme.spacing.s6,
-    paddingVertical: Theme.spacing.s12,
-    borderRadius: Theme.radius.r14,
-    backgroundColor: Theme.colors.successDeep,
+    marginTop: 6,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#157B57',
     alignItems: 'center',
     justifyContent: 'center',
   },
   submitButtonDisabled: {
-    opacity: Theme.opacity.o6,
+    opacity: 0.6,
   },
   submitButtonPressed: {
-    transform: [{ scale: Theme.scale.pressedSoft }],
+    transform: [{ scale: 0.98 }],
   },
   submitButtonText: {
-    color: Theme.colors.textInverse,
-    fontSize: Theme.typography.size.s14,
-    fontWeight: Theme.typography.weight.semiBold,
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   submitMessage: {
-    marginTop: Theme.spacing.s10,
-    fontSize: Theme.typography.size.s12,
+    marginTop: 10,
+    fontSize: 12,
   },
   submitMessageError: {
-    color: Theme.colors.textError,
+    color: '#B91C1C',
   },
   submitMessageSuccess: {
-    color: Theme.colors.textSuccess,
+    color: '#047857',
   },
   cardList: {
-    gap: Theme.spacing.s14,
+    gap: 14,
   },
   infoList: {
-    gap: Theme.spacing.s12,
+    gap: 12,
   },
   emptyText: {
-    fontSize: Theme.typography.size.s13,
-    color: Theme.colors.textSecondary,
-    paddingVertical: Theme.spacing.s4,
+    fontSize: 13,
+    color: '#6B7280',
+    paddingVertical: 4,
   },
   infoCard: {
-    padding: Theme.spacing.s16,
-    borderRadius: Theme.radius.r18,
-    backgroundColor: Theme.colors.cardTranslucentSoft,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarm,
-    ...Theme.shadows.elevatedLarge,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderWidth: 1,
+    borderColor: '#EFE3D6',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 2,
   },
   infoTag: {
     alignSelf: 'flex-start',
-    paddingHorizontal: Theme.spacing.s10,
-    paddingVertical: Theme.spacing.s4,
-    borderRadius: Theme.radius.pill,
-    marginBottom: Theme.spacing.s8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    marginBottom: 8,
   },
   infoTagText: {
-    fontSize: Theme.typography.size.s11,
-    fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.textEmphasis,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#1F2937',
   },
   infoTitle: {
-    fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
   },
   infoSubtitle: {
-    marginTop: Theme.spacing.s6,
-    fontSize: Theme.typography.size.s13,
-    color: Theme.colors.textSecondary,
+    marginTop: 6,
+    fontSize: 13,
+    color: '#6B7280',
   },
 });

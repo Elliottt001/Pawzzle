@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Theme } from '@/constants/theme';
 
 // Helper for localhost
 const API_URL = Platform.select({
@@ -11,6 +12,8 @@ const API_URL = Platform.select({
   ios: 'http://localhost:8080',
   default: 'http://localhost:8080',
 });
+const ensureChinese = (message: string, fallback: string) =>
+  /[\u4e00-\u9fff]/.test(message) ? message : fallback;
 
 type UserType = 'INDIVIDUAL' | 'INSTITUTION';
 type UserIntent = 'GIVER' | 'ADOPTER';
@@ -29,7 +32,7 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!name || !email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert('错误', '请填写所有字段');
       return;
     }
 
@@ -54,14 +57,15 @@ export default function RegisterScreen() {
       });
 
       if (response.ok) {
-        Alert.alert('Success', 'Account created! Please login.');
+        Alert.alert('成功', '账号已创建，请登录。');
         router.push('/(tabs)/profile'); 
       } else {
         const errorData = await response.json().catch(() => ({}));
-        Alert.alert('Registration Failed', errorData.message || 'Something went wrong');
+        const serverMessage = typeof errorData.message === 'string' ? errorData.message : '';
+        Alert.alert('注册失败', ensureChinese(serverMessage, '出现问题，请稍后重试'));
       }
     } catch (error) {
-      Alert.alert('Error', 'Network request failed');
+      Alert.alert('错误', '网络请求失败');
     } finally {
       setLoading(false);
     }
@@ -70,79 +74,79 @@ export default function RegisterScreen() {
   return (
     <ScrollView style={styles.scroll}>
        <ThemedView style={styles.container}>
-        <ThemedText type="title" style={styles.title}>Create Account</ThemedText>
+        <ThemedText type="title" style={styles.title}>创建账号</ThemedText>
 
         <View style={styles.formGroup}>
-          <ThemedText style={styles.label}>Name</ThemedText>
+          <ThemedText style={styles.label}>姓名</ThemedText>
           <TextInput 
             style={styles.input} 
             value={name} 
             onChangeText={setName} 
-            placeholder="John Doe" 
-            placeholderTextColor="#999"
+            placeholder="请输入姓名" 
+            placeholderTextColor={Theme.colors.textPlaceholder}
           />
         </View>
 
         <View style={styles.formGroup}>
-          <ThemedText style={styles.label}>Email</ThemedText>
+          <ThemedText style={styles.label}>邮箱</ThemedText>
           <TextInput 
             style={styles.input} 
             value={email} 
             onChangeText={setEmail} 
-            placeholder="john@example.com" 
+            placeholder="请输入邮箱" 
             keyboardType="email-address"
             autoCapitalize="none"
-            placeholderTextColor="#999"
+            placeholderTextColor={Theme.colors.textPlaceholder}
           />
         </View>
 
         <View style={styles.formGroup}>
-          <ThemedText style={styles.label}>Password</ThemedText>
+          <ThemedText style={styles.label}>密码</ThemedText>
           <TextInput 
             style={styles.input} 
             value={password} 
             onChangeText={setPassword} 
             secureTextEntry 
-            placeholder="******" 
-            placeholderTextColor="#999"
+            placeholder="请输入密码" 
+            placeholderTextColor={Theme.colors.textPlaceholder}
           />
         </View>
 
         <View style={styles.divider} />
 
         <View style={styles.formGroup}>
-          <ThemedText style={styles.label}>I am a(n):</ThemedText>
+          <ThemedText style={styles.label}>我是：</ThemedText>
           <View style={styles.radioGroup}>
             <TouchableOpacity 
               style={[styles.radioBtn, userType === 'INDIVIDUAL' && styles.radioBtnSelected]}
               onPress={() => setUserType('INDIVIDUAL')}
             >
-              <ThemedText style={userType === 'INDIVIDUAL' ? styles.textSelected : styles.textUnselected}>Individual</ThemedText>
+              <ThemedText style={userType === 'INDIVIDUAL' ? styles.textSelected : styles.textUnselected}>个人</ThemedText>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.radioBtn, userType === 'INSTITUTION' && styles.radioBtnSelected]}
               onPress={() => setUserType('INSTITUTION')}
             >
-              <ThemedText style={userType === 'INSTITUTION' ? styles.textSelected : styles.textUnselected}>Institution</ThemedText>
+              <ThemedText style={userType === 'INSTITUTION' ? styles.textSelected : styles.textUnselected}>机构</ThemedText>
             </TouchableOpacity>
           </View>
         </View>
 
         {userType === 'INDIVIDUAL' && (
           <View style={styles.formGroup}>
-            <ThemedText style={styles.label}>My goal is to:</ThemedText>
+            <ThemedText style={styles.label}>我的目标是：</ThemedText>
             <View style={styles.radioGroup}>
               <TouchableOpacity 
                 style={[styles.radioBtn, userIntent === 'ADOPTER' && styles.radioBtnSelected]}
                 onPress={() => setUserIntent('ADOPTER')}
               >
-                <ThemedText style={userIntent === 'ADOPTER' ? styles.textSelected : styles.textUnselected}>Adopt a Pet</ThemedText>
+                <ThemedText style={userIntent === 'ADOPTER' ? styles.textSelected : styles.textUnselected}>领养宠物</ThemedText>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.radioBtn, userIntent === 'GIVER' && styles.radioBtnSelected]}
                 onPress={() => setUserIntent('GIVER')}
               >
-                <ThemedText style={userIntent === 'GIVER' ? styles.textSelected : styles.textUnselected}>Rehome a Pet</ThemedText>
+                <ThemedText style={userIntent === 'GIVER' ? styles.textSelected : styles.textUnselected}>发布送养</ThemedText>
               </TouchableOpacity>
             </View>
           </View>
@@ -150,7 +154,7 @@ export default function RegisterScreen() {
 
         {userType === 'INSTITUTION' && (
            <ThemedText style={styles.hint}>
-             Note: Institutions are registered as pet providers (Rehoming) by default.
+             提示：机构默认以送养方身份注册。
            </ThemedText>
         )}
 
@@ -159,7 +163,7 @@ export default function RegisterScreen() {
           onPress={handleRegister}
           disabled={loading}
         >
-          <ThemedText style={styles.submitBtnText}>{loading ? 'Creating...' : 'Register'}</ThemedText>
+          <ThemedText style={styles.submitBtnText}>{loading ? '创建中...' : '注册'}</ThemedText>
         </TouchableOpacity>
 
       </ThemedView>
@@ -169,82 +173,82 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   scroll: {
-    flex: 1,
-    backgroundColor: '#fff', 
+    flex: Theme.layout.full,
+    backgroundColor: Theme.colors.background,
   },
   container: {
-    padding: 24,
-    flex: 1,
-    minHeight: '100%',
+    padding: Theme.spacing.s24,
+    flex: Theme.layout.full,
+    minHeight: Theme.percent.p100,
   },
   title: {
-    marginBottom: 32,
-    marginTop: 40,
-    fontSize: 28,
+    marginBottom: Theme.spacing.s32,
+    marginTop: Theme.spacing.s40,
+    fontSize: Theme.typography.size.s28,
   },
   formGroup: {
-    marginBottom: 20,
+    marginBottom: Theme.spacing.s20,
   },
   label: {
-    marginBottom: 8,
-    fontWeight: '600',
+    marginBottom: Theme.spacing.s8,
+    fontWeight: Theme.typography.weight.semiBold,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: '#f9f9f9',
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderMuted,
+    borderRadius: Theme.radius.r8,
+    padding: Theme.spacing.s12,
+    fontSize: Theme.typography.size.s16,
+    backgroundColor: Theme.colors.surfaceMuted,
   },
   divider: {
-    height: 1,
-    backgroundColor: '#eee',
-    marginVertical: 10,
+    height: Theme.borderWidth.hairline,
+    backgroundColor: Theme.colors.borderDivider,
+    marginVertical: Theme.spacing.s10,
   },
   radioGroup: {
     flexDirection: 'row',
-    gap: 12,
+    gap: Theme.spacing.s12,
   },
   radioBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
+    flex: Theme.layout.full,
+    paddingVertical: Theme.spacing.s12,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderMuted,
+    borderRadius: Theme.radius.r8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   radioBtnSelected: {
-    backgroundColor: '#10b981', // emerald-500
-    borderColor: '#10b981',
+    backgroundColor: Theme.colors.successAccent,
+    borderColor: Theme.colors.successAccent,
   },
   textSelected: {
-    color: '#fff',
-    fontWeight: 'bold',
+    color: Theme.colors.textInverse,
+    fontWeight: Theme.typography.weight.heavy,
   },
   textUnselected: {
-    color: '#333',
+    color: Theme.colors.textStrong,
   },
   hint: {
-    fontSize: 13,
-    color: '#666',
+    fontSize: Theme.typography.size.s13,
+    color: Theme.colors.textHint,
     fontStyle: 'italic',
-    marginBottom: 20,
+    marginBottom: Theme.spacing.s20,
   },
   submitBtn: {
-    backgroundColor: '#059669', // emerald-600
-    padding: 16,
-    borderRadius: 12,
+    backgroundColor: Theme.colors.successDeepAlt,
+    padding: Theme.spacing.s16,
+    borderRadius: Theme.radius.r12,
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: Theme.spacing.s20,
   },
   disabledBtn: {
-    opacity: 0.7,
+    opacity: Theme.opacity.o7,
   },
   submitBtnText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: Theme.colors.textInverse,
+    fontSize: Theme.typography.size.s18,
+    fontWeight: Theme.typography.weight.heavy,
   },
 });

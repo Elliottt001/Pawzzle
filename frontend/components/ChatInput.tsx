@@ -16,7 +16,7 @@ export function ChatInput({
   onChange,
   onSend,
   disabled = false,
-  placeholder = "Tell the agent about your home, schedule, and energy level...",
+  placeholder = "告诉顾问你的居住环境、作息和精力情况...",
 }: ChatInputProps) {
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -33,14 +33,14 @@ export function ChatInput({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        aria-label="Chat message"
+        aria-label="聊天消息"
         className="h-11 flex-1 rounded-full border-neutral-200 bg-white/90 text-sm shadow-sm placeholder:text-neutral-400 focus-visible:ring-emerald-500"
       />
       <Button
         type="submit"
         size="icon"
         disabled={disabled}
-        aria-label="Send message"
+        aria-label="发送消息"
         className="h-11 w-11 rounded-full bg-emerald-600 text-white shadow-sm transition hover:bg-emerald-700"
       >
         <SendIcon className="h-5 w-5" />

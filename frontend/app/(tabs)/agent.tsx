@@ -13,6 +13,7 @@ import { Feather, FontAwesome5 } from '@expo/vector-icons';
 
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
+import { Theme } from '@/constants/theme';
 
 type ChatRole = 'user' | 'ai' | 'debug';
 
@@ -58,6 +59,8 @@ const API_BASE_URL =
   (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 
 const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+const ensureChinese = (message: string, fallback: string) =>
+  /[\u4e00-\u9fff]/.test(message) ? message : fallback;
 
 export default function AgentScreen() {
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
@@ -84,7 +87,7 @@ export default function AgentScreen() {
 
   const appendDebug = React.useCallback(
     (title: string, payload?: string | null) => {
-      const normalized = payload && payload.trim().length > 0 ? payload : '[empty]';
+      const normalized = payload && payload.trim().length > 0 ? payload : '【空】';
       appendMessage('debug', `${title}\n${normalized}`);
     },
     [appendMessage]
@@ -101,11 +104,11 @@ export default function AgentScreen() {
 
   const formatEvaluationSummary = React.useCallback((summary: EvaluationSummary) => {
     return [
-      'Evaluation complete:',
-      `Living environment & safety: ${summary.environmentScore.toFixed(2)}`,
-      `Time & energy cost: ${summary.timeScore.toFixed(2)}`,
-      `Financial support: ${summary.financeScore.toFixed(2)}`,
-      `Psychological expectations: ${summary.psychProfile}`,
+      '评估完成：',
+      `居住环境与安全：${summary.environmentScore.toFixed(2)}`,
+      `时间与精力成本：${summary.timeScore.toFixed(2)}`,
+      `经济支持：${summary.financeScore.toFixed(2)}`,
+      `心理预期：${summary.psychProfile}`,
     ].join('\n');
   }, []);
 
@@ -121,7 +124,8 @@ export default function AgentScreen() {
       return data ?? [];
     } catch (error) {
       setPetCardsStatus('error');
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to load pet cards');
+      const message = error instanceof Error ? error.message : '';
+      setErrorMessage(ensureChinese(message, '宠物卡片加载失败'));
       return [] as PetCardData[];
     }
   }, [petCards, petCardsStatus]);
@@ -140,8 +144,8 @@ export default function AgentScreen() {
 
     requestEvaluation([])
       .then((data) => {
-        appendDebug('DEBUG: evaluation prompt', data?.prompt ?? '');
-        appendDebug('DEBUG: evaluation response', data?.rawResponse ?? '');
+        appendDebug('调试：评估提示', data?.prompt ?? '');
+        appendDebug('调试：评估响应', data?.rawResponse ?? '');
 
         if (data?.endverification) {
           const summary = buildEvaluationSummary(data);
@@ -149,8 +153,8 @@ export default function AgentScreen() {
           appendMessage('ai', formatEvaluationSummary(summary));
           setStatus('recommending');
           return loadPetCards().then((pets) => requestRecommendation(summary, [], pets)).then((decision) => {
-            appendDebug('DEBUG: recommend prompt', decision?.prompt ?? '');
-            appendDebug('DEBUG: recommend response', decision?.rawResponse ?? '');
+            appendDebug('调试：推荐提示', decision?.prompt ?? '');
+            appendDebug('调试：推荐响应', decision?.rawResponse ?? '');
             setRecommendedItems(decision?.items ?? []);
           });
         }
@@ -159,13 +163,14 @@ export default function AgentScreen() {
         if (nextQuestion) {
           appendMessage('ai', nextQuestion);
         } else {
-          appendDebug('DEBUG: evaluation missing nextQuestion', data?.rawResponse ?? '');
+          appendDebug('调试：评估缺少下一问', data?.rawResponse ?? '');
         }
         return undefined;
       })
       .catch((error) => {
         setStatus('error');
-        setErrorMessage(error instanceof Error ? error.message : 'Failed to start the chat');
+        const message = error instanceof Error ? error.message : '';
+        setErrorMessage(ensureChinese(message, '聊天初始化失败'));
       })
       .finally(() => {
         setStatus('idle');
@@ -200,8 +205,8 @@ export default function AgentScreen() {
 
     try {
       const data = await requestEvaluation(buildAgentMessages(nextMessages));
-      appendDebug('DEBUG: evaluation prompt', data?.prompt ?? '');
-      appendDebug('DEBUG: evaluation response', data?.rawResponse ?? '');
+      appendDebug('调试：评估提示', data?.prompt ?? '');
+      appendDebug('调试：评估响应', data?.rawResponse ?? '');
 
       if (data?.endverification) {
         const summary = buildEvaluationSummary(data);
@@ -211,20 +216,21 @@ export default function AgentScreen() {
         setStatus('recommending');
         const pets = await loadPetCards();
         const decision = await requestRecommendation(summary, buildAgentMessages(nextMessages), pets);
-        appendDebug('DEBUG: recommend prompt', decision?.prompt ?? '');
-        appendDebug('DEBUG: recommend response', decision?.rawResponse ?? '');
+        appendDebug('调试：推荐提示', decision?.prompt ?? '');
+        appendDebug('调试：推荐响应', decision?.rawResponse ?? '');
         setRecommendedItems(decision?.items ?? []);
       } else {
         const nextQuestion = data?.nextQuestion?.trim();
         if (nextQuestion) {
           appendMessage('ai', nextQuestion);
         } else {
-          appendDebug('DEBUG: evaluation missing nextQuestion', data?.rawResponse ?? '');
+          appendDebug('调试：评估缺少下一问', data?.rawResponse ?? '');
         }
       }
     } catch (error) {
       setStatus('error');
-      setErrorMessage(error instanceof Error ? error.message : 'Something went wrong.');
+      const message = error instanceof Error ? error.message : '';
+      setErrorMessage(ensureChinese(message, '出现问题，请稍后重试'));
     } finally {
       setStatus('idle');
     }
@@ -252,8 +258,8 @@ export default function AgentScreen() {
       </View>
 
       <View style={styles.header}>
-        <Text style={styles.overline}>Agent</Text>
-        <Text style={styles.title}>Adoption Assistant</Text>
+        <Text style={styles.overline}>顾问</Text>
+        <Text style={styles.title}>领养顾问</Text>
       </View>
 
       <ScrollView ref={scrollRef} contentContainerStyle={styles.chatList}>
@@ -262,16 +268,16 @@ export default function AgentScreen() {
         ))}
 
         {status === 'evaluating' ? (
-          <ChatBubble role="ai" text="Reviewing your details..." />
+          <ChatBubble role="ai" text="正在核对你的信息..." />
         ) : null}
         {status === 'recommending' ? (
-          <ChatBubble role="ai" text="Picking the best matches..." />
+          <ChatBubble role="ai" text="正在挑选最佳匹配..." />
         ) : null}
 
-        {errorMessage ? <ChatBubble role="debug" text={`Error: ${errorMessage}`} /> : null}
+        {errorMessage ? <ChatBubble role="debug" text={`错误：${errorMessage}`} /> : null}
 
         {evaluation && petCardsStatus === 'error' ? (
-          <ChatBubble role="debug" text="Pet cards are unavailable right now." />
+          <ChatBubble role="debug" text="暂时无法获取宠物卡片。" />
         ) : null}
 
         {visiblePets.length ? (
@@ -289,8 +295,8 @@ export default function AgentScreen() {
             <TextInput
               value={input}
               onChangeText={setInput}
-              placeholder="Share details about your home and lifestyle..."
-              placeholderTextColor="#9CA3AF"
+              placeholder="请描述你的居住情况和生活方式..."
+              placeholderTextColor={Theme.colors.placeholder}
               style={styles.input}
               returnKeyType="send"
               onSubmitEditing={handleSend}
@@ -304,12 +310,10 @@ export default function AgentScreen() {
                 !canSend && styles.sendButtonDisabled,
                 pressed && canSend && styles.sendButtonPressed,
               ]}>
-              <Feather name="send" size={18} color="#FFFFFF" />
+              <Feather name="send" size={Theme.sizes.s18} color={Theme.colors.textInverse} />
             </Pressable>
           </View>
-          <Text style={styles.helperText}>
-            The agent will keep asking until the profile is complete.
-          </Text>
+          <Text style={styles.helperText}>顾问会持续提问直到资料完善。</Text>
         </View>
       ) : null}
     </SafeAreaView>
@@ -329,7 +333,7 @@ function ChatBubble({ role, text }: { role: ChatRole; text: string }) {
       ]}>
       {!isUser && !isDebug ? (
         <View style={styles.avatar}>
-          <FontAwesome5 name="paw" size={16} color="#15803D" />
+          <FontAwesome5 name="paw" size={Theme.sizes.s16} color={Theme.colors.successStrong} />
         </View>
       ) : null}
       <View
@@ -372,7 +376,7 @@ async function requestRecommendation(
 async function getJson<T = unknown>(path: string) {
   const response = await fetch(`${API_BASE_URL}${path}`);
   if (!response.ok) {
-    throw new Error(response.statusText || 'Request failed');
+    throw new Error(ensureChinese(response.statusText || '', '请求失败'));
   }
   return (await response.json()) as T;
 }
@@ -403,9 +407,9 @@ async function postJson<T = unknown>(path: string, payload: Record<string, unkno
   if (!response.ok) {
     const message =
       typeof data === 'object' && data && 'message' in data
-        ? String((data as { message?: string }).message)
-        : response.statusText;
-    throw new Error(message || 'Request failed');
+        ? String((data as { message?: string }).message ?? '')
+        : response.statusText ?? '';
+    throw new Error(ensureChinese(message, '请求失败'));
   }
 
   return data;
@@ -416,7 +420,7 @@ function buildEvaluationSummary(data: EvaluationResponse): EvaluationSummary {
     environmentScore: clampScore(data.environmentScore),
     timeScore: clampScore(data.timeScore),
     financeScore: clampScore(data.financeScore),
-    psychProfile: data.psychProfile?.trim() || 'No profile summary provided.',
+    psychProfile: data.psychProfile?.trim() || '暂无评估总结。',
   };
 }
 
@@ -429,60 +433,60 @@ function clampScore(value?: number | null) {
 
 const styles = StyleSheet.create({
   safeArea: {
-    flex: 1,
-    backgroundColor: '#FDF7F0',
+    flex: Theme.layout.full,
+    backgroundColor: Theme.colors.backgroundWarmAlt,
   },
   background: {
     ...StyleSheet.absoluteFillObject,
   },
   blob: {
     position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    opacity: 0.6,
+    width: Theme.sizes.s220,
+    height: Theme.sizes.s220,
+    borderRadius: Theme.radius.r110,
+    opacity: Theme.opacity.o6,
   },
   blobLeft: {
-    top: -70,
-    left: -40,
-    backgroundColor: '#FCE6CE',
+    top: -Theme.sizes.s70,
+    left: -Theme.sizes.s40,
+    backgroundColor: Theme.colors.decorativePeachAlt,
   },
   blobRight: {
-    top: 20,
-    right: -50,
-    backgroundColor: '#DFF3E5',
+    top: Theme.spacing.s20,
+    right: -Theme.sizes.s50,
+    backgroundColor: Theme.colors.decorativeMint,
   },
   blobBottom: {
-    bottom: -70,
-    left: '35%',
-    backgroundColor: '#DCEFFC',
+    bottom: -Theme.sizes.s70,
+    left: Theme.percent.p35,
+    backgroundColor: Theme.colors.decorativeSkyAlt,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 6,
+    paddingHorizontal: Theme.spacing.s20,
+    paddingTop: Theme.spacing.s12,
+    paddingBottom: Theme.spacing.s6,
   },
   overline: {
-    fontSize: 11,
-    letterSpacing: 3,
+    fontSize: Theme.typography.size.s11,
+    letterSpacing: Theme.typography.letterSpacing.s3,
     textTransform: 'uppercase',
-    color: '#6B7280',
-    marginBottom: 6,
+    color: Theme.colors.textSecondary,
+    marginBottom: Theme.spacing.s6,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#111827',
+    fontSize: Theme.typography.size.s22,
+    fontWeight: Theme.typography.weight.semiBold,
+    color: Theme.colors.text,
   },
   chatList: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 140,
+    paddingHorizontal: Theme.spacing.s20,
+    paddingTop: Theme.spacing.s8,
+    paddingBottom: Theme.sizes.s140,
   },
   messageRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    marginBottom: 12,
+    marginBottom: Theme.spacing.s12,
   },
   messageRowUser: {
     justifyContent: 'flex-end',
@@ -494,108 +498,100 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   avatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: Theme.sizes.s34,
+    height: Theme.sizes.s34,
+    borderRadius: Theme.sizes.s34 / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#EAF8EF',
-    borderWidth: 1,
-    borderColor: '#D1EBDD',
-    marginRight: 8,
+    backgroundColor: Theme.colors.successSurfaceSoft,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.successBorderAlt,
+    marginRight: Theme.spacing.s8,
   },
   bubble: {
-    maxWidth: '80%',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 18,
+    maxWidth: Theme.percent.p80,
+    paddingHorizontal: Theme.spacing.s14,
+    paddingVertical: Theme.spacing.s10,
+    borderRadius: Theme.radius.r18,
   },
   userBubble: {
-    backgroundColor: '#157B57',
-    borderTopRightRadius: 6,
+    backgroundColor: Theme.colors.successDeep,
+    borderTopRightRadius: Theme.radius.r6,
   },
   aiBubble: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderWidth: 1,
-    borderColor: '#EEE6DC',
-    borderTopLeftRadius: 6,
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 2,
+    backgroundColor: Theme.colors.cardTranslucent,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarmAlt,
+    borderTopLeftRadius: Theme.radius.r6,
+    ...Theme.shadows.elevatedLarge,
   },
   debugBubble: {
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderTopLeftRadius: 6,
+    backgroundColor: Theme.colors.surfaceNeutral,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderNeutral,
+    borderTopLeftRadius: Theme.radius.r6,
   },
   messageText: {
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: Theme.typography.size.s15,
+    lineHeight: Theme.typography.lineHeight.s20,
   },
   userText: {
-    color: '#F9FAFB',
+    color: Theme.colors.textOnAccent,
   },
   aiText: {
-    color: '#111827',
+    color: Theme.colors.text,
   },
   debugText: {
-    color: '#4B5563',
-    fontSize: 12,
-    lineHeight: 16,
+    color: Theme.colors.textMuted,
+    fontSize: Theme.typography.size.s12,
+    lineHeight: Theme.typography.lineHeight.s16,
   },
   matchList: {
-    marginTop: 6,
-    gap: 14,
+    marginTop: Theme.spacing.s6,
+    gap: Theme.spacing.s14,
   },
   inputDock: {
-    borderTopWidth: 1,
-    borderTopColor: '#EFEAE3',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 12,
+    borderTopWidth: Theme.borderWidth.hairline,
+    borderTopColor: Theme.colors.borderWarmStrong,
+    backgroundColor: Theme.colors.overlaySoft,
+    paddingHorizontal: Theme.spacing.s16,
+    paddingTop: Theme.spacing.s10,
+    paddingBottom: Theme.spacing.s12,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   input: {
-    flex: 1,
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: '#EEE6DC',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    color: '#111827',
+    flex: Theme.layout.full,
+    minHeight: Theme.sizes.s44,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarmAlt,
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.r22,
+    paddingHorizontal: Theme.spacing.s16,
+    fontSize: Theme.typography.size.s15,
+    color: Theme.colors.text,
   },
   sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#157B57',
+    width: Theme.sizes.s44,
+    height: Theme.sizes.s44,
+    borderRadius: Theme.radius.r22,
+    backgroundColor: Theme.colors.successDeep,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 10,
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.12,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 10,
-    elevation: 3,
+    marginLeft: Theme.spacing.s10,
+    ...Theme.shadows.button,
   },
   sendButtonDisabled: {
-    opacity: 0.5,
+    opacity: Theme.opacity.o5,
   },
   sendButtonPressed: {
-    transform: [{ scale: 0.97 }],
+    transform: [{ scale: Theme.scale.pressed }],
   },
   helperText: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#6B7280',
+    marginTop: Theme.spacing.s8,
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.textSecondary,
   },
 });

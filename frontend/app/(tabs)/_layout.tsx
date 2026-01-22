@@ -1,45 +1,61 @@
 import { Tabs } from 'expo-router';
-import React from 'react';
-
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { StyleSheet } from 'react-native';
+import { Theme } from '../../constants/theme';
+import { IconSymbol } from '../../components/ui/icon-symbol';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
-      initialRouteName="index"
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
+        headerShown: true,
+        tabBarActiveTintColor: Theme.colors.tabBarActive,
+        tabBarInactiveTintColor: Theme.colors.tabBarInactive,
+        tabBarStyle: styles.tabBar,
+        headerStyle: styles.header,
+        headerTitleStyle: styles.headerTitle,
       }}>
-      <Tabs.Screen
-        name="agent"
-        options={{
-          title: 'Agent',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="message.fill" color={color} />,
-        }}
-      />
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: '缘分',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={Theme.sizes.s28} name="heart.fill" color={color} />
+          ),
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="support"
         options={{
-          title: 'User',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
+          title: '陪伴',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={Theme.sizes.s28} name="house.fill" color={color} />
+          ),
         }}
       />
-      <Tabs.Screen name="match" options={{ href: null }} />
-      <Tabs.Screen name="explore" options={{ href: null }} />
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: '广场',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={Theme.sizes.s28} name="person.2.fill" color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: Theme.colors.background,
+    borderTopColor: Theme.colors.border,
+  },
+  header: {
+    backgroundColor: Theme.colors.background,
+    height: Theme.layout.headerHeight,
+  },
+  headerTitle: {
+    color: Theme.colors.text,
+    fontWeight: 'bold',
+  },
+});

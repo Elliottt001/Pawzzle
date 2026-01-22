@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Theme } from '@/constants/theme';
 
 type AuthUser = {
   id: number;
@@ -26,6 +27,8 @@ type AuthSession = {
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
+const ensureChinese = (message: string, fallback: string) =>
+  /[\u4e00-\u9fff]/.test(message) ? message : fallback;
 
 export default function ProfileScreen() {
   const [session, setSession] = React.useState<AuthSession | null>(null);
@@ -43,8 +46,8 @@ export default function ProfileScreen() {
     try {
       await action();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Something went wrong.';
-      setStatus(message);
+      const message = error instanceof Error ? error.message : '';
+      setStatus(ensureChinese(message, '出错了，请稍后重试。'));
     } finally {
       setLoading(false);
     }
@@ -58,7 +61,7 @@ export default function ProfileScreen() {
         password: registerPassword,
       });
       setSession(data);
-      setStatus('Registered and signed in.');
+      setStatus('注册并已登录。');
     });
 
   const handleLogin = () =>
@@ -68,7 +71,7 @@ export default function ProfileScreen() {
         password: loginPassword,
       });
       setSession(data);
-      setStatus('Signed in.');
+      setStatus('已登录。');
     });
 
   const handleLogout = () =>
@@ -78,10 +81,10 @@ export default function ProfileScreen() {
       }
       await request('/api/auth/logout', { token: session.token });
       setSession(null);
-      setStatus('Signed out.');
+      setStatus('已退出登录。');
     });
 
-  const displayName = session?.user.name ?? 'Guest';
+  const displayName = session?.user.name ?? '游客';
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -95,8 +98,8 @@ export default function ProfileScreen() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.header}>
-          <Text style={styles.overline}>User</Text>
-          <Text style={styles.title}>Account</Text>
+          <Text style={styles.overline}>用户</Text>
+          <Text style={styles.title}>账户</Text>
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
@@ -105,9 +108,9 @@ export default function ProfileScreen() {
               <Image source={require('@/assets/images/icon.png')} style={styles.avatar} />
             </View>
             <Text style={styles.name}>{displayName}</Text>
-            <Text style={styles.nicknameLabel}>Status</Text>
+            <Text style={styles.nicknameLabel}>状态</Text>
             <View style={styles.nicknamePill}>
-              <Text style={styles.nicknameText}>{session ? 'Signed in' : 'Guest mode'}</Text>
+              <Text style={styles.nicknameText}>{session ? '已登录' : '游客模式'}</Text>
             </View>
             {session ? (
               <Text style={styles.emailText}>{session.user.email}</Text>
@@ -118,9 +121,9 @@ export default function ProfileScreen() {
 
           {session ? (
             <View style={styles.formCard}>
-              <Text style={styles.formTitle}>Signed in</Text>
+              <Text style={styles.formTitle}>已登录</Text>
               <Text style={styles.formSubtitle}>
-                You can sign out on this device when you are ready.
+                如需退出登录，可在此设备操作。
               </Text>
               <Pressable
                 onPress={handleLogout}
@@ -130,25 +133,25 @@ export default function ProfileScreen() {
                   pressed && styles.actionButtonPressed,
                 ]}>
                 <Text style={styles.actionButtonText}>
-                  {loading ? 'Signing out...' : 'Sign out'}
+                  {loading ? '正在退出...' : '退出登录'}
                 </Text>
               </Pressable>
             </View>
           ) : (
             <>
-              <FormSection title="Create account">
+              <FormSection title="注册账户">
                 <TextInput
                   value={registerName}
                   onChangeText={setRegisterName}
-                  placeholder="Name"
-                  placeholderTextColor="#9CA3AF"
+                  placeholder="姓名"
+                  placeholderTextColor={Theme.colors.placeholder}
                   style={styles.input}
                 />
                 <TextInput
                   value={registerEmail}
                   onChangeText={setRegisterEmail}
-                  placeholder="Email"
-                  placeholderTextColor="#9CA3AF"
+                  placeholder="邮箱"
+                  placeholderTextColor={Theme.colors.placeholder}
                   style={styles.input}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -157,8 +160,8 @@ export default function ProfileScreen() {
                 <TextInput
                   value={registerPassword}
                   onChangeText={setRegisterPassword}
-                  placeholder="Password"
-                  placeholderTextColor="#9CA3AF"
+                  placeholder="密码"
+                  placeholderTextColor={Theme.colors.placeholder}
                   style={styles.input}
                   secureTextEntry
                   autoCapitalize="none"
@@ -169,19 +172,19 @@ export default function ProfileScreen() {
                   style={({ pressed }) => [
                     styles.actionButton,
                     pressed && styles.actionButtonPressed,
-                  ]}>
-                  <Text style={styles.actionButtonText}>
-                    {loading ? 'Registering...' : 'Register'}
-                  </Text>
-                </Pressable>
-              </FormSection>
+                ]}>
+                <Text style={styles.actionButtonText}>
+                  {loading ? '注册中...' : '注册'}
+                </Text>
+              </Pressable>
+            </FormSection>
 
-              <FormSection title="Sign in">
+              <FormSection title="登录">
                 <TextInput
                   value={loginEmail}
                   onChangeText={setLoginEmail}
-                  placeholder="Email"
-                  placeholderTextColor="#9CA3AF"
+                  placeholder="邮箱"
+                  placeholderTextColor={Theme.colors.placeholder}
                   style={styles.input}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -190,8 +193,8 @@ export default function ProfileScreen() {
                 <TextInput
                   value={loginPassword}
                   onChangeText={setLoginPassword}
-                  placeholder="Password"
-                  placeholderTextColor="#9CA3AF"
+                  placeholder="密码"
+                  placeholderTextColor={Theme.colors.placeholder}
                   style={styles.input}
                   secureTextEntry
                   autoCapitalize="none"
@@ -202,12 +205,12 @@ export default function ProfileScreen() {
                   style={({ pressed }) => [
                     styles.actionButton,
                     pressed && styles.actionButtonPressed,
-                  ]}>
-                  <Text style={styles.actionButtonText}>
-                    {loading ? 'Signing in...' : 'Sign in'}
-                  </Text>
-                </Pressable>
-              </FormSection>
+                ]}>
+                <Text style={styles.actionButtonText}>
+                  {loading ? '登录中...' : '登录'}
+                </Text>
+              </Pressable>
+            </FormSection>
             </>
           )}
         </ScrollView>
@@ -251,9 +254,9 @@ async function request<T = unknown>(path: string, payload?: Record<string, unkno
   if (!response.ok) {
     const message =
       typeof data === 'object' && data && 'message' in data
-        ? String((data as { message?: string }).message)
-        : response.statusText;
-    throw new Error(message || 'Request failed');
+        ? String((data as { message?: string }).message ?? '')
+        : response.statusText ?? '';
+    throw new Error(ensureChinese(message, '请求失败'));
   }
 
   return data;
@@ -261,171 +264,163 @@ async function request<T = unknown>(path: string, payload?: Record<string, unkno
 
 const styles = StyleSheet.create({
   safeArea: {
-    flex: 1,
-    backgroundColor: '#FDF7F0',
+    flex: Theme.layout.full,
+    backgroundColor: Theme.colors.backgroundWarmAlt,
   },
   container: {
-    flex: 1,
+    flex: Theme.layout.full,
   },
   background: {
     ...StyleSheet.absoluteFillObject,
   },
   blob: {
     position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    opacity: 0.65,
+    width: Theme.sizes.s220,
+    height: Theme.sizes.s220,
+    borderRadius: Theme.radius.r110,
+    opacity: Theme.opacity.o65,
   },
   blobTop: {
-    top: -80,
-    left: -40,
-    backgroundColor: '#FCE7CF',
+    top: -Theme.sizes.s80,
+    left: -Theme.sizes.s40,
+    backgroundColor: Theme.colors.decorativePeachSoft,
   },
   blobSide: {
-    top: 80,
-    right: -60,
-    backgroundColor: '#DFF3E5',
+    top: Theme.sizes.s80,
+    right: -Theme.sizes.s60,
+    backgroundColor: Theme.colors.decorativeMint,
   },
   blobBottom: {
-    bottom: -70,
-    left: '30%',
-    backgroundColor: '#D9EEF7',
+    bottom: -Theme.sizes.s70,
+    left: Theme.percent.p30,
+    backgroundColor: Theme.colors.decorativeSkySoft,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingHorizontal: Theme.spacing.s20,
+    paddingTop: Theme.spacing.s12,
+    paddingBottom: Theme.spacing.s8,
   },
   overline: {
-    fontSize: 11,
-    letterSpacing: 3,
+    fontSize: Theme.typography.size.s11,
+    letterSpacing: Theme.typography.letterSpacing.s3,
     textTransform: 'uppercase',
-    color: '#6B7280',
-    marginBottom: 6,
+    color: Theme.colors.textSecondary,
+    marginBottom: Theme.spacing.s6,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#111827',
+    fontSize: Theme.typography.size.s22,
+    fontWeight: Theme.typography.weight.semiBold,
+    color: Theme.colors.text,
   },
   content: {
-    paddingHorizontal: 20,
-    paddingBottom: 140,
-    gap: 16,
+    paddingHorizontal: Theme.spacing.s20,
+    paddingBottom: Theme.sizes.s140,
+    gap: Theme.spacing.s16,
   },
   profileCard: {
-    marginTop: 8,
-    padding: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#EFE3D6',
+    marginTop: Theme.spacing.s8,
+    padding: Theme.spacing.s20,
+    backgroundColor: Theme.colors.cardTranslucentSoft,
+    borderRadius: Theme.radius.r24,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarm,
     alignItems: 'center',
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 16,
-    elevation: 3,
+    ...Theme.shadows.cardLarge,
   },
   avatarWrap: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#F7EFE4',
+    width: Theme.sizes.s96,
+    height: Theme.sizes.s96,
+    borderRadius: Theme.radius.r48,
+    backgroundColor: Theme.colors.surfaceWarm,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#EADBC8',
+    marginBottom: Theme.spacing.s12,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarmSoft,
   },
   avatar: {
-    width: 68,
-    height: 68,
+    width: Theme.sizes.s68,
+    height: Theme.sizes.s68,
   },
   name: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#111827',
+    fontSize: Theme.typography.size.s20,
+    fontWeight: Theme.typography.weight.semiBold,
+    color: Theme.colors.text,
   },
   nicknameLabel: {
-    marginTop: 12,
-    fontSize: 12,
-    color: '#6B7280',
+    marginTop: Theme.spacing.s12,
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.textSecondary,
     textTransform: 'uppercase',
-    letterSpacing: 1.6,
+    letterSpacing: Theme.typography.letterSpacing.s1_6,
   },
   nicknamePill: {
-    marginTop: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: '#E8F5EE',
-    borderWidth: 1,
-    borderColor: '#CDE8D9',
+    marginTop: Theme.spacing.s6,
+    paddingHorizontal: Theme.spacing.s14,
+    paddingVertical: Theme.spacing.s6,
+    borderRadius: Theme.radius.pill,
+    backgroundColor: Theme.colors.successSurface,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.successBorder,
   },
   nicknameText: {
-    fontSize: 14,
-    color: '#15803D',
-    fontWeight: '600',
+    fontSize: Theme.typography.size.s14,
+    color: Theme.colors.successStrong,
+    fontWeight: Theme.typography.weight.semiBold,
   },
   emailText: {
-    marginTop: 10,
-    fontSize: 13,
-    color: '#6B7280',
+    marginTop: Theme.spacing.s10,
+    fontSize: Theme.typography.size.s13,
+    color: Theme.colors.textSecondary,
   },
   statusText: {
-    fontSize: 13,
-    color: '#1F2937',
+    fontSize: Theme.typography.size.s13,
+    color: Theme.colors.textEmphasis,
   },
   formCard: {
-    padding: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#EFE3D6',
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 2,
+    padding: Theme.spacing.s18,
+    backgroundColor: Theme.colors.cardTranslucentSoft,
+    borderRadius: Theme.radius.r20,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarm,
+    ...Theme.shadows.elevatedSoft,
   },
   formTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 12,
+    fontSize: Theme.typography.size.s16,
+    fontWeight: Theme.typography.weight.semiBold,
+    color: Theme.colors.text,
+    marginBottom: Theme.spacing.s12,
   },
   formSubtitle: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginBottom: 12,
+    fontSize: Theme.typography.size.s13,
+    color: Theme.colors.textSecondary,
+    marginBottom: Theme.spacing.s12,
   },
   formFields: {
-    gap: 12,
+    gap: Theme.spacing.s12,
   },
   input: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: '#EEE6DC',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    fontSize: 14,
-    color: '#111827',
+    minHeight: Theme.sizes.s44,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarmAlt,
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.r14,
+    paddingHorizontal: Theme.spacing.s12,
+    fontSize: Theme.typography.size.s14,
+    color: Theme.colors.text,
   },
   actionButton: {
-    backgroundColor: '#157B57',
-    paddingVertical: 12,
-    borderRadius: 14,
+    backgroundColor: Theme.colors.successDeep,
+    paddingVertical: Theme.spacing.s12,
+    borderRadius: Theme.radius.r14,
     alignItems: 'center',
   },
   actionButtonPressed: {
-    transform: [{ scale: 0.98 }],
+    transform: [{ scale: Theme.scale.pressedSoft }],
   },
   actionButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
+    color: Theme.colors.textInverse,
+    fontSize: Theme.typography.size.s14,
+    fontWeight: Theme.typography.weight.semiBold,
   },
 });

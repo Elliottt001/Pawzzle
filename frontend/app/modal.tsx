@@ -3,13 +3,14 @@ import { StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Theme } from '@/constants/theme';
 
 export default function ModalScreen() {
   return (
     <ThemedView style={styles.container}>
-      <ThemedText type="title">This is a modal</ThemedText>
+      <ThemedText type="title">这是一个弹窗</ThemedText>
       <Link href="/" dismissTo style={styles.link}>
-        <ThemedText type="link">Go to home screen</ThemedText>
+        <ThemedText type="link">返回首页</ThemedText>
       </Link>
     </ThemedView>
   );
@@ -17,13 +18,13 @@ export default function ModalScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flex: Theme.layout.full,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
+    padding: Theme.spacing.s20,
   },
   link: {
-    marginTop: 15,
-    paddingVertical: 15,
+    marginTop: Theme.spacing.s15,
+    paddingVertical: Theme.spacing.s15,
   },
 });
