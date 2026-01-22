@@ -29,20 +29,15 @@ type AgentMessage = {
 
 type EvaluationResponse = {
   endverification: boolean;
-  environmentScore?: number | null;
-  timeScore?: number | null;
-  financeScore?: number | null;
-  psychProfile?: string | null;
+  profile?: string | null;
+  nextQuestions?: string[] | null;
   nextQuestion?: string | null;
   prompt?: string | null;
   rawResponse?: string | null;
 };
 
 type EvaluationSummary = {
-  environmentScore: number;
-  timeScore: number;
-  financeScore: number;
-  psychProfile: string;
+  profile: string;
 };
 
 type AgentDecisionItem = { id: string; confidence?: number };
@@ -70,6 +65,7 @@ export default function AgentScreen() {
     'loading'
   );
   const [evaluation, setEvaluation] = React.useState<EvaluationSummary | null>(null);
+  const [pendingQuestions, setPendingQuestions] = React.useState<string[]>([]);
   const [recommendedItems, setRecommendedItems] = React.useState<AgentDecisionItem[]>([]);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const scrollRef = React.useRef<ScrollView | null>(null);
@@ -101,11 +97,8 @@ export default function AgentScreen() {
 
   const formatEvaluationSummary = React.useCallback((summary: EvaluationSummary) => {
     return [
-      'Evaluation complete:',
-      `Living environment & safety: ${summary.environmentScore.toFixed(2)}`,
-      `Time & energy cost: ${summary.timeScore.toFixed(2)}`,
-      `Financial support: ${summary.financeScore.toFixed(2)}`,
-      `Psychological expectations: ${summary.psychProfile}`,
+      'Profile complete:',
+      summary.profile,
     ].join('\n');
   }, []);
 
@@ -146,6 +139,7 @@ export default function AgentScreen() {
         if (data?.endverification) {
           const summary = buildEvaluationSummary(data);
           setEvaluation(summary);
+          setPendingQuestions([]);
           appendMessage('ai', formatEvaluationSummary(summary));
           setStatus('recommending');
           return loadPetCards().then((pets) => requestRecommendation(summary, [], pets)).then((decision) => {
@@ -155,11 +149,13 @@ export default function AgentScreen() {
           });
         }
 
-        const nextQuestion = data?.nextQuestion?.trim();
-        if (nextQuestion) {
-          appendMessage('ai', nextQuestion);
+        const questions = normalizeQuestions(data);
+        if (questions.length) {
+          const [first, ...rest] = questions;
+          setPendingQuestions(rest);
+          appendMessage('ai', first);
         } else {
-          appendDebug('DEBUG: evaluation missing nextQuestion', data?.rawResponse ?? '');
+          appendDebug('DEBUG: evaluation missing questions', data?.rawResponse ?? '');
         }
         return undefined;
       })
@@ -193,9 +189,16 @@ export default function AgentScreen() {
 
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
-    setStatus('evaluating');
     setErrorMessage(null);
 
+    if (pendingQuestions.length) {
+      const [nextQuestion, ...rest] = pendingQuestions;
+      setPendingQuestions(rest);
+      appendMessage('ai', nextQuestion);
+      return;
+    }
+
+    setStatus('evaluating');
     const nextMessages = [...messages, userMessage];
 
     try {
@@ -206,6 +209,7 @@ export default function AgentScreen() {
       if (data?.endverification) {
         const summary = buildEvaluationSummary(data);
         setEvaluation(summary);
+        setPendingQuestions([]);
         appendMessage('ai', formatEvaluationSummary(summary));
 
         setStatus('recommending');
@@ -215,11 +219,13 @@ export default function AgentScreen() {
         appendDebug('DEBUG: recommend response', decision?.rawResponse ?? '');
         setRecommendedItems(decision?.items ?? []);
       } else {
-        const nextQuestion = data?.nextQuestion?.trim();
-        if (nextQuestion) {
-          appendMessage('ai', nextQuestion);
+        const questions = normalizeQuestions(data);
+        if (questions.length) {
+          const [first, ...rest] = questions;
+          setPendingQuestions(rest);
+          appendMessage('ai', first);
         } else {
-          appendDebug('DEBUG: evaluation missing nextQuestion', data?.rawResponse ?? '');
+          appendDebug('DEBUG: evaluation missing questions', data?.rawResponse ?? '');
         }
       }
     } catch (error) {
@@ -289,7 +295,7 @@ export default function AgentScreen() {
             <TextInput
               value={input}
               onChangeText={setInput}
-              placeholder="Share details about your home and lifestyle..."
+              placeholder="Answer the question in your own words..."
               placeholderTextColor="#9CA3AF"
               style={styles.input}
               returnKeyType="send"
@@ -308,7 +314,7 @@ export default function AgentScreen() {
             </Pressable>
           </View>
           <Text style={styles.helperText}>
-            The agent will keep asking until the profile is complete.
+            The agent will ask 15 questions in batches of five.
           </Text>
         </View>
       ) : null}
@@ -413,18 +419,27 @@ async function postJson<T = unknown>(path: string, payload: Record<string, unkno
 
 function buildEvaluationSummary(data: EvaluationResponse): EvaluationSummary {
   return {
-    environmentScore: clampScore(data.environmentScore),
-    timeScore: clampScore(data.timeScore),
-    financeScore: clampScore(data.financeScore),
-    psychProfile: data.psychProfile?.trim() || 'No profile summary provided.',
+    profile: data.profile?.trim() || 'No profile summary provided.',
   };
 }
 
-function clampScore(value?: number | null) {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return 0.5;
+function normalizeQuestions(data?: EvaluationResponse | null) {
+  if (!data) {
+    return [];
   }
-  return Math.max(0, Math.min(1, value));
+  const fromList = Array.isArray(data.nextQuestions) ? data.nextQuestions : [];
+  const raw = fromList.length ? fromList : data.nextQuestion ? [data.nextQuestion] : [];
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const trimmed = typeof item === 'string' ? item.trim() : '';
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+    seen.add(trimmed);
+    result.push(trimmed);
+  }
+  return result;
 }
 
 const styles = StyleSheet.create({
