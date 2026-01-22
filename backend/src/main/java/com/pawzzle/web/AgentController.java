@@ -3,16 +3,23 @@ package com.pawzzle.web;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pawzzle.domain.pet.Pet;
+import com.pawzzle.domain.pet.PetRepository;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.ChatResponse;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.embedding.EmbeddingClient;
 import org.springframework.ai.openai.OpenAiChatClient;
+import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,6 +29,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/agent")
 @RequiredArgsConstructor
 public class AgentController {
+    private static final int DEFAULT_CANDIDATE_LIMIT = 50;
+    private static final Logger log = LoggerFactory.getLogger(AgentController.class);
     private static final String EVALUATION_SYSTEM_PROMPT = """
         You are a pet adoption interview question generator and profiler.
         You must ask exactly 15 total questions to build a detailed user profile.
@@ -51,6 +60,11 @@ public class AgentController {
 
     private final OpenAiChatClient chatClient;
     private final ObjectMapper objectMapper;
+    private final EmbeddingClient embeddingClient;
+    private final PetRepository petRepository;
+
+    @Value("${pawzzle.matching.candidate-limit:50}")
+    private int candidateLimit;
 
     @PostMapping("/evaluate")
     public EvaluationResponse evaluate(@RequestBody EvaluationRequest request) {
@@ -74,9 +88,10 @@ public class AgentController {
 
     @PostMapping("/recommend")
     public RecommendationResponse recommend(@RequestBody RecommendationRequest request) {
-        List<PetCard> pets = request.pets() == null ? List.of() : request.pets();
+        CandidateSelection selection = resolveCandidatePets(request);
+        List<PetCard> pets = selection.pets();
         if (pets.isEmpty()) {
-            return new RecommendationResponse(List.of(), "", "");
+            return new RecommendationResponse(List.of(), "", "", selection.debug());
         }
 
         String userPrompt = buildRecommendationPrompt(request, pets);
@@ -87,7 +102,7 @@ public class AgentController {
 
         String content = response.getResult().getOutput().getContent();
         List<RecommendationItem> items = parseItems(content, pets);
-        return new RecommendationResponse(items, content == null ? "" : content, userPrompt);
+        return new RecommendationResponse(items, content == null ? "" : content, userPrompt, selection.debug());
     }
 
     private String buildEvaluationPrompt(List<AgentMessage> messages) {
@@ -124,6 +139,203 @@ public class AgentController {
             Pet Cards:
             %s
             """.formatted(qaText, petsJson);
+    }
+
+    private CandidateSelection resolveCandidatePets(RecommendationRequest request) {
+        if (request == null) {
+            return new CandidateSelection(List.of(), "request=null");
+        }
+        int limit = effectiveCandidateLimit();
+        int providedCount = request.pets() == null ? 0 : request.pets().size();
+        int messageCount = request.messages() == null ? 0 : request.messages().size();
+        int qaCount = request.questionAnswers() == null ? 0 : request.questionAnswers().size();
+        boolean hasEvaluation = request.evaluation() != null;
+
+        SearchPayload payload = buildSearchPayload(request);
+        StringBuilder debug = new StringBuilder();
+        debug.append("candidate.limit=").append(limit).append('\n');
+        debug.append("request.evaluation.present=").append(hasEvaluation).append('\n');
+        debug.append("request.messages.count=").append(messageCount).append('\n');
+        debug.append("request.questionAnswers.count=").append(qaCount).append('\n');
+        debug.append("request.pets.count=").append(providedCount).append('\n');
+        debug.append("search.source=").append(payload.source()).append('\n');
+        if (payload.text() != null) {
+            debug.append("search.text.length=").append(payload.text().length()).append('\n');
+            debug.append("search.text=").append(payload.text()).append('\n');
+        } else {
+            debug.append("search.text.length=0\n");
+        }
+
+        if (payload.text() != null) {
+            List<Double> vector = embeddingClient.embed(payload.text());
+            int vectorSize = vector == null ? 0 : vector.size();
+            debug.append("embedding.size=").append(vectorSize).append('\n');
+            debug.append("embedding.preview=").append(formatVectorPreview(vector, 6)).append('\n');
+            String species = detectSpecies(payload.text());
+            debug.append("species.filter=").append(species == null ? "none" : species).append('\n');
+            if (vector == null || vector.isEmpty()) {
+                debug.append("vector.search.skipped=true\n");
+                List<PetCard> fallback = limitPetCards(request.pets() == null ? List.of() : request.pets(), limit);
+                debug.append("fallback.pets.count=").append(fallback.size()).append('\n');
+                debug.append("fallback.pets.ids=").append(joinPetCardIds(fallback)).append('\n');
+                log.info("Agent recommend debug:\n{}", debug);
+                return new CandidateSelection(fallback, debug.toString());
+            }
+            List<Pet> candidates = petRepository.hybridSearch(species, vector, limit);
+            debug.append("vector.search.limit=").append(limit).append('\n');
+            debug.append("vector.search.result.count=").append(candidates.size()).append('\n');
+            debug.append("vector.search.result.ids=").append(joinPetIds(candidates)).append('\n');
+            List<PetCard> cards = toPetCards(candidates);
+            debug.append("response.pets.count=").append(cards.size()).append('\n');
+            debug.append("response.pets.ids=").append(joinPetCardIds(cards)).append('\n');
+            log.info("Agent recommend debug:\n{}", debug);
+            return new CandidateSelection(cards, debug.toString());
+        }
+
+        List<PetCard> provided = request.pets() == null ? List.of() : request.pets();
+        List<PetCard> limited = limitPetCards(provided, limit);
+        debug.append("vector.search.skipped=true\n");
+        debug.append("fallback.pets.count=").append(limited.size()).append('\n');
+        debug.append("fallback.pets.ids=").append(joinPetCardIds(limited)).append('\n');
+        log.info("Agent recommend debug:\n{}", debug);
+        return new CandidateSelection(limited, debug.toString());
+    }
+
+    private SearchPayload buildSearchPayload(RecommendationRequest request) {
+        EvaluationSummary evaluation = request.evaluation();
+        if (evaluation != null) {
+            String profile = normalizeText(evaluation.profile());
+            if (profile != null) {
+                return new SearchPayload(profile, "evaluation.profile");
+            }
+        }
+        List<QuestionAnswer> answers = request.questionAnswers();
+        if (answers != null && !answers.isEmpty()) {
+            String qaText = formatQuestionAnswers(answers);
+            if (!"No answers provided.".equals(qaText)) {
+                return new SearchPayload(qaText, "questionAnswers");
+            }
+        }
+        List<AgentMessage> messages = request.messages();
+        if (messages != null && !messages.isEmpty()) {
+            String conversation = formatMessages(messages);
+            if (!"No conversation yet.".equals(conversation)) {
+                return new SearchPayload(conversation, "messages");
+            }
+        }
+        return new SearchPayload(null, "none");
+    }
+
+    private String detectSpecies(String text) {
+        if (text == null) {
+            return null;
+        }
+        String lower = text.toLowerCase(Locale.ROOT);
+        if (lower.contains("cat") || lower.contains("kitten") || text.contains("猫")) {
+            return "CAT";
+        }
+        if (lower.contains("dog") || lower.contains("puppy") || text.contains("狗")) {
+            return "DOG";
+        }
+        return null;
+    }
+
+    private String formatVectorPreview(List<Double> vector, int limit) {
+        if (vector == null || vector.isEmpty()) {
+            return "[]";
+        }
+        int capped = Math.min(limit, vector.size());
+        List<String> values = new ArrayList<>(capped);
+        for (int i = 0; i < capped; i += 1) {
+            Double value = vector.get(i);
+            if (value == null) {
+                values.add("0");
+            } else {
+                values.add(String.format(Locale.ROOT, "%.6f", value));
+            }
+        }
+        String preview = String.join(",", values);
+        if (vector.size() > capped) {
+            preview = preview + ",...";
+        }
+        return "[" + preview + "]";
+    }
+
+    private String joinPetIds(List<Pet> pets) {
+        if (pets == null || pets.isEmpty()) {
+            return "[]";
+        }
+        List<String> ids = new ArrayList<>();
+        for (Pet pet : pets) {
+            if (pet == null || pet.getId() == null) {
+                continue;
+            }
+            ids.add(pet.getId().toString());
+        }
+        return ids.isEmpty() ? "[]" : ids.toString();
+    }
+
+    private String joinPetCardIds(List<PetCard> pets) {
+        if (pets == null || pets.isEmpty()) {
+            return "[]";
+        }
+        List<String> ids = new ArrayList<>();
+        for (PetCard pet : pets) {
+            if (pet == null || pet.id() == null) {
+                continue;
+            }
+            ids.add(pet.id());
+        }
+        return ids.isEmpty() ? "[]" : ids.toString();
+    }
+
+    private List<PetCard> toPetCards(List<Pet> pets) {
+        if (pets == null || pets.isEmpty()) {
+            return List.of();
+        }
+        List<PetCard> cards = new ArrayList<>();
+        for (Pet pet : pets) {
+            if (pet == null) {
+                continue;
+            }
+            String id = pet.getId() == null ? null : pet.getId().toString();
+            if (id == null) {
+                continue;
+            }
+            cards.add(new PetCard(
+                id,
+                pet.getName(),
+                pet.getBreed(),
+                pet.getAge(),
+                pet.getEnergy(),
+                pet.getTrait(),
+                pet.getDistance(),
+                pet.getIcon(),
+                pet.getTone()
+            ));
+        }
+        return cards;
+    }
+
+    private List<PetCard> limitPetCards(List<PetCard> pets, int limit) {
+        if (pets == null || pets.isEmpty()) {
+            return List.of();
+        }
+        List<PetCard> cleaned = new ArrayList<>();
+        for (PetCard pet : pets) {
+            if (pet != null && pet.id() != null) {
+                cleaned.add(pet);
+            }
+        }
+        if (cleaned.isEmpty()) {
+            return List.of();
+        }
+        int capped = Math.min(limit, cleaned.size());
+        return new ArrayList<>(cleaned.subList(0, capped));
+    }
+
+    private int effectiveCandidateLimit() {
+        return candidateLimit > 0 ? candidateLimit : DEFAULT_CANDIDATE_LIMIT;
     }
 
     private String formatQuestionAnswers(List<QuestionAnswer> questionAnswers) {
@@ -450,7 +662,7 @@ public class AgentController {
     ) {
     }
 
-    public record RecommendationResponse(List<RecommendationItem> items, String rawResponse, String prompt) {
+    public record RecommendationResponse(List<RecommendationItem> items, String rawResponse, String prompt, String debug) {
     }
 
     public record QuestionAnswer(String question, String answer) {
@@ -480,5 +692,11 @@ public class AgentController {
         String icon,
         String tone
     ) {
+    }
+
+    private record SearchPayload(String text, String source) {
+    }
+
+    private record CandidateSelection(List<PetCard> pets, String debug) {
     }
 }

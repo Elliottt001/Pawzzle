@@ -47,6 +47,7 @@ type AgentDecisionResponse = {
   items: AgentDecisionItem[];
   rawResponse?: string;
   prompt?: string;
+  debug?: string;
 };
 
 const API_BASE_URL =
@@ -146,8 +147,9 @@ export default function AgentScreen() {
           setPendingQuestions([]);
           appendMessage('ai', formatEvaluationSummary(summary));
           setStatus('recommending');
-          return loadPetCards().then((pets) => requestRecommendation(summary, [], pets)).then((decision) => {
+          return loadPetCards().then(() => requestRecommendation(summary, [])).then((decision) => {
             appendDebug('调试：推荐提示', decision?.prompt ?? '');
+            appendDebug('调试：候选筛选', decision?.debug ?? '');
             appendDebug('调试：推荐响应', decision?.rawResponse ?? '');
             setRecommendedItems(decision?.items ?? []);
           });
@@ -218,9 +220,10 @@ export default function AgentScreen() {
         appendMessage('ai', formatEvaluationSummary(summary));
 
         setStatus('recommending');
-        const pets = await loadPetCards();
-        const decision = await requestRecommendation(summary, buildAgentMessages(nextMessages), pets);
+        await loadPetCards();
+        const decision = await requestRecommendation(summary, buildAgentMessages(nextMessages));
         appendDebug('调试：推荐提示', decision?.prompt ?? '');
+        appendDebug('调试：候选筛选', decision?.debug ?? '');
         appendDebug('调试：推荐响应', decision?.rawResponse ?? '');
         setRecommendedItems(decision?.items ?? []);
       } else {
@@ -367,15 +370,10 @@ async function requestEvaluation(messages: AgentMessage[]) {
   return postJson<EvaluationResponse>('/api/agent/evaluate', { messages });
 }
 
-async function requestRecommendation(
-  summary: EvaluationSummary,
-  messages: AgentMessage[],
-  pets: PetCardData[]
-) {
+async function requestRecommendation(summary: EvaluationSummary, messages: AgentMessage[]) {
   return postJson<AgentDecisionResponse>('/api/agent/recommend', {
     messages,
     evaluation: summary,
-    pets,
   });
 }
 
