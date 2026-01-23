@@ -23,5 +23,27 @@ CREATE TABLE IF NOT EXISTS user_sessions (
     expires_at TIMESTAMP NULL
 );
 
+-- Direct chat threads/messages
+CREATE TABLE IF NOT EXISTS chat_threads (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    owner_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    pet_id BIGINT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id BIGSERIAL PRIMARY KEY,
+    thread_id BIGINT NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+    sender_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_threads_user_id ON chat_threads(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_threads_owner_id ON chat_threads(owner_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_thread_id ON chat_messages(thread_id);
+
 -- Pets (with JSONB attributes and vector embedding)
 -- Adoption orders/processes

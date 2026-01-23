@@ -61,7 +61,7 @@ export default function RegisterScreen() {
         const data = (await response.json()) as AuthSession;
         setSession(data);
         Alert.alert('成功', '账号已创建并已登录。');
-        router.push('/(tabs)/profile'); 
+        router.push('/(tabs)/index'); 
       } else {
         const errorData = await response.json().catch(() => ({}));
         const serverMessage = typeof errorData.message === 'string' ? errorData.message : '';

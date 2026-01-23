@@ -545,7 +545,7 @@ export default function CommunityScreen() {
                   <View style={styles.loginHint}>
                     <Text style={styles.loginHintText}>请先登录后再发布内容。</Text>
                     <Pressable
-                      onPress={() => router.push('/(tabs)/profile')}
+                      onPress={() => router.push('/')}
                       style={({ pressed }) => [
                         styles.loginButton,
                         pressed && styles.loginButtonPressed,

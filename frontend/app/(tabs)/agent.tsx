@@ -89,6 +89,7 @@ const getRandomAcknowledgement = () => {
 };
 
 export default function AgentScreen() {
+  const [hasStarted, setHasStarted] = React.useState(false);
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [input, setInput] = React.useState('');
   const [status, setStatus] = React.useState<'idle' | 'evaluating' | 'recommending' | 'error'>(
@@ -175,11 +176,13 @@ export default function AgentScreen() {
   }, [petCards, petCardsStatus]);
 
   React.useEffect(() => {
-    loadPetCards();
-  }, [loadPetCards]);
+    if (hasStarted) {
+      loadPetCards();
+    }
+  }, [hasStarted, loadPetCards]);
 
   React.useEffect(() => {
-    if (hasStartedRef.current) {
+    if (!hasStarted || hasStartedRef.current) {
       return;
     }
     hasStartedRef.current = true;
@@ -223,7 +226,14 @@ export default function AgentScreen() {
       .finally(() => {
         setStatus('idle');
       });
-  }, [appendDebug, appendMessage, buildEvaluationSummary, formatEvaluationSummary]);
+  }, [
+    appendDebug,
+    appendMessage,
+    buildEvaluationSummary,
+    formatEvaluationSummary,
+    hasStarted,
+    loadPetCards,
+  ]);
 
   React.useEffect(() => {
     const timeout = setTimeout(() => {
@@ -307,6 +317,10 @@ export default function AgentScreen() {
       })
       .filter((item): item is { pet: PetCardData; confidence?: number } => Boolean(item));
   }, [petCards, recommendedItems]);
+
+  if (!hasStarted) {
+    return <AgentStartScreen onStart={() => setHasStarted(true)} />;
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -415,6 +429,66 @@ function ChatBubble({ role, text }: { role: ChatRole; text: string }) {
         </Text>
       </View>
     </View>
+  );
+}
+
+function AgentStartScreen({ onStart }: { onStart: () => void }) {
+  return (
+    <SafeAreaView style={startStyles.safeArea}>
+      <View style={startStyles.background}>
+        <View style={[startStyles.glow, startStyles.glowTop]} />
+        <View style={[startStyles.glow, startStyles.glowRight]} />
+        <View style={[startStyles.glow, startStyles.glowBottom]} />
+      </View>
+
+      <ScrollView contentContainerStyle={startStyles.content} bounces={false}>
+        <View style={startStyles.brandRow}>
+          <Text style={startStyles.brandText}>Pawzzle</Text>
+        </View>
+
+        <View style={startStyles.hero}>
+          <View style={startStyles.mascotWrap}>
+            <View style={startStyles.mascotGlow} />
+            <View style={startStyles.puzzlePiece}>
+              <View style={[startStyles.connector, startStyles.connectorTop]} />
+              <View style={[startStyles.connector, startStyles.connectorLeft]} />
+              <View style={[startStyles.connector, startStyles.connectorRight]} />
+              <View style={[startStyles.connector, startStyles.connectorBottom]} />
+              <View style={startStyles.catBadge}>
+                <FontAwesome5 name="cat" size={Theme.sizes.s50} color={Theme.colors.textWarning} />
+                <View style={startStyles.badgePaw}>
+                  <FontAwesome5
+                    name="paw"
+                    size={Theme.sizes.s16}
+                    color={Theme.colors.decorativePeachSoft}
+                  />
+                </View>
+              </View>
+            </View>
+          </View>
+
+          <Text style={startStyles.headline}>你好！我是Pawzy</Text>
+          <Text style={startStyles.subhead}>准备好寻找你的伙伴了吗</Text>
+
+          <View style={startStyles.ctaRow}>
+            <FontAwesome5 name="paw" size={Theme.sizes.s18} color={Theme.colors.decorativePeach} />
+            <Pressable
+              onPress={onStart}
+              style={({ pressed }) => [
+                startStyles.ctaButton,
+                pressed && startStyles.ctaButtonPressed,
+              ]}>
+              <Text style={startStyles.ctaText}>开始测试</Text>
+            </Pressable>
+            <FontAwesome5 name="paw" size={Theme.sizes.s18} color={Theme.colors.decorativePeach} />
+          </View>
+
+          <Text style={startStyles.tipText}>随时开始，只需几分钟哦</Text>
+        </View>
+
+        <Text style={startStyles.privacyText}>对话仅用于匹配，我们保护你的隐私~</Text>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -661,5 +735,167 @@ const styles = StyleSheet.create({
     marginTop: Theme.spacing.s8,
     fontSize: Theme.typography.size.s12,
     color: Theme.colors.textSecondary,
+  },
+});
+
+const PUZZLE_SIZE = Theme.sizes.s140;
+const CONNECTOR_SIZE = Theme.sizes.s40;
+const CONNECTOR_OFFSET = (PUZZLE_SIZE - CONNECTOR_SIZE) / 2;
+
+const startStyles = StyleSheet.create({
+  safeArea: {
+    flex: Theme.layout.full,
+    backgroundColor: Theme.colors.backgroundWarmAlt,
+  },
+  background: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  glow: {
+    position: 'absolute',
+    width: Theme.sizes.s220,
+    height: Theme.sizes.s220,
+    borderRadius: Theme.radius.r110,
+    opacity: Theme.opacity.o65,
+  },
+  glowTop: {
+    top: -Theme.sizes.s80,
+    left: -Theme.sizes.s40,
+    backgroundColor: Theme.colors.decorativePeachAlt,
+  },
+  glowRight: {
+    top: Theme.spacing.s24,
+    right: -Theme.sizes.s50,
+    backgroundColor: Theme.colors.decorativeMint,
+  },
+  glowBottom: {
+    bottom: -Theme.sizes.s70,
+    left: Theme.percent.p35,
+    backgroundColor: Theme.colors.decorativeSkyAlt,
+  },
+  content: {
+    flexGrow: Theme.layout.full,
+    paddingHorizontal: Theme.spacing.s24,
+    paddingTop: Theme.spacing.s16,
+    paddingBottom: Theme.sizes.s80,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  brandRow: {
+    alignSelf: 'flex-start',
+  },
+  brandText: {
+    fontSize: Theme.typography.size.s20,
+    fontWeight: Theme.typography.weight.semiBold,
+    color: Theme.colors.textWarning,
+    letterSpacing: Theme.typography.letterSpacing.s1_6,
+  },
+  hero: {
+    alignItems: 'center',
+    gap: Theme.spacing.s16,
+  },
+  mascotWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Theme.spacing.s12,
+  },
+  mascotGlow: {
+    position: 'absolute',
+    width: Theme.sizes.s220,
+    height: Theme.sizes.s220,
+    borderRadius: Theme.radius.r110,
+    backgroundColor: Theme.colors.decorativePeachSoft,
+    opacity: Theme.opacity.o6,
+  },
+  puzzlePiece: {
+    width: PUZZLE_SIZE,
+    height: PUZZLE_SIZE,
+    borderRadius: Theme.radius.r24,
+    backgroundColor: Theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarmSoft,
+    ...Theme.shadows.cardLarge,
+  },
+  connector: {
+    position: 'absolute',
+    width: CONNECTOR_SIZE,
+    height: CONNECTOR_SIZE,
+    borderRadius: CONNECTOR_SIZE / 2,
+    backgroundColor: Theme.colors.primary,
+  },
+  connectorTop: {
+    top: -Theme.sizes.s20,
+    left: CONNECTOR_OFFSET,
+  },
+  connectorLeft: {
+    left: -Theme.sizes.s20,
+    top: CONNECTOR_OFFSET,
+  },
+  connectorRight: {
+    right: -Theme.sizes.s20,
+    top: CONNECTOR_OFFSET,
+  },
+  connectorBottom: {
+    bottom: -Theme.sizes.s20,
+    left: CONNECTOR_OFFSET,
+  },
+  catBadge: {
+    width: Theme.sizes.s90,
+    height: Theme.sizes.s90,
+    borderRadius: Theme.sizes.s90 / 2,
+    backgroundColor: Theme.colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarm,
+    ...Theme.shadows.elevated,
+  },
+  badgePaw: {
+    position: 'absolute',
+    bottom: Theme.spacing.s6,
+    right: Theme.spacing.s6,
+  },
+  headline: {
+    fontSize: Theme.typography.size.s20,
+    fontWeight: Theme.typography.weight.semiBold,
+    color: Theme.colors.textWarning,
+  },
+  subhead: {
+    fontSize: Theme.typography.size.s14,
+    color: Theme.colors.textSecondary,
+  },
+  ctaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.s14,
+    marginTop: Theme.spacing.s4,
+  },
+  ctaButton: {
+    minWidth: Theme.sizes.s220,
+    paddingVertical: Theme.spacing.s12,
+    paddingHorizontal: Theme.spacing.s32,
+    borderRadius: Theme.radius.pill,
+    backgroundColor: Theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Theme.shadows.button,
+  },
+  ctaButtonPressed: {
+    transform: [{ scale: Theme.scale.pressed }],
+  },
+  ctaText: {
+    fontSize: Theme.typography.size.s16,
+    fontWeight: Theme.typography.weight.semiBold,
+    color: Theme.colors.textInverse,
+  },
+  tipText: {
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.textSecondary,
+  },
+  privacyText: {
+    fontSize: Theme.typography.size.s11,
+    color: Theme.colors.textSecondary,
+    opacity: Theme.opacity.o7,
   },
 });

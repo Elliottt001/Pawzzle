@@ -14,6 +14,8 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Theme } from '@/constants/theme';
+import { createThread } from '@/lib/chatApi';
+import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
 
 const API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
@@ -37,6 +39,9 @@ export default function PetDetailsScreen() {
   const [pet, setPet] = useState<Pet | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [session, setSessionState] = useState<AuthSession | null>(() => getSession());
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   useEffect(() => {
     const rawId = Array.isArray(id) ? id[0] : id;
@@ -67,6 +72,19 @@ export default function PetDetailsScreen() {
     fetchPet();
   }, [id]);
 
+  useEffect(() => {
+    const unsubscribe = subscribeSession((nextSession) => {
+      setSessionState(nextSession);
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (session?.token) {
+      setChatError(null);
+    }
+  }, [session?.token]);
+
   if (loading) {
     return (
       <ThemedView style={styles.center}>
@@ -82,6 +100,34 @@ export default function PetDetailsScreen() {
       </ThemedView>
     );
   }
+
+  const handleStartChat = async () => {
+    if (!pet.ownerId) {
+      return;
+    }
+    if (!session?.token) {
+      setChatError('请先登录后再私聊。');
+      router.push('/');
+      return;
+    }
+    if (chatLoading) {
+      return;
+    }
+    setChatLoading(true);
+    setChatError(null);
+    try {
+      const thread = await createThread(
+        { ownerId: pet.ownerId, petId: pet.id },
+        session.token
+      );
+      router.push(`/chat/${thread.id}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      setChatError(/[\u4e00-\u9fff]/.test(message) ? message : '创建私聊失败');
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   return (
     <ScrollView style={styles.scrollContainer}>
@@ -103,24 +149,41 @@ export default function PetDetailsScreen() {
           <ThemedView style={styles.ownerCard}>
             <ThemedText type="title" style={styles.ownerTitle}>发布者</ThemedText>
             {pet.ownerId ? (
-              <Pressable
-                onPress={() => router.push(`/user/${pet.ownerId}`)}
-                style={({ pressed }) => [
-                  styles.ownerRow,
-                  pressed && styles.ownerRowPressed,
-                ]}>
-                <View style={styles.ownerAvatar}>
-                  <FontAwesome5 name="user" size={Theme.sizes.s24} color={Theme.colors.text} />
-                </View>
-                <View>
-                  <ThemedText type="defaultSemiBold">
-                    {pet.ownerName ?? '未命名'}
+              <>
+                <Pressable
+                  onPress={() => router.push(`/user/${pet.ownerId}`)}
+                  style={({ pressed }) => [
+                    styles.ownerRow,
+                    pressed && styles.ownerRowPressed,
+                  ]}>
+                  <View style={styles.ownerAvatar}>
+                    <FontAwesome5 name="user" size={Theme.sizes.s24} color={Theme.colors.text} />
+                  </View>
+                  <View>
+                    <ThemedText type="defaultSemiBold">
+                      {pet.ownerName ?? '未命名'}
+                    </ThemedText>
+                    <ThemedText style={styles.ownerMeta}>
+                      {getUserTypeLabel(pet.ownerType)}
+                    </ThemedText>
+                  </View>
+                </Pressable>
+                <Pressable
+                  onPress={handleStartChat}
+                  disabled={chatLoading}
+                  style={({ pressed }) => [
+                    styles.chatButton,
+                    pressed && styles.chatButtonPressed,
+                    chatLoading && styles.chatButtonDisabled,
+                  ]}>
+                  <ThemedText style={styles.chatButtonText}>
+                    {chatLoading ? '正在创建...' : '私聊发布者'}
                   </ThemedText>
-                  <ThemedText style={styles.ownerMeta}>
-                    {getUserTypeLabel(pet.ownerType)}
-                  </ThemedText>
-                </View>
-              </Pressable>
+                </Pressable>
+                {chatError ? (
+                  <ThemedText style={styles.chatErrorText}>{chatError}</ThemedText>
+                ) : null}
+              </>
             ) : (
                 <ThemedText style={styles.noInfo}>暂无送养人信息。</ThemedText>
             )}
@@ -234,6 +297,29 @@ const styles = StyleSheet.create({
     marginTop: Theme.spacing.s2,
     fontSize: Theme.typography.size.s12,
     color: Theme.colors.textSecondary,
+  },
+  chatButton: {
+    alignSelf: 'flex-start',
+    marginTop: Theme.spacing.s8,
+    paddingVertical: Theme.spacing.s8,
+    paddingHorizontal: Theme.spacing.s16,
+    borderRadius: Theme.radius.r20,
+    backgroundColor: Theme.colors.successDeep,
+  },
+  chatButtonPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
+  chatButtonDisabled: {
+    opacity: Theme.opacity.o6,
+  },
+  chatButtonText: {
+    color: Theme.colors.textInverse,
+    fontSize: Theme.typography.size.s13,
+    fontWeight: Theme.typography.weight.semiBold,
+  },
+  chatErrorText: {
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.textError,
   },
   noInfo: {
     fontStyle: 'italic',

@@ -1,46 +1,39 @@
 import { Tabs } from 'expo-router';
-import { StyleSheet } from 'react-native';
-import { Theme } from '../../constants/theme';
 import { IconSymbol } from '../../components/ui/icon-symbol';
+import { PawzzleTabBar } from '../../components/pawzzle-tab-bar';
 
 export default function TabLayout() {
   return (
     <Tabs
       initialRouteName="index"
+      tabBar={(props) => <PawzzleTabBar {...props} />}
       screenOptions={{
-        headerShown: true,
-        tabBarActiveTintColor: Theme.colors.tabBarActive,
-        tabBarInactiveTintColor: Theme.colors.tabBarInactive,
-        tabBarStyle: styles.tabBar,
-        headerStyle: styles.header,
-        headerTitleStyle: styles.headerTitle,
+        headerShown: false,
       }}>
-      <Tabs.Screen
-        name="agent"
-        options={{
-          title: '首页',
-          headerShown: false,
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={Theme.sizes.s28} name="house.fill" color={color} />
-          ),
-        }}
-      />
       <Tabs.Screen
         name="index"
         options={{
-          title: '缘分',
-          headerShown: false,
+          title: '首页',
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={Theme.sizes.s28} name="heart.fill" color={color} />
+            <IconSymbol size={24} name="house.fill" color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="support"
+        name="pets"
         options={{
-          title: '陪伴',
+          title: '宠物',
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={Theme.sizes.s28} name="pawprint.fill" color={color} />
+            <IconSymbol size={24} name="pawprint.fill" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="agent"
+        options={{
+          title: '',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="pawprint.fill" color={color} />
           ),
         }}
       />
@@ -49,25 +42,19 @@ export default function TabLayout() {
         options={{
           title: '广场',
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={Theme.sizes.s28} name="person.2.fill" color={color} />
+            <IconSymbol size={24} name="person.2.fill" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="chats"
+        options={{
+          title: '私聊',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={24} name="message.fill" color={color} />
           ),
         }}
       />
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: Theme.colors.background,
-    borderTopColor: Theme.colors.border,
-  },
-  header: {
-    backgroundColor: Theme.colors.background,
-    height: Theme.layout.headerHeight,
-  },
-  headerTitle: {
-    color: Theme.colors.text,
-    fontWeight: 'bold',
-  },
-});
