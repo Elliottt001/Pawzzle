@@ -1,5 +1,8 @@
 package com.pawzzle.web;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pawzzle.domain.pet.Pet;
 import com.pawzzle.domain.pet.PetCardDTO;
 import com.pawzzle.domain.pet.PetDTO;
@@ -9,6 +12,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.ai.chat.ChatResponse;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.OpenAiChatClient;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,9 +32,26 @@ import org.springframework.web.server.ResponseStatusException;
 public class PetController {
 
     private final PetRepository petRepository;
+    private final OpenAiChatClient chatClient;
+    private final ObjectMapper objectMapper;
     private static final Set<String> LOCATIONS = Set.of("杭州", "北京", "上海");
     private static final Set<String> CAT_BREEDS = Set.of("British Shorthair", "Ragdoll", "Siamese");
     private static final Set<String> DOG_BREEDS = Set.of("Corgi", "Shiba Inu", "Mini Poodle");
+    private static final int AI_GENERATED_PET_COUNT = 20;
+    private static final String AI_PET_GENERATION_PROMPT = """
+        You generate pet adoption card data for a mobile app.
+        Return ONLY valid JSON with an array of exactly 20 objects.
+        Each object MUST contain these fields:
+        - name: short, unique pet name (Chinese or English is OK)
+        - species: "CAT" or "DOG"
+        - breed: use EXACT values from ["British Shorthair","Ragdoll","Siamese","Corgi","Shiba Inu","Mini Poodle"]
+        - age: integer, 1 to 10
+        - location: use EXACT values from ["杭州","北京","上海"]
+        - personalityTag: one word, no spaces
+        - description: 12-30 Chinese characters describing temperament
+
+        Do NOT include id fields, and do NOT wrap in markdown.
+        """;
 
     @GetMapping
     public List<PetCardDTO> listPetCards() {
@@ -39,21 +64,23 @@ public class PetController {
     @PostMapping
     public PetCardDTO createPet(@RequestBody CreatePetRequest request) {
         CreatePetPayload payload = validateCreateRequest(request);
-        Pet pet = Pet.builder()
-            .name(payload.name())
-            .species(payload.species())
-            .status(Pet.Status.OPEN)
-            .breed(payload.breed())
-            .age(payload.ageLabel())
-            .energy(payload.personalityTag())
-            .trait(payload.trait())
-            .distance(payload.location())
-            .icon(payload.icon())
-            .tone(payload.tone())
-            .rawDescription(payload.rawDescription())
-            .build();
+        Pet pet = buildPet(payload);
         Pet saved = petRepository.save(pet);
         return PetCardDTO.from(saved);
+    }
+
+    @PostMapping("/generate")
+    public GeneratePetsResponse generatePets() {
+        String content = callChat(AI_PET_GENERATION_PROMPT);
+        GenerationResult result = parseAndSaveGeneratedPets(content);
+        return new GeneratePetsResponse(
+            AI_GENERATED_PET_COUNT,
+            result.parsed(),
+            result.created(),
+            result.skipped(),
+            result.skippedReasons(),
+            content == null ? "" : content
+        );
     }
 
     @GetMapping("/{id}")
@@ -163,6 +190,151 @@ public class PetController {
         return age == 1 ? "1 yr" : age + " yrs";
     }
 
+    private Pet buildPet(CreatePetPayload payload) {
+        return Pet.builder()
+            .name(payload.name())
+            .species(payload.species())
+            .status(Pet.Status.OPEN)
+            .breed(payload.breed())
+            .age(payload.ageLabel())
+            .energy(payload.personalityTag())
+            .trait(payload.trait())
+            .distance(payload.location())
+            .icon(payload.icon())
+            .tone(payload.tone())
+            .rawDescription(payload.rawDescription())
+            .build();
+    }
+
+    private String callChat(String systemPrompt) {
+        Prompt prompt = new Prompt(List.of(
+            new SystemMessage(systemPrompt),
+            new UserMessage("Generate now.")
+        ));
+        ChatResponse response = chatClient.call(prompt);
+        return response.getResult().getOutput().getContent();
+    }
+
+    private GenerationResult parseAndSaveGeneratedPets(String response) {
+        String cleaned = stripCodeFences(response);
+        JsonNode root;
+        try {
+            root = objectMapper.readTree(cleaned);
+        } catch (JsonProcessingException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI JSON parse failed");
+        }
+        JsonNode itemsNode = root.isArray() ? root : root.has("items") ? root.get("items") : root;
+        if (!itemsNode.isArray()) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI response is not an array");
+        }
+        int parsed = 0;
+        int created = 0;
+        List<String> skippedReasons = new java.util.ArrayList<>();
+
+        for (JsonNode item : itemsNode) {
+            parsed += 1;
+            String name = normalize(readText(item.get("name")));
+            String species = normalize(readText(item.get("species")));
+            String breed = normalize(readText(item.get("breed")));
+            Integer age = readInt(item.get("age"));
+            String location = normalize(readText(item.get("location")));
+            String personalityTag = normalize(readText(item.get("personalityTag")));
+            String description = normalize(readText(item.get("description")));
+
+            if (name == null || species == null || breed == null || age == null || location == null
+                || personalityTag == null) {
+                skippedReasons.add("missing-fields:" + safeName(name));
+                continue;
+            }
+            if (petRepository.existsByName(name)) {
+                skippedReasons.add("duplicate-name:" + name);
+                continue;
+            }
+
+            CreatePetRequest request = new CreatePetRequest(
+                name,
+                species,
+                breed,
+                age,
+                location,
+                personalityTag,
+                description
+            );
+            try {
+                CreatePetPayload payload = validateCreateRequest(request);
+                Pet saved = petRepository.save(buildPet(payload));
+                if (saved.getId() != null) {
+                    created += 1;
+                }
+            } catch (ResponseStatusException ex) {
+                skippedReasons.add("invalid:" + name + ":" + ex.getReason());
+            }
+        }
+
+        int skipped = parsed - created;
+        return new GenerationResult(parsed, created, skipped, limitReasons(skippedReasons, 20));
+    }
+
+    private List<String> limitReasons(List<String> reasons, int limit) {
+        if (reasons == null || reasons.isEmpty()) {
+            return List.of();
+        }
+        int capped = Math.min(limit, reasons.size());
+        return List.copyOf(reasons.subList(0, capped));
+    }
+
+    private String safeName(String name) {
+        return name == null ? "unknown" : name;
+    }
+
+    private String readText(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (node.isTextual()) {
+            String value = node.asText().trim();
+            return value.isEmpty() ? null : value;
+        }
+        if (node.isNumber() || node.isBoolean()) {
+            return node.asText();
+        }
+        return node.toString();
+    }
+
+    private Integer readInt(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (node.isInt() || node.isLong()) {
+            return node.asInt();
+        }
+        if (node.isNumber()) {
+            return (int) Math.round(node.asDouble());
+        }
+        if (node.isTextual()) {
+            try {
+                return Integer.parseInt(node.asText().trim());
+            } catch (NumberFormatException ex) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private String stripCodeFences(String text) {
+        String trimmed = text == null ? "" : text.trim();
+        if (trimmed.startsWith("```")) {
+            int firstNewline = trimmed.indexOf('\n');
+            if (firstNewline > -1) {
+                trimmed = trimmed.substring(firstNewline + 1);
+            }
+            if (trimmed.endsWith("```")) {
+                trimmed = trimmed.substring(0, trimmed.length() - 3);
+            }
+        }
+        return trimmed.trim();
+    }
+
     private ResponseStatusException badRequest(String message) {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
@@ -178,6 +350,16 @@ public class PetController {
     ) {
     }
 
+    public record GeneratePetsResponse(
+        int requested,
+        int parsed,
+        int created,
+        int skipped,
+        List<String> skippedReasons,
+        String rawResponse
+    ) {
+    }
+
     private record CreatePetPayload(
         String name,
         Pet.Species species,
@@ -190,5 +372,8 @@ public class PetController {
         String tone,
         String rawDescription
     ) {
+    }
+
+    private record GenerationResult(int parsed, int created, int skipped, List<String> skippedReasons) {
     }
 }
