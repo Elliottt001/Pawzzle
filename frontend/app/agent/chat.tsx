@@ -12,8 +12,10 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Theme } from '../../constants/theme';
+import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 
 const AI_RESPONSE_DELAY_MS = 600;
+const BAIDU_TRANSCRIBE_URL = 'http://<YOUR_IP>:8080/api/voice/transcribe-baidu';
 
 const MOCK_PET = {
   name: '麻糬',
@@ -47,6 +49,7 @@ export default function AgentChatScreen() {
   ]);
   const [input, setInput] = React.useState('');
   const [isTyping, setIsTyping] = React.useState(false);
+  const { startRecording, stopRecording, isRecording } = useVoiceRecorder();
 
   const canSend = input.trim().length > 0 && !isTyping;
 
@@ -82,6 +85,60 @@ export default function AgentChatScreen() {
         },
       ]);
     }, AI_RESPONSE_DELAY_MS);
+  };
+
+  const handleVoicePressIn = async () => {
+    try {
+      await startRecording();
+    } catch (error) {
+      console.warn('Failed to start recording', error);
+    }
+  };
+
+  const handleVoicePressOut = async () => {
+    try {
+      const uri = await stopRecording();
+      if (!uri) {
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append(
+        'file',
+        {
+          uri,
+          type: 'audio/m4a',
+          name: 'voice.m4a',
+        } as unknown as Blob
+      );
+
+      const response = await fetch(BAIDU_TRANSCRIBE_URL, {
+        method: 'POST',
+        body: formData,
+      });
+
+      let payload: { text?: string; error?: string } | null = null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+
+      if (!response.ok) {
+        const errorMessage = payload?.error ?? 'Voice transcription failed';
+        console.warn(errorMessage);
+        return;
+      }
+
+      const text = typeof payload?.text === 'string' ? payload.text.trim() : '';
+      if (text.length === 0) {
+        return;
+      }
+
+      setInput(text);
+    } catch (error) {
+      console.warn('Voice transcription request failed', error);
+    }
   };
 
   React.useEffect(() => {
@@ -142,6 +199,22 @@ export default function AgentChatScreen() {
               returnKeyType="send"
               onSubmitEditing={handleSend}
             />
+            <Pressable
+              onPressIn={handleVoicePressIn}
+              onPressOut={handleVoicePressOut}
+              style={({ pressed }) => [
+                styles.micButton,
+                isRecording && styles.micButtonRecording,
+                pressed && styles.micButtonPressed,
+              ]}>
+              <Text
+                style={[
+                  styles.micButtonText,
+                  isRecording && styles.micButtonTextRecording,
+                ]}>
+                Mic
+              </Text>
+            </Pressable>
             <Pressable
               onPress={handleSend}
               disabled={!canSend}
@@ -321,6 +394,32 @@ const styles = StyleSheet.create({
     paddingVertical: Theme.spacing.s,
     fontSize: Theme.typography.size.s14,
     color: Theme.colors.text,
+  },
+  micButton: {
+    minWidth: Theme.sizes.s44,
+    paddingHorizontal: Theme.spacing.s,
+    paddingVertical: Theme.spacing.s,
+    borderRadius: Theme.layout.radius,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarm,
+    backgroundColor: Theme.colors.surfaceNeutral,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micButtonRecording: {
+    backgroundColor: Theme.colors.danger,
+    borderColor: Theme.colors.danger,
+  },
+  micButtonPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
+  micButtonText: {
+    color: Theme.colors.text,
+    fontSize: Theme.typography.size.s14,
+    fontWeight: Theme.typography.weight.semiBold,
+  },
+  micButtonTextRecording: {
+    color: Theme.colors.textInverse,
   },
   sendButton: {
     backgroundColor: Theme.colors.successDeep,
