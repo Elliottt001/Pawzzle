@@ -1,6 +1,15 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Platform, ScrollView, StyleSheet } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
+import { FontAwesome5 } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -17,11 +26,13 @@ type Pet = {
   status: 'OPEN' | 'MATCHED' | 'ADOPTED';
   description: string;
   tags: object;
-  ownerUsername: string | null;
-  ownerContactInfo: string | null;
+  ownerId: number | null;
+  ownerName: string | null;
+  ownerType: 'INDIVIDUAL' | 'INSTITUTION' | null;
 };
 
 export default function PetDetailsScreen() {
+  const router = useRouter();
   const { id } = useLocalSearchParams();
   const [pet, setPet] = useState<Pet | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,12 +101,26 @@ export default function PetDetailsScreen() {
           <ThemedText>{pet.description}</ThemedText>
           
           <ThemedView style={styles.ownerCard}>
-            <ThemedText type="title" style={styles.ownerTitle}>送养人信息</ThemedText>
-            {pet.ownerUsername ? (
-              <>
-                <ThemedText>姓名：{pet.ownerUsername}</ThemedText>
-                <ThemedText>联系方式：{pet.ownerContactInfo || '暂无'}</ThemedText>
-              </>
+            <ThemedText type="title" style={styles.ownerTitle}>发布者</ThemedText>
+            {pet.ownerId ? (
+              <Pressable
+                onPress={() => router.push(`/user/${pet.ownerId}`)}
+                style={({ pressed }) => [
+                  styles.ownerRow,
+                  pressed && styles.ownerRowPressed,
+                ]}>
+                <View style={styles.ownerAvatar}>
+                  <FontAwesome5 name="user" size={Theme.sizes.s24} color={Theme.colors.text} />
+                </View>
+                <View>
+                  <ThemedText type="defaultSemiBold">
+                    {pet.ownerName ?? '未命名'}
+                  </ThemedText>
+                  <ThemedText style={styles.ownerMeta}>
+                    {getUserTypeLabel(pet.ownerType)}
+                  </ThemedText>
+                </View>
+              </Pressable>
             ) : (
                 <ThemedText style={styles.noInfo}>暂无送养人信息。</ThemedText>
             )}
@@ -137,6 +162,16 @@ function getStatusLabel(status: Pet['status']) {
   return labels[status] ?? status;
 }
 
+function getUserTypeLabel(userType: Pet['ownerType']) {
+  if (userType === 'INSTITUTION') {
+    return '机构用户 (VIP)';
+  }
+  if (userType === 'INDIVIDUAL') {
+    return '普通用户';
+  }
+  return '未知类型';
+}
+
 const styles = StyleSheet.create({
   scrollContainer: {
     flex: Theme.layout.full,
@@ -171,10 +206,34 @@ const styles = StyleSheet.create({
     padding: Theme.spacing.s16,
     borderRadius: Theme.radius.r12,
     backgroundColor: Theme.colors.neutralAlpha,
+    gap: Theme.spacing.s12,
   },
   ownerTitle: {
     fontSize: Theme.typography.size.s18,
     marginBottom: Theme.spacing.s8,
+  },
+  ownerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.s12,
+  },
+  ownerRowPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
+  ownerAvatar: {
+    width: Theme.sizes.s48,
+    height: Theme.sizes.s48,
+    borderRadius: Theme.radius.r24,
+    backgroundColor: Theme.colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarm,
+  },
+  ownerMeta: {
+    marginTop: Theme.spacing.s2,
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.textSecondary,
   },
   noInfo: {
     fontStyle: 'italic',

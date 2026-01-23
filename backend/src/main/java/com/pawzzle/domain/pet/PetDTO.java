@@ -1,6 +1,7 @@
 package com.pawzzle.domain.pet;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.pawzzle.domain.user.User;
 import lombok.Builder;
 import lombok.Data;
 
@@ -13,6 +14,7 @@ public class PetDTO {
     private Pet.Status status;
     private String description;
     private JsonNode tags;
-    private String ownerUsername;
-    private String ownerContactInfo;
+    private Long ownerId;
+    private String ownerName;
+    private User.UserType ownerType;
 }

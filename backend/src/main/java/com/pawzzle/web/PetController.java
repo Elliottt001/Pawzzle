@@ -7,6 +7,9 @@ import com.pawzzle.domain.pet.Pet;
 import com.pawzzle.domain.pet.PetCardDTO;
 import com.pawzzle.domain.pet.PetDTO;
 import com.pawzzle.domain.pet.PetRepository;
+import com.pawzzle.domain.user.SessionService;
+import com.pawzzle.domain.user.User;
+import com.pawzzle.domain.user.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.List;
 import java.util.Objects;
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -34,10 +38,27 @@ public class PetController {
     private final PetRepository petRepository;
     private final OpenAiChatClient chatClient;
     private final ObjectMapper objectMapper;
+    private final SessionService sessionService;
+    private final UserRepository userRepository;
     private static final Set<String> LOCATIONS = Set.of("杭州", "北京", "上海");
-    private static final Set<String> CAT_BREEDS = Set.of("British Shorthair", "Ragdoll", "Siamese");
-    private static final Set<String> DOG_BREEDS = Set.of("Corgi", "Shiba Inu", "Mini Poodle");
+    private static final Set<String> CAT_BREEDS = Set.of(
+        "British Shorthair",
+        "Ragdoll",
+        "Siamese",
+        "英短",
+        "布偶",
+        "暹罗"
+    );
+    private static final Set<String> DOG_BREEDS = Set.of(
+        "Corgi",
+        "Shiba Inu",
+        "Mini Poodle",
+        "柯基",
+        "柴犬",
+        "迷你贵宾"
+    );
     private static final int AI_GENERATED_PET_COUNT = 20;
+    private static final long AI_OWNER_ID = 2L;
     private static final String AI_PET_GENERATION_PROMPT = """
         You generate pet adoption card data for a mobile app.
         Return ONLY valid JSON with an array of exactly 20 objects.
@@ -62,17 +83,22 @@ public class PetController {
     }
 
     @PostMapping
-    public PetCardDTO createPet(@RequestBody CreatePetRequest request) {
+    public PetCardDTO createPet(
+        @RequestBody CreatePetRequest request,
+        @RequestHeader(value = "Authorization", required = false) String authorization
+    ) {
+        User owner = sessionService.requireUser(authorization, request.token());
         CreatePetPayload payload = validateCreateRequest(request);
-        Pet pet = buildPet(payload);
+        Pet pet = buildPet(payload, owner);
         Pet saved = petRepository.save(pet);
         return PetCardDTO.from(saved);
     }
 
     @PostMapping("/generate")
     public GeneratePetsResponse generatePets() {
+        User owner = resolveAiOwner();
         String content = callChat(AI_PET_GENERATION_PROMPT);
-        GenerationResult result = parseAndSaveGeneratedPets(content);
+        GenerationResult result = parseAndSaveGeneratedPets(content, owner);
         return new GeneratePetsResponse(
             AI_GENERATED_PET_COUNT,
             result.parsed(),
@@ -87,6 +113,7 @@ public class PetController {
     public PetDTO getPetById(@PathVariable Long id) {
         Pet pet = petRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Pet not found with id: " + id));
+        User owner = pet.getOwner();
 
         return PetDTO.builder()
                 .id(pet.getId())
@@ -95,8 +122,9 @@ public class PetController {
                 .status(pet.getStatus())
                 .description(pet.getRawDescription())
                 .tags(pet.getStructuredTags())
-                .ownerUsername(pet.getOwner() != null ? pet.getOwner().getName() : null)
-                .ownerContactInfo(pet.getOwner() != null ? pet.getOwner().getEmail() : null)
+                .ownerId(owner != null ? owner.getId() : null)
+                .ownerName(owner != null ? owner.getName() : null)
+                .ownerType(owner != null ? owner.getUserType() : null)
                 .build();
     }
 
@@ -190,7 +218,7 @@ public class PetController {
         return age == 1 ? "1 yr" : age + " yrs";
     }
 
-    private Pet buildPet(CreatePetPayload payload) {
+    private Pet buildPet(CreatePetPayload payload, User owner) {
         return Pet.builder()
             .name(payload.name())
             .species(payload.species())
@@ -203,6 +231,7 @@ public class PetController {
             .icon(payload.icon())
             .tone(payload.tone())
             .rawDescription(payload.rawDescription())
+            .owner(owner)
             .build();
     }
 
@@ -215,7 +244,7 @@ public class PetController {
         return response.getResult().getOutput().getContent();
     }
 
-    private GenerationResult parseAndSaveGeneratedPets(String response) {
+    private GenerationResult parseAndSaveGeneratedPets(String response, User owner) {
         String cleaned = stripCodeFences(response);
         JsonNode root;
         try {
@@ -258,11 +287,12 @@ public class PetController {
                 age,
                 location,
                 personalityTag,
-                description
+                description,
+                null
             );
             try {
                 CreatePetPayload payload = validateCreateRequest(request);
-                Pet saved = petRepository.save(buildPet(payload));
+                Pet saved = petRepository.save(buildPet(payload, owner));
                 if (saved.getId() != null) {
                     created += 1;
                 }
@@ -335,6 +365,14 @@ public class PetController {
         return trimmed.trim();
     }
 
+    private User resolveAiOwner() {
+        return userRepository.findById(AI_OWNER_ID)
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.PRECONDITION_FAILED,
+                "AI owner user (id=2) not found"
+            ));
+    }
+
     private ResponseStatusException badRequest(String message) {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
@@ -346,7 +384,8 @@ public class PetController {
         Integer age,
         String location,
         String personalityTag,
-        String description
+        String description,
+        String token
     ) {
     }
 

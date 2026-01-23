@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Theme } from '@/constants/theme';
+import { setSession, type AuthSession } from '@/lib/session';
 
 // Helper for localhost
 const API_URL = Platform.select({
@@ -57,7 +58,9 @@ export default function RegisterScreen() {
       });
 
       if (response.ok) {
-        Alert.alert('成功', '账号已创建，请登录。');
+        const data = (await response.json()) as AuthSession;
+        setSession(data);
+        Alert.alert('成功', '账号已创建并已登录。');
         router.push('/(tabs)/profile'); 
       } else {
         const errorData = await response.json().catch(() => ({}));

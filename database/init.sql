@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS users (
     name VARCHAR(100) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
+    user_type VARCHAR(20) NOT NULL DEFAULT 'INDIVIDUAL',
+    user_intent VARCHAR(20),
     preference_summary TEXT,
     preference_vector vector(1536),
     created_at TIMESTAMP NOT NULL DEFAULT NOW()

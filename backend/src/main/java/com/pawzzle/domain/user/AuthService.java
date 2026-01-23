@@ -25,8 +25,10 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
         }
 
-        User.UserIntent finalIntent = request.userIntent();
-        if (request.userType() == User.UserType.INSTITUTION) {
+        User.UserType userType = request.userType() == null ? User.UserType.INDIVIDUAL : request.userType();
+        User.UserIntent finalIntent =
+            request.userIntent() == null ? User.UserIntent.ADOPTER : request.userIntent();
+        if (userType == User.UserType.INSTITUTION) {
             finalIntent = User.UserIntent.GIVER;
         }
 
@@ -34,7 +36,7 @@ public class AuthService {
             .name(request.name().trim())
             .email(email)
             .passwordHash(passwordEncoder.encode(request.password()))
-            .userType(request.userType())
+            .userType(userType)
             .userIntent(finalIntent)
             .build();
 
