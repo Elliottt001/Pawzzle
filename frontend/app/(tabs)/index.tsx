@@ -1,68 +1,15 @@
 import * as React from 'react';
-import {
-  Platform,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { Theme } from '@/constants/theme';
 
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
-  (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
-const ensureChinese = (message: string, fallback: string) =>
-  /[\u4e00-\u9fff]/.test(message) ? message : fallback;
-
-type GeneratePetsResponse = {
-  requested: number;
-  parsed: number;
-  created: number;
-  skipped: number;
-  skippedReasons?: string[];
-  rawResponse?: string;
-};
-
 export default function HomeScreen() {
   const router = useRouter();
-  const [aiStatus, setAiStatus] = React.useState<'idle' | 'generating' | 'success' | 'error'>(
-    'idle'
-  );
-  const [aiMessage, setAiMessage] = React.useState<string | null>(null);
-  const isGenerating = aiStatus === 'generating';
 
   const handleStart = () => {
     router.push('/agent');
-  };
-
-  const handleGenerateCards = async () => {
-    if (isGenerating) {
-      return;
-    }
-    setAiStatus('generating');
-    setAiMessage(null);
-
-    try {
-      const data = await postJson<GeneratePetsResponse>('/api/pets/generate', {});
-      const parsed = data?.parsed ?? 0;
-      const created = data?.created ?? 0;
-      const skipped = data?.skipped ?? 0;
-      const reasons =
-        data?.skippedReasons && data.skippedReasons.length
-          ? ` 跳过原因：${data.skippedReasons.join(' | ')}`
-          : '';
-      setAiStatus('success');
-      setAiMessage(`AI生成完成：解析${parsed}条，新增${created}条，跳过${skipped}条。${reasons}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '';
-      setAiStatus('error');
-      setAiMessage(ensureChinese(message, 'AI生成失败，请稍后再试。'));
-    }
   };
 
   return (
@@ -117,68 +64,12 @@ export default function HomeScreen() {
           </View>
 
           <Text style={styles.tipText}>随时开始，只需几分钟哦</Text>
-
-          <View style={styles.aiSection}>
-            <Pressable
-              onPress={handleGenerateCards}
-              disabled={isGenerating}
-              style={({ pressed }) => [
-                styles.aiButton,
-                isGenerating && styles.aiButtonDisabled,
-                pressed && !isGenerating && styles.aiButtonPressed,
-              ]}>
-              <Text style={styles.aiButtonText}>{isGenerating ? '生成中...' : 'AI生成20张宠物卡片'}</Text>
-            </Pressable>
-            {aiMessage ? (
-              <Text
-                style={[
-                  styles.aiMessage,
-                  aiStatus === 'error' ? styles.aiMessageError : styles.aiMessageSuccess,
-                ]}>
-                {aiMessage}
-              </Text>
-            ) : null}
-          </View>
         </View>
 
         <Text style={styles.privacyText}>对话仅用于匹配，我们保护你的隐私~</Text>
       </ScrollView>
     </SafeAreaView>
   );
-}
-
-async function postJson<T = unknown>(path: string, payload: Record<string, unknown>) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  const text = await response.text();
-  let data: T | undefined;
-  if (text) {
-    try {
-      data = JSON.parse(text) as T;
-    } catch {
-      data = undefined;
-    }
-  }
-
-  if (!response.ok) {
-    const message =
-      typeof data === 'object' && data && 'message' in data
-        ? String((data as { message?: string }).message ?? '')
-        : response.statusText ?? '';
-    throw new Error(ensureChinese(message, '请求失败'));
-  }
-
-  return data;
 }
 
 const PUZZLE_SIZE = Theme.sizes.s140;
@@ -335,41 +226,6 @@ const styles = StyleSheet.create({
   tipText: {
     fontSize: Theme.typography.size.s12,
     color: Theme.colors.textSecondary,
-  },
-  aiSection: {
-    alignItems: 'center',
-    gap: Theme.spacing.s8,
-  },
-  aiButton: {
-    paddingVertical: Theme.spacing.s10,
-    paddingHorizontal: Theme.spacing.s20,
-    borderRadius: Theme.radius.pill,
-    backgroundColor: Theme.colors.card,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarm,
-    ...Theme.shadows.card,
-  },
-  aiButtonDisabled: {
-    opacity: Theme.opacity.o6,
-  },
-  aiButtonPressed: {
-    transform: [{ scale: Theme.scale.pressedSoft }],
-  },
-  aiButtonText: {
-    fontSize: Theme.typography.size.s13,
-    fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.text,
-  },
-  aiMessage: {
-    maxWidth: Theme.sizes.s310,
-    textAlign: 'center',
-    fontSize: Theme.typography.size.s11,
-  },
-  aiMessageError: {
-    color: Theme.colors.textError,
-  },
-  aiMessageSuccess: {
-    color: Theme.colors.textSuccess,
   },
   privacyText: {
     fontSize: Theme.typography.size.s11,

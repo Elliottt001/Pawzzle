@@ -24,6 +24,15 @@ type AuthSession = {
   user: AuthUser;
 };
 
+type GeneratePetsResponse = {
+  requested: number;
+  parsed: number;
+  created: number;
+  skipped: number;
+  skippedReasons?: string[];
+  rawResponse?: string;
+};
+
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
@@ -39,6 +48,11 @@ export default function ProfileScreen() {
   const [registerPassword, setRegisterPassword] = React.useState('');
   const [loginEmail, setLoginEmail] = React.useState('');
   const [loginPassword, setLoginPassword] = React.useState('');
+  const [aiStatus, setAiStatus] = React.useState<'idle' | 'generating' | 'success' | 'error'>(
+    'idle'
+  );
+  const [aiMessage, setAiMessage] = React.useState<string | null>(null);
+  const isGenerating = aiStatus === 'generating';
 
   const runAuthAction = async (action: () => Promise<void>) => {
     setStatus(null);
@@ -84,6 +98,31 @@ export default function ProfileScreen() {
       setStatus('已退出登录。');
     });
 
+  const handleGenerateCards = async () => {
+    if (isGenerating) {
+      return;
+    }
+    setAiStatus('generating');
+    setAiMessage(null);
+
+    try {
+      const data = await request<GeneratePetsResponse>('/api/pets/generate', {});
+      const parsed = data?.parsed ?? 0;
+      const created = data?.created ?? 0;
+      const skipped = data?.skipped ?? 0;
+      const reasons =
+        data?.skippedReasons && data.skippedReasons.length
+          ? ` 跳过原因：${data.skippedReasons.join(' | ')}`
+          : '';
+      setAiStatus('success');
+      setAiMessage(`AI生成完成：解析${parsed}条，新增${created}条，跳过${skipped}条。${reasons}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      setAiStatus('error');
+      setAiMessage(ensureChinese(message, 'AI生成失败，请稍后再试。'));
+    }
+  };
+
   const displayName = session?.user.name ?? '游客';
 
   return (
@@ -118,6 +157,30 @@ export default function ProfileScreen() {
           </View>
 
           {status ? <Text style={styles.statusText}>{status}</Text> : null}
+
+          <FormSection title="AI 生成宠物卡片">
+            <Text style={styles.formSubtitle}>一键生成 20 张宠物卡片并写入数据库。</Text>
+            <Pressable
+              onPress={handleGenerateCards}
+              disabled={isGenerating}
+              style={({ pressed }) => [
+                styles.actionButton,
+                pressed && styles.actionButtonPressed,
+              ]}>
+              <Text style={styles.actionButtonText}>
+                {isGenerating ? '生成中...' : '生成20张卡片'}
+              </Text>
+            </Pressable>
+            {aiMessage ? (
+              <Text
+                style={[
+                  styles.statusText,
+                  aiStatus === 'error' ? styles.aiMessageError : styles.aiMessageSuccess,
+                ]}>
+                {aiMessage}
+              </Text>
+            ) : null}
+          </FormSection>
 
           {session ? (
             <View style={styles.formCard}>
@@ -422,5 +485,11 @@ const styles = StyleSheet.create({
     color: Theme.colors.textInverse,
     fontSize: Theme.typography.size.s14,
     fontWeight: Theme.typography.weight.semiBold,
+  },
+  aiMessageError: {
+    color: Theme.colors.textError,
+  },
+  aiMessageSuccess: {
+    color: Theme.colors.textSuccess,
   },
 });
