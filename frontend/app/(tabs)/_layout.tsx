@@ -6,6 +6,7 @@ import { IconSymbol } from '../../components/ui/icon-symbol';
 export default function TabLayout() {
   return (
     <Tabs
+      initialRouteName="index"
       screenOptions={{
         headerShown: true,
         tabBarActiveTintColor: Theme.colors.tabBarActive,
@@ -15,9 +16,20 @@ export default function TabLayout() {
         headerTitleStyle: styles.headerTitle,
       }}>
       <Tabs.Screen
+        name="agent"
+        options={{
+          title: '首页',
+          headerShown: false,
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={Theme.sizes.s28} name="house.fill" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="index"
         options={{
           title: '缘分',
+          headerShown: false,
           tabBarIcon: ({ color }) => (
             <IconSymbol size={Theme.sizes.s28} name="heart.fill" color={color} />
           ),
@@ -28,7 +40,7 @@ export default function TabLayout() {
         options={{
           title: '陪伴',
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={Theme.sizes.s28} name="house.fill" color={color} />
+            <IconSymbol size={Theme.sizes.s28} name="pawprint.fill" color={color} />
           ),
         }}
       />

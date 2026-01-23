@@ -1,5 +1,6 @@
 import * as React from 'react';
 import {
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   SafeAreaView,
@@ -57,6 +58,35 @@ const API_BASE_URL =
 const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const ensureChinese = (message: string, fallback: string) =>
   /[\u4e00-\u9fff]/.test(message) ? message : fallback;
+const WAITING_TEXT_INTERVAL_MS = 2600;
+const EVALUATING_WAITING_TEXTS = [
+  '正在整理你的回答...',
+  '正在生成下一组问题...',
+  '正在核对关键信息...',
+  '正在补全匹配画像...',
+];
+const RECOMMENDING_WAITING_TEXTS = [
+  '正在筛选合适的毛孩子...',
+  '正在匹配性格与生活节奏...',
+  '正在生成推荐结果...',
+];
+
+const ACKNOWLEDGEMENTS = [
+  '好的，了解您的情况了！',
+  '收到，这很有趣～',
+  '明白啦，我们会帮您留意的。',
+  '原来是这样呀，很有意思！',
+  '好的，这对我很有帮助。',
+  '收到您的反馈啦。',
+  '好的，这一点很重要。',
+  '确实是这样呢。',
+  '了解了，我们会仔细考虑的。',
+  '收到，谢谢您的分享！',
+];
+
+const getRandomAcknowledgement = () => {
+  return ACKNOWLEDGEMENTS[Math.floor(Math.random() * ACKNOWLEDGEMENTS.length)];
+};
 
 export default function AgentScreen() {
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
@@ -72,11 +102,31 @@ export default function AgentScreen() {
   const [pendingQuestions, setPendingQuestions] = React.useState<string[]>([]);
   const [recommendedItems, setRecommendedItems] = React.useState<AgentDecisionItem[]>([]);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [waitingIndex, setWaitingIndex] = React.useState(0);
   const scrollRef = React.useRef<ScrollView | null>(null);
   const hasStartedRef = React.useRef(false);
 
   const isBusy = status === 'evaluating' || status === 'recommending';
   const canSend = input.trim().length > 0 && !isBusy && !evaluation;
+  const waitingMessages =
+    status === 'recommending' ? RECOMMENDING_WAITING_TEXTS : EVALUATING_WAITING_TEXTS;
+  const waitingText = waitingMessages[waitingIndex % waitingMessages.length];
+
+  React.useEffect(() => {
+    if (!isBusy) {
+      setWaitingIndex(0);
+      return;
+    }
+
+    setWaitingIndex(0);
+    const activeMessages =
+      status === 'recommending' ? RECOMMENDING_WAITING_TEXTS : EVALUATING_WAITING_TEXTS;
+    const interval = setInterval(() => {
+      setWaitingIndex((prev) => (prev + 1) % activeMessages.length);
+    }, WAITING_TEXT_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [isBusy, status]);
 
   const appendMessage = React.useCallback((role: ChatRole, content: string) => {
     setMessages((prev) => [...prev, { id: createId(), role, content }]);
@@ -201,7 +251,7 @@ export default function AgentScreen() {
     if (pendingQuestions.length) {
       const [nextQuestion, ...rest] = pendingQuestions;
       setPendingQuestions(rest);
-      appendMessage('ai', nextQuestion);
+      appendMessage('ai', `${getRandomAcknowledgement()}\n\n${nextQuestion}`);
       return;
     }
 
@@ -217,7 +267,7 @@ export default function AgentScreen() {
         const summary = buildEvaluationSummary(data);
         setEvaluation(summary);
         setPendingQuestions([]);
-        appendMessage('ai', formatEvaluationSummary(summary));
+        appendMessage('ai', `${getRandomAcknowledgement()}\n\n${formatEvaluationSummary(summary)}`);
 
         setStatus('recommending');
         await loadPetCards();
@@ -231,7 +281,7 @@ export default function AgentScreen() {
         if (questions.length) {
           const [first, ...rest] = questions;
           setPendingQuestions(rest);
-          appendMessage('ai', first);
+          appendMessage('ai', `${getRandomAcknowledgement()}\n\n${first}`);
         } else {
           appendDebug('调试：评估缺少下一问', data?.rawResponse ?? '');
         }
@@ -266,65 +316,67 @@ export default function AgentScreen() {
         <View style={[styles.blob, styles.blobBottom]} />
       </View>
 
-      <View style={styles.header}>
-        <Text style={styles.overline}>顾问</Text>
-        <Text style={styles.title}>领养顾问</Text>
-      </View>
-
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.chatList}>
-        {messages.map((message) => (
-          <ChatBubble key={message.id} role={message.role} text={message.content} />
-        ))}
-
-        {status === 'evaluating' ? (
-          <ChatBubble role="ai" text="正在核对你的信息..." />
-        ) : null}
-        {status === 'recommending' ? (
-          <ChatBubble role="ai" text="正在挑选最佳匹配..." />
-        ) : null}
-
-        {errorMessage ? <ChatBubble role="debug" text={`错误：${errorMessage}`} /> : null}
-
-        {evaluation && petCardsStatus === 'error' ? (
-          <ChatBubble role="debug" text="暂时无法获取宠物卡片。" />
-        ) : null}
-
-        {visiblePets.length ? (
-          <View style={styles.matchList}>
-            {visiblePets.map(({ pet, confidence }) => (
-              <PetCard key={pet.id} pet={pet} confidence={confidence} />
-            ))}
-          </View>
-        ) : null}
-      </ScrollView>
-
-      {!evaluation ? (
-        <View style={styles.inputDock}>
-          <View style={styles.inputRow}>
-            <TextInput
-              value={input}
-              onChangeText={setInput}
-              placeholder="请用自己的话回答问题..."
-              placeholderTextColor={Theme.colors.placeholder}
-              style={styles.input}
-              returnKeyType="send"
-              onSubmitEditing={handleSend}
-              editable={!isBusy}
-            />
-            <Pressable
-              onPress={handleSend}
-              disabled={!canSend}
-              style={({ pressed }) => [
-                styles.sendButton,
-                !canSend && styles.sendButtonDisabled,
-                pressed && canSend && styles.sendButtonPressed,
-              ]}>
-              <Feather name="send" size={Theme.sizes.s18} color={Theme.colors.textInverse} />
-            </Pressable>
-          </View>
-          <Text style={styles.helperText}>顾问会分批提问（共15题）直到资料完善。</Text>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.header}>
+          <Text style={styles.overline}>顾问</Text>
+          <Text style={styles.title}>领养顾问</Text>
         </View>
-      ) : null}
+
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={styles.chatList}
+          keyboardShouldPersistTaps="handled">
+          {messages.map((message) => (
+            <ChatBubble key={message.id} role={message.role} text={message.content} />
+          ))}
+
+          {isBusy ? <ChatBubble role="ai" text={waitingText} /> : null}
+
+          {errorMessage ? <ChatBubble role="debug" text={`错误：${errorMessage}`} /> : null}
+
+          {evaluation && petCardsStatus === 'error' ? (
+            <ChatBubble role="debug" text="暂时无法获取宠物卡片。" />
+          ) : null}
+
+          {visiblePets.length ? (
+            <View style={styles.matchList}>
+              {visiblePets.map(({ pet, confidence }) => (
+                <PetCard key={pet.id} pet={pet} confidence={confidence} />
+              ))}
+            </View>
+          ) : null}
+        </ScrollView>
+
+        {!evaluation ? (
+          <View style={styles.inputDock}>
+            <View style={styles.inputRow}>
+              <TextInput
+                value={input}
+                onChangeText={setInput}
+                placeholder="请用自己的话回答问题..."
+                placeholderTextColor={Theme.colors.placeholder}
+                style={styles.input}
+                returnKeyType="send"
+                onSubmitEditing={handleSend}
+                editable={!isBusy}
+              />
+              <Pressable
+                onPress={handleSend}
+                disabled={!canSend}
+                style={({ pressed }) => [
+                  styles.sendButton,
+                  !canSend && styles.sendButtonDisabled,
+                  pressed && canSend && styles.sendButtonPressed,
+                ]}>
+                <Feather name="send" size={Theme.sizes.s18} color={Theme.colors.textInverse} />
+              </Pressable>
+            </View>
+            <Text style={styles.helperText}>顾问会分批提问（共15题）直到资料完善。</Text>
+          </View>
+        ) : null}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -448,6 +500,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: Theme.layout.full,
     backgroundColor: Theme.colors.backgroundWarmAlt,
+  },
+  container: {
+    flex: Theme.layout.full,
   },
   background: {
     ...StyleSheet.absoluteFillObject,

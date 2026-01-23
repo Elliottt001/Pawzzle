@@ -1,658 +1,80 @@
 import * as React from 'react';
-import {
-  Platform,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FontAwesome5 } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
-import { PetCard } from '@/components/pet-card';
-import type { PetCardData } from '@/types/pet';
 import { Theme } from '@/constants/theme';
 
-const categories = [
-  { id: 'all', label: '全部' },
-  { id: 'cards', label: '宠物卡片' },
-  { id: 'updates', label: '动态' },
-  { id: 'guides', label: '指南' },
-] as const;
-
-const uploadTypes = [
-  { id: 'card', label: '卡片' },
-  { id: 'update', label: '动态' },
-  { id: 'guide', label: '指南' },
-] as const;
-
-const speciesOptions = [
-  { id: 'CAT', label: '猫' },
-  { id: 'DOG', label: '狗' },
-] as const;
-
-const breedOptions = {
-  CAT: ['英短', '布偶', '暹罗'],
-  DOG: ['柯基', '柴犬', '迷你贵宾'],
-} as const;
-
-const locationOptions = ['杭州', '北京', '上海'] as const;
-
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
-  (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
-const ensureChinese = (message: string, fallback: string) =>
-  /[\u4e00-\u9fff]/.test(message) ? message : fallback;
-
-type CategoryId = (typeof categories)[number]['id'];
-type UploadType = (typeof uploadTypes)[number]['id'];
-type SpeciesId = (typeof speciesOptions)[number]['id'];
-
-type InfoItem = {
-  id: string;
-  title: string;
-  subtitle: string;
-  tag: string;
-  tone: string;
-};
-
-type HomeResponse = {
-  petCards: PetCardData[];
-  updates: InfoItem[];
-  guides: InfoItem[];
-};
-
 export default function HomeScreen() {
-  const [query, setQuery] = React.useState('');
-  const [activeCategory, setActiveCategory] = React.useState<CategoryId>('all');
-  const [petCards, setPetCards] = React.useState<PetCardData[]>([]);
-  const [updates, setUpdates] = React.useState<InfoItem[]>([]);
-  const [guides, setGuides] = React.useState<InfoItem[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [loadError, setLoadError] = React.useState<string | null>(null);
-  const [uploadType, setUploadType] = React.useState<UploadType>('card');
-  const [cardName, setCardName] = React.useState('');
-  const [cardSpecies, setCardSpecies] = React.useState<SpeciesId | null>(null);
-  const [cardBreed, setCardBreed] = React.useState<string | null>(null);
-  const [cardAge, setCardAge] = React.useState('');
-  const [cardLocation, setCardLocation] = React.useState<string | null>(null);
-  const [cardPersonality, setCardPersonality] = React.useState('');
-  const [cardDescription, setCardDescription] = React.useState('');
-  const [contentTitle, setContentTitle] = React.useState('');
-  const [contentSubtitle, setContentSubtitle] = React.useState('');
-  const [contentTag, setContentTag] = React.useState('');
-  const [submitStatus, setSubmitStatus] = React.useState<
-    'idle' | 'submitting' | 'success' | 'error'
-  >('idle');
-  const [submitMessage, setSubmitMessage] = React.useState<string | null>(null);
+  const router = useRouter();
 
-  const loadHomeData = React.useCallback(() => {
-    let isActive = true;
-    setIsLoading(true);
-    setLoadError(null);
-
-    fetch(`${API_BASE_URL}/api/home`)
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error('首页数据加载失败');
-        }
-        return (await response.json()) as HomeResponse;
-      })
-      .then((data) => {
-        if (!isActive) {
-          return;
-        }
-        setPetCards(data?.petCards ?? []);
-        setUpdates(data?.updates ?? []);
-        setGuides(data?.guides ?? []);
-      })
-      .catch((error) => {
-        if (!isActive) {
-          return;
-        }
-        const message = error instanceof Error ? error.message : '';
-        setLoadError(ensureChinese(message, '首页数据加载失败'));
-      })
-      .finally(() => {
-        if (isActive) {
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      isActive = false;
-    };
-  }, []);
-
-  React.useEffect(() => {
-    const cleanup = loadHomeData();
-    return cleanup;
-  }, [loadHomeData]);
-
-  React.useEffect(() => {
-    if (!cardSpecies) {
-      setCardBreed(null);
-      return;
-    }
-    const speciesBreeds = breedOptions[cardSpecies];
-    if (cardBreed && !speciesBreeds.some((breed) => breed === cardBreed)) {
-      setCardBreed(null);
-    }
-  }, [cardBreed, cardSpecies]);
-
-  React.useEffect(() => {
-    setSubmitStatus('idle');
-    setSubmitMessage(null);
-  }, [uploadType]);
-
-  const normalized = query.trim().toLowerCase();
-  const visiblePets =
-    normalized.length === 0
-      ? petCards
-      : petCards.filter((pet) =>
-          [pet.name, pet.breed, pet.energy, pet.trait, pet.distance].some((field) =>
-            field ? field.toLowerCase().includes(normalized) : false
-          )
-        );
-  const selectedBreeds = cardSpecies ? breedOptions[cardSpecies] : [];
-  const isSubmitting = submitStatus === 'submitting';
-  const contentLabel = uploadType === 'update' ? '动态' : '指南';
-
-  const handleCreateCard = async () => {
-    if (isSubmitting) {
-      return;
-    }
-    setSubmitStatus('submitting');
-    setSubmitMessage(null);
-
-    const name = cardName.trim();
-    const personalityTag = cardPersonality.trim();
-    const location = cardLocation?.trim() ?? '';
-    const description = cardDescription.trim();
-    const ageValue = Number(cardAge);
-
-    if (!name) {
-      setSubmitStatus('error');
-      setSubmitMessage('请输入名字。');
-      return;
-    }
-    if (!cardSpecies) {
-      setSubmitStatus('error');
-      setSubmitMessage('请选择物种。');
-      return;
-    }
-    if (!cardBreed) {
-      setSubmitStatus('error');
-      setSubmitMessage('请选择品种。');
-      return;
-    }
-    if (!cardAge || Number.isNaN(ageValue) || ageValue <= 0) {
-      setSubmitStatus('error');
-      setSubmitMessage('年龄必须为正数。');
-      return;
-    }
-    if (!location) {
-      setSubmitStatus('error');
-      setSubmitMessage('请选择城市。');
-      return;
-    }
-    if (!personalityTag) {
-      setSubmitStatus('error');
-      setSubmitMessage('请填写性格标签。');
-      return;
-    }
-    if (/\s/.test(personalityTag)) {
-      setSubmitStatus('error');
-      setSubmitMessage('性格标签请填写一个词。');
-      return;
-    }
-
-    try {
-      await postJson('/api/pets', {
-        name,
-        species: cardSpecies,
-        breed: cardBreed,
-        age: ageValue,
-        location,
-        personalityTag,
-        description: description || undefined,
-      });
-      setSubmitStatus('success');
-      setSubmitMessage('卡片已发布。');
-      setCardName('');
-      setCardSpecies(null);
-      setCardBreed(null);
-      setCardAge('');
-      setCardLocation(null);
-      setCardPersonality('');
-      setCardDescription('');
-      loadHomeData();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '';
-      setSubmitStatus('error');
-      setSubmitMessage(ensureChinese(message, '发布卡片失败。'));
-    }
-  };
-
-  const handleCreateContent = async () => {
-    if (isSubmitting) {
-      return;
-    }
-    if (uploadType !== 'update' && uploadType !== 'guide') {
-      return;
-    }
-    setSubmitStatus('submitting');
-    setSubmitMessage(null);
-
-    const title = contentTitle.trim();
-    const subtitle = contentSubtitle.trim();
-    const tag = contentTag.trim();
-
-    if (!title || !subtitle) {
-      setSubmitStatus('error');
-      setSubmitMessage('标题和副标题必填。');
-      return;
-    }
-
-    try {
-      await postJson('/api/home/content', {
-        category: uploadType.toUpperCase(),
-        title,
-        subtitle,
-        tag: tag || undefined,
-      });
-      setSubmitStatus('success');
-      setSubmitMessage(`已发布${contentLabel}`);
-      setContentTitle('');
-      setContentSubtitle('');
-      setContentTag('');
-      loadHomeData();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '';
-      setSubmitStatus('error');
-      setSubmitMessage(ensureChinese(message, `发布${contentLabel}失败。`));
-    }
+  const handleStart = () => {
+    router.push('/agent');
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.background}>
-        <View style={[styles.blob, styles.blobLeft]} />
-        <View style={[styles.blob, styles.blobRight]} />
-        <View style={[styles.blob, styles.blobBottom]} />
+        <View style={[styles.glow, styles.glowTop]} />
+        <View style={[styles.glow, styles.glowRight]} />
+        <View style={[styles.glow, styles.glowBottom]} />
       </View>
 
-      <View style={styles.header}>
-        <Text style={styles.overline}>寻找伙伴</Text>
-        <Text style={styles.title}>缘分首页</Text>
-      </View>
-
-      <View style={styles.searchRow}>
-        <View style={styles.searchBox}>
-          <Feather name="search" size={Theme.sizes.s18} color={Theme.colors.textSecondary} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="按品种、体型或性格搜索..."
-            placeholderTextColor={Theme.colors.placeholder}
-            style={styles.searchInput}
-          />
+      <ScrollView contentContainerStyle={styles.content} bounces={false}>
+        <View style={styles.brandRow}>
+          <Text style={styles.brandText}>Puzzle 寻爪</Text>
         </View>
-        <View style={styles.filterButton}>
-          <Feather name="sliders" size={Theme.sizes.s18} color={Theme.colors.text} />
-        </View>
-      </View>
 
-      <View style={styles.categoryRow}>
-        {categories.map((category) => {
-          const isActive = activeCategory === category.id;
-          return (
-            <Pressable
-              key={category.id}
-              onPress={() => setActiveCategory(category.id)}
-              style={({ pressed }) => [
-                styles.categoryPill,
-                isActive && styles.categoryPillActive,
-                pressed && styles.categoryPillPressed,
-              ]}>
-              <Text style={[styles.categoryText, isActive && styles.categoryTextActive]}>
-                {category.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {loadError ? <Text style={styles.errorText}>{loadError}</Text> : null}
-
-      <ScrollView contentContainerStyle={styles.content}>
-        <Section title="上传" subtitle="新增卡片和内容">
-          <View style={styles.formCard}>
-            <View style={styles.uploadTypeRow}>
-              {uploadTypes.map((type) => {
-                const isActive = uploadType === type.id;
-                return (
-                  <Pressable
-                    key={type.id}
-                    onPress={() => setUploadType(type.id)}
-                    style={({ pressed }) => [
-                      styles.uploadTypePill,
-                      isActive && styles.uploadTypePillActive,
-                      pressed && styles.uploadTypePillPressed,
-                    ]}>
-                    <Text style={[styles.uploadTypeText, isActive && styles.uploadTypeTextActive]}>
-                      {type.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+        <View style={styles.hero}>
+          <View style={styles.mascotWrap}>
+            <View style={styles.mascotGlow} />
+            <View style={styles.puzzlePiece}>
+              <View style={[styles.connector, styles.connectorTop]} />
+              <View style={[styles.connector, styles.connectorLeft]} />
+              <View style={[styles.connector, styles.connectorRight]} />
+              <View style={[styles.connector, styles.connectorBottom]} />
+              <View style={styles.catBadge}>
+                <FontAwesome5
+                  name="cat"
+                  size={Theme.sizes.s50}
+                  color={Theme.colors.textWarning}
+                />
+                <View style={styles.badgePaw}>
+                  <FontAwesome5
+                    name="paw"
+                    size={Theme.sizes.s16}
+                    color={Theme.colors.decorativePeachSoft}
+                  />
+                </View>
+              </View>
             </View>
-
-            {uploadType === 'card' ? (
-              <View style={styles.formFields}>
-                <FieldLabel text="名字" />
-                <TextInput
-                  value={cardName}
-                  onChangeText={setCardName}
-                  placeholder="宠物名字"
-                  placeholderTextColor={Theme.colors.placeholder}
-                  style={styles.formInput}
-                />
-
-                <FieldLabel text="物种" />
-                <View style={styles.choiceRow}>
-                  {speciesOptions.map((option) => {
-                    const isActive = cardSpecies === option.id;
-                    return (
-                      <Pressable
-                        key={option.id}
-                        onPress={() => setCardSpecies(option.id)}
-                        style={({ pressed }) => [
-                          styles.choicePill,
-                          isActive && styles.choicePillActive,
-                          pressed && styles.choicePillPressed,
-                        ]}>
-                        <Text style={[styles.choiceText, isActive && styles.choiceTextActive]}>
-                          {option.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                <FieldLabel text="品种" />
-                {selectedBreeds.length ? (
-                  <View style={styles.choiceRow}>
-                    {selectedBreeds.map((breed) => {
-                      const isActive = cardBreed === breed;
-                      return (
-                        <Pressable
-                          key={breed}
-                          onPress={() => setCardBreed(breed)}
-                          style={({ pressed }) => [
-                            styles.choicePill,
-                            isActive && styles.choicePillActive,
-                            pressed && styles.choicePillPressed,
-                          ]}>
-                          <Text style={[styles.choiceText, isActive && styles.choiceTextActive]}>
-                            {breed}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ) : (
-                  <Text style={styles.formHint}>请先选择物种以查看品种。</Text>
-                )}
-
-                <FieldLabel text="年龄（岁）" />
-                <TextInput
-                  value={cardAge}
-                  onChangeText={(value) => setCardAge(value.replace(/[^0-9]/g, ''))}
-                  placeholder="例如：2"
-                  placeholderTextColor={Theme.colors.placeholder}
-                  keyboardType="number-pad"
-                  style={styles.formInput}
-                />
-
-                <FieldLabel text="城市" />
-                <View style={styles.choiceRow}>
-                  {locationOptions.map((location) => {
-                    const isActive = cardLocation === location;
-                    return (
-                      <Pressable
-                        key={location}
-                        onPress={() => setCardLocation(location)}
-                        style={({ pressed }) => [
-                          styles.choicePill,
-                          isActive && styles.choicePillActive,
-                          pressed && styles.choicePillPressed,
-                        ]}>
-                        <Text style={[styles.choiceText, isActive && styles.choiceTextActive]}>
-                          {location}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                <FieldLabel text="性格标签（一个词）" />
-                <TextInput
-                  value={cardPersonality}
-                  onChangeText={setCardPersonality}
-                  placeholder="活泼"
-                  placeholderTextColor={Theme.colors.placeholder}
-                  style={styles.formInput}
-                  autoCapitalize="none"
-                />
-
-                <FieldLabel text="描述（可选）" />
-                <TextInput
-                  value={cardDescription}
-                  onChangeText={setCardDescription}
-                  placeholder="简单介绍..."
-                  placeholderTextColor={Theme.colors.placeholder}
-                  style={[styles.formInput, styles.formInputMultiline]}
-                  multiline
-                />
-
-                <Pressable
-                  onPress={handleCreateCard}
-                  disabled={isSubmitting}
-                  style={({ pressed }) => [
-                    styles.submitButton,
-                    isSubmitting && styles.submitButtonDisabled,
-                    pressed && !isSubmitting && styles.submitButtonPressed,
-                  ]}>
-                  <Text style={styles.submitButtonText}>
-                    {isSubmitting ? '发布中...' : '发布卡片'}
-                  </Text>
-                </Pressable>
-              </View>
-            ) : (
-              <View style={styles.formFields}>
-                <FieldLabel text={`${contentLabel}标题`} />
-                <TextInput
-                  value={contentTitle}
-                  onChangeText={setContentTitle}
-                  placeholder={`请输入${contentLabel}标题`}
-                  placeholderTextColor={Theme.colors.placeholder}
-                  style={styles.formInput}
-                />
-
-                <FieldLabel text={`${contentLabel}副标题`} />
-                <TextInput
-                  value={contentSubtitle}
-                  onChangeText={setContentSubtitle}
-                  placeholder="简短摘要..."
-                  placeholderTextColor={Theme.colors.placeholder}
-                  style={styles.formInput}
-                />
-
-                <FieldLabel text="标签（可选）" />
-                <TextInput
-                  value={contentTag}
-                  onChangeText={setContentTag}
-                  placeholder="最新、活动、技巧..."
-                  placeholderTextColor={Theme.colors.placeholder}
-                  style={styles.formInput}
-                />
-
-                <Pressable
-                  onPress={handleCreateContent}
-                  disabled={isSubmitting}
-                  style={({ pressed }) => [
-                    styles.submitButton,
-                    isSubmitting && styles.submitButtonDisabled,
-                    pressed && !isSubmitting && styles.submitButtonPressed,
-                  ]}>
-                  <Text style={styles.submitButtonText}>
-                    {isSubmitting ? '发布中...' : `发布${contentLabel}`}
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-
-            {submitMessage ? (
-              <Text
-                style={[
-                  styles.submitMessage,
-                  submitStatus === 'error' ? styles.submitMessageError : styles.submitMessageSuccess,
-                ]}>
-                {submitMessage}
-              </Text>
-            ) : null}
           </View>
-        </Section>
 
-        {activeCategory === 'all' || activeCategory === 'cards' ? (
-          <Section
-            title="宠物卡片"
-            subtitle={isLoading ? '加载中...' : `${visiblePets.length}个匹配`}>
-            {isLoading ? (
-              <Text style={styles.emptyText}>加载宠物卡片中...</Text>
-            ) : visiblePets.length ? (
-              <View style={styles.cardList}>
-                {visiblePets.map((pet) => (
-                  <PetCard key={pet.id} pet={pet} />
-                ))}
-              </View>
-            ) : (
-              <Text style={styles.emptyText}>暂无宠物卡片。</Text>
-            )}
-          </Section>
-        ) : null}
+          <Text style={styles.headline}>你好！我是Pawzy</Text>
+          <Text style={styles.subhead}>准备好寻找你的伙伴了吗</Text>
 
-        {activeCategory === 'all' || activeCategory === 'updates' ? (
-          <Section title="动态" subtitle="最新动态">
-            {isLoading ? (
-              <Text style={styles.emptyText}>加载动态中...</Text>
-            ) : updates.length ? (
-              <View style={styles.infoList}>
-                {updates.map((item) => (
-                  <InfoCard key={item.id} item={item} />
-                ))}
-              </View>
-            ) : (
-              <Text style={styles.emptyText}>暂无动态。</Text>
-            )}
-          </Section>
-        ) : null}
+          <View style={styles.ctaRow}>
+            <FontAwesome5 name="paw" size={Theme.sizes.s18} color={Theme.colors.decorativePeach} />
+            <Pressable
+              onPress={handleStart}
+              style={({ pressed }) => [styles.ctaButton, pressed && styles.ctaButtonPressed]}>
+              <Text style={styles.ctaText}>开始测试</Text>
+            </Pressable>
+            <FontAwesome5 name="paw" size={Theme.sizes.s18} color={Theme.colors.decorativePeach} />
+          </View>
 
-        {activeCategory === 'all' || activeCategory === 'guides' ? (
-          <Section title="指南" subtitle="快速知识">
-            {isLoading ? (
-              <Text style={styles.emptyText}>加载指南中...</Text>
-            ) : guides.length ? (
-              <View style={styles.infoList}>
-                {guides.map((item) => (
-                  <InfoCard key={item.id} item={item} />
-                ))}
-              </View>
-            ) : (
-              <Text style={styles.emptyText}>暂无指南。</Text>
-            )}
-          </Section>
-        ) : null}
+          <Text style={styles.tipText}>随时开始，只需几分钟哦</Text>
+        </View>
+
+        <Text style={styles.privacyText}>对话仅用于匹配，我们保护你的隐私~</Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function Section({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <View>
-          <Text style={styles.sectionTitle}>{title}</Text>
-          <Text style={styles.sectionSubtitle}>{subtitle}</Text>
-        </View>
-        <Feather name="chevron-right" size={Theme.sizes.s18} color={Theme.colors.placeholder} />
-      </View>
-      {children}
-    </View>
-  );
-}
-
-function FieldLabel({ text }: { text: string }) {
-  return <Text style={styles.formLabel}>{text}</Text>;
-}
-
-function InfoCard({ item }: { item: InfoItem }) {
-  return (
-    <View style={styles.infoCard}>
-      <View style={[styles.infoTag, { backgroundColor: item.tone }]}>
-        <Text style={styles.infoTagText}>{item.tag}</Text>
-      </View>
-      <Text style={styles.infoTitle}>{item.title}</Text>
-      <Text style={styles.infoSubtitle}>{item.subtitle}</Text>
-    </View>
-  );
-}
-
-async function postJson<T = unknown>(path: string, payload: Record<string, unknown>) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  const text = await response.text();
-  let data: T | undefined;
-  if (text) {
-    try {
-      data = JSON.parse(text) as T;
-    } catch {
-      data = undefined;
-    }
-  }
-
-  if (!response.ok) {
-    const message =
-      typeof data === 'object' && data && 'message' in data
-        ? String((data as { message?: string }).message ?? '')
-        : response.statusText ?? '';
-    throw new Error(ensureChinese(message, '请求失败'));
-  }
-
-  return data;
-}
+const PUZZLE_SIZE = Theme.sizes.s140;
+const CONNECTOR_SIZE = Theme.sizes.s40;
+const CONNECTOR_OFFSET = (PUZZLE_SIZE - CONNECTOR_SIZE) / 2;
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -662,301 +84,152 @@ const styles = StyleSheet.create({
   background: {
     ...StyleSheet.absoluteFillObject,
   },
-  blob: {
+  glow: {
     position: 'absolute',
     width: Theme.sizes.s220,
     height: Theme.sizes.s220,
     borderRadius: Theme.radius.r110,
-    opacity: Theme.opacity.o6,
+    opacity: Theme.opacity.o65,
   },
-  blobLeft: {
-    top: -Theme.sizes.s70,
+  glowTop: {
+    top: -Theme.sizes.s80,
     left: -Theme.sizes.s40,
     backgroundColor: Theme.colors.decorativePeachAlt,
   },
-  blobRight: {
-    top: Theme.spacing.s20,
+  glowRight: {
+    top: Theme.spacing.s24,
     right: -Theme.sizes.s50,
     backgroundColor: Theme.colors.decorativeMint,
   },
-  blobBottom: {
+  glowBottom: {
     bottom: -Theme.sizes.s70,
     left: Theme.percent.p35,
     backgroundColor: Theme.colors.decorativeSkyAlt,
   },
-  header: {
-    paddingHorizontal: Theme.spacing.s20,
-    paddingTop: Theme.spacing.s12,
-    paddingBottom: Theme.spacing.s6,
-  },
-  overline: {
-    fontSize: Theme.typography.size.s11,
-    letterSpacing: Theme.typography.letterSpacing.s3,
-    textTransform: 'uppercase',
-    color: Theme.colors.textSecondary,
-    marginBottom: Theme.spacing.s6,
-  },
-  title: {
-    fontSize: Theme.typography.size.s22,
-    fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.text,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Theme.spacing.s12,
-    paddingHorizontal: Theme.spacing.s20,
-    paddingVertical: Theme.spacing.s12,
-  },
-  searchBox: {
-    flex: Theme.layout.full,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Theme.spacing.s10,
-    paddingHorizontal: Theme.spacing.s14,
-    paddingVertical: Theme.spacing.s10,
-    backgroundColor: Theme.colors.cardTranslucentSoft,
-    borderRadius: Theme.radius.pill,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarm,
-    ...Theme.shadows.elevated,
-  },
-  searchInput: {
-    flex: Theme.layout.full,
-    fontSize: Theme.typography.size.s15,
-    color: Theme.colors.text,
-  },
-  filterButton: {
-    width: Theme.sizes.s44,
-    height: Theme.sizes.s44,
-    borderRadius: Theme.radius.r22,
-    backgroundColor: Theme.colors.overlaySoft,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Theme.shadows.elevated,
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Theme.spacing.s10,
-    paddingHorizontal: Theme.spacing.s20,
-    paddingBottom: Theme.spacing.s6,
-  },
-  errorText: {
-    marginTop: Theme.spacing.s6,
-    paddingHorizontal: Theme.spacing.s20,
-    fontSize: Theme.typography.size.s12,
-    color: Theme.colors.textError,
-  },
-  categoryPill: {
-    paddingHorizontal: Theme.spacing.s14,
-    paddingVertical: Theme.spacing.s8,
-    borderRadius: Theme.radius.pill,
-    backgroundColor: Theme.colors.cardTranslucentSoft,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarm,
-  },
-  categoryPillActive: {
-    backgroundColor: Theme.colors.successDeep,
-    borderColor: Theme.colors.successDeep,
-  },
-  categoryPillPressed: {
-    transform: [{ scale: Theme.scale.pressedSoft }],
-  },
-  categoryText: {
-    fontSize: Theme.typography.size.s13,
-    fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.textEmphasis,
-  },
-  categoryTextActive: {
-    color: Theme.colors.textInverse,
-  },
   content: {
-    paddingHorizontal: Theme.spacing.s20,
-    paddingTop: Theme.spacing.s8,
-    paddingBottom: Theme.sizes.s140,
-    gap: Theme.spacing.s18,
-  },
-  section: {
-    gap: Theme.spacing.s12,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
+    flexGrow: Theme.layout.full,
+    paddingHorizontal: Theme.spacing.s24,
+    paddingTop: Theme.spacing.s16,
+    paddingBottom: Theme.sizes.s80,
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  sectionTitle: {
-    fontSize: Theme.typography.size.s18,
+  brandRow: {
+    alignSelf: 'flex-start',
+  },
+  brandText: {
+    fontSize: Theme.typography.size.s20,
     fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.text,
+    color: Theme.colors.textWarning,
+    letterSpacing: Theme.typography.letterSpacing.s1_6,
   },
-  sectionSubtitle: {
-    fontSize: Theme.typography.size.s12,
-    color: Theme.colors.textSecondary,
-    marginTop: Theme.spacing.s2,
+  hero: {
+    alignItems: 'center',
+    gap: Theme.spacing.s16,
   },
-  formCard: {
-    padding: Theme.spacing.s16,
-    borderRadius: Theme.radius.r20,
-    backgroundColor: Theme.colors.cardTranslucentSoft,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarm,
-    ...Theme.shadows.elevatedSoft,
-  },
-  uploadTypeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Theme.spacing.s8,
-    marginBottom: Theme.spacing.s12,
-  },
-  uploadTypePill: {
-    paddingHorizontal: Theme.spacing.s12,
-    paddingVertical: Theme.spacing.s6,
-    borderRadius: Theme.radius.pill,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderNeutral,
-    backgroundColor: Theme.colors.surfaceNeutral,
-  },
-  uploadTypePillActive: {
-    backgroundColor: Theme.colors.successDeep,
-    borderColor: Theme.colors.successDeep,
-  },
-  uploadTypePillPressed: {
-    transform: [{ scale: Theme.scale.pressedSoft }],
-  },
-  uploadTypeText: {
-    fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.textEmphasis,
-  },
-  uploadTypeTextActive: {
-    color: Theme.colors.textInverse,
-  },
-  formFields: {
-    gap: Theme.spacing.s10,
-  },
-  formLabel: {
-    fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.textSubtle,
-  },
-  formInput: {
-    minHeight: Theme.sizes.s40,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmAlt,
-    backgroundColor: Theme.colors.card,
-    borderRadius: Theme.radius.r12,
-    paddingHorizontal: Theme.spacing.s12,
-    paddingVertical: Theme.spacing.s8,
-    fontSize: Theme.typography.size.s14,
-    color: Theme.colors.text,
-  },
-  formInputMultiline: {
-    minHeight: Theme.sizes.s80,
-    textAlignVertical: 'top',
-  },
-  formHint: {
-    fontSize: Theme.typography.size.s12,
-    color: Theme.colors.textSecondary,
-  },
-  choiceRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Theme.spacing.s8,
-  },
-  choicePill: {
-    paddingHorizontal: Theme.spacing.s12,
-    paddingVertical: Theme.spacing.s6,
-    borderRadius: Theme.radius.pill,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderNeutral,
-    backgroundColor: Theme.colors.backgroundNeutral,
-  },
-  choicePillActive: {
-    backgroundColor: Theme.colors.text,
-    borderColor: Theme.colors.text,
-  },
-  choicePillPressed: {
-    transform: [{ scale: Theme.scale.pressedSoft }],
-  },
-  choiceText: {
-    fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.textEmphasis,
-  },
-  choiceTextActive: {
-    color: Theme.colors.textInverse,
-  },
-  submitButton: {
-    marginTop: Theme.spacing.s6,
-    paddingVertical: Theme.spacing.s12,
-    borderRadius: Theme.radius.r14,
-    backgroundColor: Theme.colors.successDeep,
+  mascotWrap: {
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: Theme.spacing.s12,
   },
-  submitButtonDisabled: {
+  mascotGlow: {
+    position: 'absolute',
+    width: Theme.sizes.s220,
+    height: Theme.sizes.s220,
+    borderRadius: Theme.radius.r110,
+    backgroundColor: Theme.colors.decorativePeachSoft,
     opacity: Theme.opacity.o6,
   },
-  submitButtonPressed: {
-    transform: [{ scale: Theme.scale.pressedSoft }],
+  puzzlePiece: {
+    width: PUZZLE_SIZE,
+    height: PUZZLE_SIZE,
+    borderRadius: Theme.radius.r24,
+    backgroundColor: Theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarmSoft,
+    ...Theme.shadows.cardLarge,
   },
-  submitButtonText: {
-    color: Theme.colors.textInverse,
-    fontSize: Theme.typography.size.s14,
-    fontWeight: Theme.typography.weight.semiBold,
+  connector: {
+    position: 'absolute',
+    width: CONNECTOR_SIZE,
+    height: CONNECTOR_SIZE,
+    borderRadius: CONNECTOR_SIZE / 2,
+    backgroundColor: Theme.colors.primary,
   },
-  submitMessage: {
-    marginTop: Theme.spacing.s10,
-    fontSize: Theme.typography.size.s12,
+  connectorTop: {
+    top: -Theme.sizes.s20,
+    left: CONNECTOR_OFFSET,
   },
-  submitMessageError: {
-    color: Theme.colors.textError,
+  connectorLeft: {
+    left: -Theme.sizes.s20,
+    top: CONNECTOR_OFFSET,
   },
-  submitMessageSuccess: {
-    color: Theme.colors.textSuccess,
+  connectorRight: {
+    right: -Theme.sizes.s20,
+    top: CONNECTOR_OFFSET,
   },
-  cardList: {
-    gap: Theme.spacing.s14,
+  connectorBottom: {
+    bottom: -Theme.sizes.s20,
+    left: CONNECTOR_OFFSET,
   },
-  infoList: {
-    gap: Theme.spacing.s12,
-  },
-  emptyText: {
-    fontSize: Theme.typography.size.s13,
-    color: Theme.colors.textSecondary,
-    paddingVertical: Theme.spacing.s4,
-  },
-  infoCard: {
-    padding: Theme.spacing.s16,
-    borderRadius: Theme.radius.r18,
-    backgroundColor: Theme.colors.cardTranslucentSoft,
+  catBadge: {
+    width: Theme.sizes.s90,
+    height: Theme.sizes.s90,
+    borderRadius: Theme.sizes.s90 / 2,
+    backgroundColor: Theme.colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: Theme.borderWidth.hairline,
     borderColor: Theme.colors.borderWarm,
-    ...Theme.shadows.elevatedLarge,
+    ...Theme.shadows.elevated,
   },
-  infoTag: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: Theme.spacing.s10,
-    paddingVertical: Theme.spacing.s4,
-    borderRadius: Theme.radius.pill,
-    marginBottom: Theme.spacing.s8,
+  badgePaw: {
+    position: 'absolute',
+    bottom: Theme.spacing.s6,
+    right: Theme.spacing.s6,
   },
-  infoTagText: {
-    fontSize: Theme.typography.size.s11,
+  headline: {
+    fontSize: Theme.typography.size.s20,
     fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.textEmphasis,
+    color: Theme.colors.textWarning,
   },
-  infoTitle: {
+  subhead: {
+    fontSize: Theme.typography.size.s14,
+    color: Theme.colors.textSecondary,
+  },
+  ctaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.s14,
+    marginTop: Theme.spacing.s4,
+  },
+  ctaButton: {
+    minWidth: Theme.sizes.s220,
+    paddingVertical: Theme.spacing.s12,
+    paddingHorizontal: Theme.spacing.s32,
+    borderRadius: Theme.radius.pill,
+    backgroundColor: Theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Theme.shadows.button,
+  },
+  ctaButtonPressed: {
+    transform: [{ scale: Theme.scale.pressed }],
+  },
+  ctaText: {
     fontSize: Theme.typography.size.s16,
     fontWeight: Theme.typography.weight.semiBold,
-    color: Theme.colors.text,
+    color: Theme.colors.textInverse,
   },
-  infoSubtitle: {
-    marginTop: Theme.spacing.s6,
-    fontSize: Theme.typography.size.s13,
+  tipText: {
+    fontSize: Theme.typography.size.s12,
     color: Theme.colors.textSecondary,
+  },
+  privacyText: {
+    fontSize: Theme.typography.size.s11,
+    color: Theme.colors.textSecondary,
+    opacity: Theme.opacity.o7,
   },
 });
