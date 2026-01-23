@@ -11,17 +11,19 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Theme } from '@/constants/theme';
+import { getSession, setSession, subscribeSession, type AuthSession } from '@/lib/session';
 
-type AuthUser = {
-  id: number;
-  name: string;
-  email: string;
-};
+type UserType = 'INDIVIDUAL' | 'INSTITUTION';
 
-type AuthSession = {
-  token: string;
-  user: AuthUser;
+type GeneratePetsResponse = {
+  requested: number;
+  parsed: number;
+  created: number;
+  skipped: number;
+  skippedReasons?: string[];
+  rawResponse?: string;
 };
 
 const API_BASE_URL =
@@ -31,14 +33,28 @@ const ensureChinese = (message: string, fallback: string) =>
   /[\u4e00-\u9fff]/.test(message) ? message : fallback;
 
 export default function ProfileScreen() {
-  const [session, setSession] = React.useState<AuthSession | null>(null);
+  const router = useRouter();
+  const [session, setSessionState] = React.useState<AuthSession | null>(() => getSession());
   const [status, setStatus] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [registerName, setRegisterName] = React.useState('');
   const [registerEmail, setRegisterEmail] = React.useState('');
   const [registerPassword, setRegisterPassword] = React.useState('');
+  const [registerUserType, setRegisterUserType] = React.useState<UserType>('INDIVIDUAL');
   const [loginEmail, setLoginEmail] = React.useState('');
   const [loginPassword, setLoginPassword] = React.useState('');
+  const [aiStatus, setAiStatus] = React.useState<'idle' | 'generating' | 'success' | 'error'>(
+    'idle'
+  );
+  const [aiMessage, setAiMessage] = React.useState<string | null>(null);
+  const isGenerating = aiStatus === 'generating';
+
+  React.useEffect(() => {
+    const unsubscribe = subscribeSession((nextSession) => {
+      setSessionState(nextSession);
+    });
+    return unsubscribe;
+  }, []);
 
   const runAuthAction = async (action: () => Promise<void>) => {
     setStatus(null);
@@ -59,6 +75,7 @@ export default function ProfileScreen() {
         name: registerName,
         email: registerEmail,
         password: registerPassword,
+        userType: registerUserType,
       });
       setSession(data);
       setStatus('注册并已登录。');
@@ -84,7 +101,37 @@ export default function ProfileScreen() {
       setStatus('已退出登录。');
     });
 
+  const handleGenerateCards = async () => {
+    if (isGenerating) {
+      return;
+    }
+    setAiStatus('generating');
+    setAiMessage(null);
+
+    try {
+      const data = await request<GeneratePetsResponse>('/api/pets/generate', {});
+      const parsed = data?.parsed ?? 0;
+      const created = data?.created ?? 0;
+      const skipped = data?.skipped ?? 0;
+      const reasons =
+        data?.skippedReasons && data.skippedReasons.length
+          ? ` 跳过原因：${data.skippedReasons.join(' | ')}`
+          : '';
+      setAiStatus('success');
+      setAiMessage(`AI生成完成：解析${parsed}条，新增${created}条，跳过${skipped}条。${reasons}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      setAiStatus('error');
+      setAiMessage(ensureChinese(message, 'AI生成失败，请稍后再试。'));
+    }
+  };
+
   const displayName = session?.user.name ?? '游客';
+  const userTypeLabel = session
+    ? session.user.userType === 'INSTITUTION'
+      ? '机构用户 (VIP)'
+      : '普通用户'
+    : '未登录';
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -104,13 +151,27 @@ export default function ProfileScreen() {
 
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.profileCard}>
-            <View style={styles.avatarWrap}>
+            <Pressable
+              disabled={!session}
+              onPress={() => {
+                if (session?.user.id) {
+                  router.push(`/user/${session.user.id}`);
+                }
+              }}
+              style={({ pressed }) => [
+                styles.avatarWrap,
+                pressed && session && styles.avatarPressed,
+              ]}>
               <Image source={require('@/assets/images/icon.png')} style={styles.avatar} />
-            </View>
+            </Pressable>
             <Text style={styles.name}>{displayName}</Text>
             <Text style={styles.nicknameLabel}>状态</Text>
             <View style={styles.nicknamePill}>
               <Text style={styles.nicknameText}>{session ? '已登录' : '游客模式'}</Text>
+            </View>
+            <Text style={styles.nicknameLabel}>用户类型</Text>
+            <View style={styles.userTypePill}>
+              <Text style={styles.userTypeText}>{userTypeLabel}</Text>
             </View>
             {session ? (
               <Text style={styles.emailText}>{session.user.email}</Text>
@@ -118,6 +179,32 @@ export default function ProfileScreen() {
           </View>
 
           {status ? <Text style={styles.statusText}>{status}</Text> : null}
+
+          {session ? (
+            <FormSection title="AI 生成宠物卡片">
+              <Text style={styles.formSubtitle}>一键生成 20 张宠物卡片并写入数据库。</Text>
+              <Pressable
+                onPress={handleGenerateCards}
+                disabled={isGenerating}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  pressed && styles.actionButtonPressed,
+                ]}>
+                <Text style={styles.actionButtonText}>
+                  {isGenerating ? '生成中...' : '生成20张卡片'}
+                </Text>
+              </Pressable>
+              {aiMessage ? (
+                <Text
+                  style={[
+                    styles.statusText,
+                    aiStatus === 'error' ? styles.aiMessageError : styles.aiMessageSuccess,
+                  ]}>
+                  {aiMessage}
+                </Text>
+              ) : null}
+            </FormSection>
+          ) : null}
 
           {session ? (
             <View style={styles.formCard}>
@@ -166,6 +253,39 @@ export default function ProfileScreen() {
                   secureTextEntry
                   autoCapitalize="none"
                 />
+                <Text style={styles.fieldLabel}>用户类型</Text>
+                <View style={styles.choiceRow}>
+                  <Pressable
+                    onPress={() => setRegisterUserType('INDIVIDUAL')}
+                    style={({ pressed }) => [
+                      styles.choicePill,
+                      registerUserType === 'INDIVIDUAL' && styles.choicePillActive,
+                      pressed && styles.choicePillPressed,
+                    ]}>
+                    <Text
+                      style={[
+                        styles.choiceText,
+                        registerUserType === 'INDIVIDUAL' && styles.choiceTextActive,
+                      ]}>
+                      普通用户
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setRegisterUserType('INSTITUTION')}
+                    style={({ pressed }) => [
+                      styles.choicePill,
+                      registerUserType === 'INSTITUTION' && styles.choicePillActive,
+                      pressed && styles.choicePillPressed,
+                    ]}>
+                    <Text
+                      style={[
+                        styles.choiceText,
+                        registerUserType === 'INSTITUTION' && styles.choiceTextActive,
+                      ]}>
+                      机构用户
+                    </Text>
+                  </Pressable>
+                </View>
                 <Pressable
                   onPress={handleRegister}
                   disabled={loading}
@@ -338,6 +458,9 @@ const styles = StyleSheet.create({
     borderWidth: Theme.borderWidth.hairline,
     borderColor: Theme.colors.borderWarmSoft,
   },
+  avatarPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
   avatar: {
     width: Theme.sizes.s68,
     height: Theme.sizes.s68,
@@ -366,6 +489,20 @@ const styles = StyleSheet.create({
   nicknameText: {
     fontSize: Theme.typography.size.s14,
     color: Theme.colors.successStrong,
+    fontWeight: Theme.typography.weight.semiBold,
+  },
+  userTypePill: {
+    marginTop: Theme.spacing.s6,
+    paddingHorizontal: Theme.spacing.s14,
+    paddingVertical: Theme.spacing.s6,
+    borderRadius: Theme.radius.pill,
+    backgroundColor: Theme.colors.warningSurface,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.warningBorder,
+  },
+  userTypeText: {
+    fontSize: Theme.typography.size.s13,
+    color: Theme.colors.warningText,
     fontWeight: Theme.typography.weight.semiBold,
   },
   emailText: {
@@ -399,6 +536,40 @@ const styles = StyleSheet.create({
   formFields: {
     gap: Theme.spacing.s12,
   },
+  fieldLabel: {
+    fontSize: Theme.typography.size.s12,
+    fontWeight: Theme.typography.weight.semiBold,
+    color: Theme.colors.textSubtle,
+  },
+  choiceRow: {
+    flexDirection: 'row',
+    gap: Theme.spacing.s10,
+  },
+  choicePill: {
+    flex: Theme.layout.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Theme.spacing.s8,
+    borderRadius: Theme.radius.r10,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarmAlt,
+    backgroundColor: Theme.colors.backgroundNeutral,
+  },
+  choicePillActive: {
+    backgroundColor: Theme.colors.successDeep,
+    borderColor: Theme.colors.successDeep,
+  },
+  choicePillPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
+  choiceText: {
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.textEmphasis,
+    fontWeight: Theme.typography.weight.semiBold,
+  },
+  choiceTextActive: {
+    color: Theme.colors.textInverse,
+  },
   input: {
     minHeight: Theme.sizes.s44,
     borderWidth: Theme.borderWidth.hairline,
@@ -422,5 +593,11 @@ const styles = StyleSheet.create({
     color: Theme.colors.textInverse,
     fontSize: Theme.typography.size.s14,
     fontWeight: Theme.typography.weight.semiBold,
+  },
+  aiMessageError: {
+    color: Theme.colors.textError,
+  },
+  aiMessageSuccess: {
+    color: Theme.colors.textSuccess,
   },
 });

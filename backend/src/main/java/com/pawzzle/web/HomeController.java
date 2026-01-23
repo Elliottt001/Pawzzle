@@ -5,6 +5,7 @@ import com.pawzzle.domain.content.HomeContentRepository;
 import com.pawzzle.domain.pet.Pet;
 import com.pawzzle.domain.pet.PetCardDTO;
 import com.pawzzle.domain.pet.PetRepository;
+import com.pawzzle.domain.user.SessionService;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -22,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class HomeController {
     private final PetRepository petRepository;
     private final HomeContentRepository homeContentRepository;
+    private final SessionService sessionService;
 
     @GetMapping
     public HomeResponse getHomeData() {
@@ -35,7 +38,11 @@ public class HomeController {
     }
 
     @PostMapping("/content")
-    public HomeContentDTO createContent(@RequestBody CreateContentRequest request) {
+    public HomeContentDTO createContent(
+        @RequestBody CreateContentRequest request,
+        @RequestHeader(value = "Authorization", required = false) String authorization
+    ) {
+        sessionService.requireUser(authorization, request.token());
         CreateContentPayload payload = validateCreateRequest(request);
         int sortOrder = nextSortOrder(payload.category());
         HomeContentItem item = HomeContentItem.builder()
@@ -136,7 +143,8 @@ public class HomeController {
         String title,
         String subtitle,
         String tag,
-        String tone
+        String tone,
+        String token
     ) {
     }
 

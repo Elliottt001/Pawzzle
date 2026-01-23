@@ -11,6 +11,8 @@ public interface PetRepository extends JpaRepository<Pet, Long> {
 
 	List<Pet> findByStatus(Pet.Status status);
 
+	List<Pet> findByOwnerIdOrderByIdDesc(Long ownerId);
+
 	@Query(value = """
 		select *
 		from pets p
