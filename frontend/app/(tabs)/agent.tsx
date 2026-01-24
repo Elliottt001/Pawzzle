@@ -192,8 +192,8 @@ export default function AgentScreen() {
 
     requestEvaluation([])
       .then((data) => {
-        appendDebug('调试：评估提示', data?.prompt ?? '');
-        appendDebug('调试：评估响应', data?.rawResponse ?? '');
+        // appendDebug('调试：评估提示', data?.prompt ?? '');
+        // appendDebug('调试：评估响应', data?.rawResponse ?? '');
 
         if (data?.endverification) {
           const summary = buildEvaluationSummary(data);
@@ -202,9 +202,9 @@ export default function AgentScreen() {
           appendMessage('ai', formatEvaluationSummary(summary));
           setStatus('recommending');
           return loadPetCards().then(() => requestRecommendation(summary, [])).then((decision) => {
-            appendDebug('调试：推荐提示', decision?.prompt ?? '');
-            appendDebug('调试：候选筛选', decision?.debug ?? '');
-            appendDebug('调试：推荐响应', decision?.rawResponse ?? '');
+            // appendDebug('调试：推荐提示', decision?.prompt ?? '');
+            // appendDebug('调试：候选筛选', decision?.debug ?? '');
+            // appendDebug('调试：推荐响应', decision?.rawResponse ?? '');
             setRecommendedItems(decision?.items ?? []);
           });
         }
@@ -215,7 +215,7 @@ export default function AgentScreen() {
           setPendingQuestions(rest);
           appendMessage('ai', first);
         } else {
-          appendDebug('调试：评估缺少下一问', data?.rawResponse ?? '');
+          // appendDebug('调试：评估缺少下一问', data?.rawResponse ?? '');
         }
         return undefined;
       })
@@ -271,8 +271,8 @@ export default function AgentScreen() {
 
     try {
       const data = await requestEvaluation(buildAgentMessages(nextMessages));
-      appendDebug('调试：评估提示', data?.prompt ?? '');
-      appendDebug('调试：评估响应', data?.rawResponse ?? '');
+      // appendDebug('调试：评估提示', data?.prompt ?? '');
+      // appendDebug('调试：评估响应', data?.rawResponse ?? '');
 
       if (data?.endverification) {
         const summary = buildEvaluationSummary(data);
@@ -283,9 +283,9 @@ export default function AgentScreen() {
         setStatus('recommending');
         await loadPetCards();
         const decision = await requestRecommendation(summary, buildAgentMessages(nextMessages));
-        appendDebug('调试：推荐提示', decision?.prompt ?? '');
-        appendDebug('调试：候选筛选', decision?.debug ?? '');
-        appendDebug('调试：推荐响应', decision?.rawResponse ?? '');
+        // appendDebug('调试：推荐提示', decision?.prompt ?? '');
+        // appendDebug('调试：候选筛选', decision?.debug ?? '');
+        // appendDebug('调试：推荐响应', decision?.rawResponse ?? '');
         setRecommendedItems(decision?.items ?? []);
       } else {
         const questions = normalizeQuestions(data);
@@ -294,7 +294,7 @@ export default function AgentScreen() {
           setPendingQuestions(rest);
           appendMessage('ai', `${getRandomAcknowledgement()}\n\n${first}`);
         } else {
-          appendDebug('调试：评估缺少下一问', data?.rawResponse ?? '');
+          // appendDebug('调试：评估缺少下一问', data?.rawResponse ?? '');
         }
       }
     } catch (error) {
@@ -349,11 +349,11 @@ export default function AgentScreen() {
 
           {isBusy ? <ChatBubble role="ai" text={waitingText} /> : null}
 
-          {errorMessage ? <ChatBubble role="debug" text={`错误：${errorMessage}`} /> : null}
+          {/* {errorMessage ? <ChatBubble role="debug" text={`错误：${errorMessage}`} /> : null} */}
 
-          {evaluation && petCardsStatus === 'error' ? (
+          {/* {evaluation && petCardsStatus === 'error' ? (
             <ChatBubble role="debug" text="暂时无法获取宠物卡片。" />
-          ) : null}
+          ) : null} */}
 
           {visiblePets.length ? (
             <View style={styles.matchList}>

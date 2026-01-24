@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { Theme } from '../../../constants/theme';
 import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
 
@@ -34,11 +35,6 @@ const resolveParam = (value: string | string[] | undefined) => {
   }
 };
 
-const speciesOptions = [
-  { id: 'CAT', label: '猫' },
-  { id: 'DOG', label: '狗' },
-] as const;
-
 const breedOptions = {
   CAT: ['英短', '布偶', '暹罗'],
   DOG: ['柯基', '柴犬', '迷你贵宾'],
@@ -46,29 +42,19 @@ const breedOptions = {
 
 const locationOptions = ['杭州', '北京', '上海'] as const;
 
-type SpeciesId = (typeof speciesOptions)[number]['id'];
-
 const RECOGNIZED_INFO = {
-  species: 'DOG' as const,
-  speciesLabel: '狗狗',
   breed: '柯基' as const,
   location: '杭州',
   ageGuess: '2',
-  medicalProofs: ['疫苗接种记录完整', '驱虫证明已核验', '体检合格报告已上传'],
-  docIds: ['免疫证编号：HZ-2024-11', '体检编号：PET-2024-728'],
 };
 
-const DEFAULT_DESCRIPTION = '已完成体检与免疫，性格友好，适合家庭领养。';
-const TAG_RULES = [
-  { keyword: '温顺', tag: '温顺' },
-  { keyword: '亲人', tag: '亲人' },
-  { keyword: '安静', tag: '安静' },
-  { keyword: '活泼', tag: '活泼' },
-  { keyword: '护主', tag: '护主' },
-  { keyword: '胆小', tag: '怕生' },
-  { keyword: '疫苗', tag: '已免疫' },
-];
-const DEFAULT_TAGS = ['适合家庭', '已免疫', '易相处'];
+const DEFAULT_DESCRIPTION = '性格友好，适合家庭领养。';
+const FALLBACK_TAGS = ['干饭王', '小粘人', '高冷', '温顺', '小太阳', '机灵鬼'];
+const GENDER_OPTIONS = [
+  { id: 'male', label: '公' },
+  { id: 'female', label: '母' },
+] as const;
+const STATUS_OPTIONS = ['已绝育', '已完成疫苗', '疫苗进行中', '未接种/不确定'] as const;
 
 export default function PetRehomeVerifyScreen() {
   const router = useRouter();
@@ -79,20 +65,26 @@ export default function PetRehomeVerifyScreen() {
   const resolvedPhotoType = resolveParam(photoType);
   const isManual = modeValue === 'manual' && !resolvedPhotoUri;
   const [session, setSessionState] = React.useState<AuthSession | null>(() => getSession());
+  const [photoUriState, setPhotoUriState] = React.useState<string | null>(resolvedPhotoUri);
+  const [photoNameState, setPhotoNameState] = React.useState<string | null>(resolvedPhotoName);
+  const [photoTypeState, setPhotoTypeState] = React.useState<string | null>(resolvedPhotoType);
   const [name, setName] = React.useState('团子');
   const [age, setAge] = React.useState(RECOGNIZED_INFO.ageGuess);
-  const [species, setSpecies] = React.useState<SpeciesId | null>(() =>
-    isManual ? null : RECOGNIZED_INFO.species,
-  );
   const [breed, setBreed] = React.useState<string | null>(() =>
     isManual ? null : RECOGNIZED_INFO.breed,
   );
-  const [location, setLocation] = React.useState<string | null>(() =>
-    isManual ? null : RECOGNIZED_INFO.location,
+  const [location] = React.useState<string>(() =>
+    isManual ? locationOptions[0] : RECOGNIZED_INFO.location,
   );
-  const [noteText, setNoteText] = React.useState('');
+  const [personalityText, setPersonalityText] = React.useState('');
+  const [avoidAdopterText, setAvoidAdopterText] = React.useState('');
+  const [gender, setGender] = React.useState<(typeof GENDER_OPTIONS)[number]['id'] | null>(
+    null,
+  );
+  const [careStatus, setCareStatus] = React.useState<(typeof STATUS_OPTIONS)[number] | null>(null);
   const [tags, setTags] = React.useState<string[]>([]);
   const [tagStatus, setTagStatus] = React.useState<'idle' | 'generating' | 'ready'>('idle');
+  const [tagError, setTagError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = React.useState<string | null>(null);
@@ -101,7 +93,11 @@ export default function PetRehomeVerifyScreen() {
   >('idle');
   const [photoUploadError, setPhotoUploadError] = React.useState<string | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = React.useState<string | null>(null);
-  const selectedBreeds = species ? breedOptions[species] : [];
+  const [breedOpen, setBreedOpen] = React.useState(false);
+  const allBreeds = React.useMemo(
+    () => [...breedOptions.CAT, ...breedOptions.DOG],
+    [],
+  );
 
   React.useEffect(() => {
     const unsubscribe = subscribeSession((nextSession) => {
@@ -111,15 +107,10 @@ export default function PetRehomeVerifyScreen() {
   }, []);
 
   React.useEffect(() => {
-    if (!species) {
-      setBreed(null);
-      return;
-    }
-    const speciesBreeds = breedOptions[species];
-    if (breed && !speciesBreeds.some((option) => option === breed)) {
+    if (breed && !allBreeds.includes(breed)) {
       setBreed(null);
     }
-  }, [breed, species]);
+  }, [allBreeds, breed]);
 
   const resolveExtension = (name: string | null, type: string | null) => {
     if (name) {
@@ -165,25 +156,25 @@ export default function PetRehomeVerifyScreen() {
   };
 
   const uploadPhoto = async () => {
-    if (!resolvedPhotoUri || !session?.token) {
+    if (!photoUriState || !session?.token) {
       return null;
     }
     setPhotoUploadStatus('uploading');
     setPhotoUploadError(null);
     try {
-      const extension = resolveExtension(resolvedPhotoName, resolvedPhotoType);
-      const fileName = buildFileName(resolvedPhotoName, extension);
-      const mimeType = resolveMimeType(resolvedPhotoType, extension);
+      const extension = resolveExtension(photoNameState, photoTypeState);
+      const fileName = buildFileName(photoNameState, extension);
+      const mimeType = resolveMimeType(photoTypeState, extension);
       const formData = new FormData();
       if (Platform.OS === 'web') {
-        const response = await fetch(resolvedPhotoUri);
+        const response = await fetch(photoUriState);
         const blob = await response.blob();
         const finalType = blob.type || mimeType;
         const file = new File([blob], fileName, { type: finalType });
         formData.append('file', file);
       } else {
         formData.append('file', {
-          uri: resolvedPhotoUri,
+          uri: photoUriState,
           name: fileName,
           type: mimeType,
         } as unknown as Blob);
@@ -223,17 +214,90 @@ export default function PetRehomeVerifyScreen() {
     }
   };
 
-  const handleGenerateTags = () => {
-    if (!noteText.trim()) {
-      setSaveError('请先填写个人说明。');
+  const handlePickPhoto = async () => {
+    if (photoUploadStatus === 'uploading') {
       return;
     }
-    setSaveError(null);
+    setPhotoUploadError(null);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setPhotoUploadError('需要相册权限才能选择照片。');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled) {
+        return;
+      }
+      const asset = result.assets?.[0];
+      if (!asset?.uri) {
+        setPhotoUploadError('未获取到照片，请重试。');
+        return;
+      }
+      const fallbackName = `pet-photo-${Date.now()}.jpg`;
+      setPhotoUriState(asset.uri);
+      setPhotoNameState(asset.fileName?.trim() || fallbackName);
+      setPhotoTypeState(asset.mimeType?.trim() || 'image/jpeg');
+      setUploadedImageUrl(null);
+      setPhotoUploadStatus('idle');
+    } catch {
+      setPhotoUploadError('上传失败，请稍后再试。');
+    }
+  };
+
+  const handleGenerateTags = async () => {
+    if (tagStatus === 'generating') {
+      return;
+    }
+    const trimmed = personalityText.trim();
+    if (!trimmed) {
+      setTagError('请先填写性格侧写内容。');
+      return;
+    }
+    setTagError(null);
     setTagStatus('generating');
-    setTimeout(() => {
-      setTags(buildTags(noteText));
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (session?.token) {
+        headers.Authorization = `Bearer ${session.token}`;
+      }
+      const response = await fetch(`${API_BASE_URL}/api/pets/personality-tags`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ text: trimmed }),
+      });
+      const text = await response.text();
+      let payload: { tags?: string[] } | null = null;
+      if (text) {
+        try {
+          payload = JSON.parse(text) as { tags?: string[] };
+        } catch {
+          payload = null;
+        }
+      }
+      if (!response.ok) {
+        const message =
+          payload && typeof payload === 'object' && 'message' in payload
+            ? String((payload as { message?: string }).message ?? '')
+            : response.statusText ?? '';
+        throw new Error(message);
+      }
+      const aiTags = normalizeTags(Array.isArray(payload?.tags) ? payload?.tags ?? [] : []);
+      const finalTags = fillTags(aiTags);
+      setTags(finalTags);
       setTagStatus('ready');
-    }, 600);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      setTagError(ensureChinese(message, '标签生成失败，请稍后再试。'));
+      setTagStatus('idle');
+    }
   };
 
   const handlePublish = async () => {
@@ -241,7 +305,7 @@ export default function PetRehomeVerifyScreen() {
       return;
     }
     if (!session?.token) {
-      setSaveError('请先登录后再发布。');
+      setSaveError('请先登录后再保存。');
       return;
     }
     const trimmedName = name.trim();
@@ -254,16 +318,13 @@ export default function PetRehomeVerifyScreen() {
       setSaveError('请填写正确的年龄。');
       return;
     }
-    if (!species) {
-      setSaveError('请选择宠物类型。');
-      return;
-    }
     if (!breed) {
       setSaveError('请选择宠物品种。');
       return;
     }
-    if (!location) {
-      setSaveError('请选择所在城市。');
+    const resolvedSpecies = resolveSpeciesFromBreed(breed);
+    if (!resolvedSpecies) {
+      setSaveError('请选择宠物品种。');
       return;
     }
 
@@ -273,7 +334,7 @@ export default function PetRehomeVerifyScreen() {
 
     try {
       let imageUrl = uploadedImageUrl;
-      if (resolvedPhotoUri && !imageUrl) {
+      if (photoUriState && !imageUrl) {
         imageUrl = await uploadPhoto();
         if (!imageUrl) {
           return;
@@ -281,12 +342,12 @@ export default function PetRehomeVerifyScreen() {
       }
       const payload = {
         name: trimmedName,
-        species,
+        species: resolvedSpecies,
         breed,
         age: Math.round(ageValue),
         location,
         personalityTag: tags[0] ?? '亲人',
-        description: noteText.trim() || DEFAULT_DESCRIPTION,
+        description: personalityText.trim() || DEFAULT_DESCRIPTION,
         imageUrl: imageUrl ?? undefined,
       };
       const response = await fetch(`${API_BASE_URL}/api/pets`, {
@@ -308,7 +369,7 @@ export default function PetRehomeVerifyScreen() {
         }
         throw new Error(message || response.statusText);
       }
-      setSaveSuccess('宠物卡片已发布。');
+      setSaveSuccess('宠物卡片已生成。');
       router.replace('/(tabs)/pets');
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
@@ -318,174 +379,82 @@ export default function PetRehomeVerifyScreen() {
     }
   };
 
-  const tagButtonText =
-    tagStatus === 'generating' ? '识别中...' : tags.length ? '重新生成标签' : '生成标签';
+  const tagButtonText = tagStatus === 'generating' ? '生成中...' : '生成';
+  const canGenerateTags = personalityText.trim().length > 0 && tagStatus !== 'generating';
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.topBar}>
+        <Pressable
+          onPress={() => router.back()}
+          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}>
+          <FontAwesome5 name="chevron-left" size={Theme.sizes.s14} color={Theme.colors.textWarm} />
+          <Text style={styles.backText}>返回</Text>
+        </Pressable>
+        <Text style={styles.topTitle}>添加宠物卡片</Text>
+        <Pressable
+          onPress={handlePublish}
+          disabled={saving}
+          style={({ pressed }) => [
+            styles.saveButton,
+            pressed && styles.saveButtonPressed,
+            saving && styles.saveButtonDisabled,
+          ]}>
+          <Text style={styles.saveButtonText}>{saving ? '保存中' : '保存'}</Text>
+        </Pressable>
+      </View>
+
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <Text style={styles.title}>宠物卡片录入</Text>
-          <Text style={styles.subtitle}>
-            {isManual ? '照片可选，未上传也能发布。请手动填写信息。' : '拍照识别与文本分析已完成。'}
-          </Text>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>影像识别结果</Text>
-          <View style={styles.photoRow}>
-            <View style={styles.photoBox}>
-              {resolvedPhotoUri ? (
-                <Image source={{ uri: resolvedPhotoUri }} style={styles.photoImage} contentFit="cover" />
-              ) : (
-                <>
-                  <FontAwesome5
-                    name="camera"
-                    size={Theme.sizes.s24}
-                    color={Theme.colors.textSecondary}
-                  />
-                  <Text style={styles.photoText}>{isManual ? '未上传照片' : '识别完成'}</Text>
-                </>
-              )}
-            </View>
-            {isManual ? (
-              <View style={styles.readonlyColumn}>
-                <Text style={styles.photoHint}>已跳过识别，可在下方手动填写。</Text>
-              </View>
-            ) : (
-              <View style={styles.readonlyColumn}>
-                <View style={styles.readonlyItem}>
-                  <Text style={styles.label}>类型</Text>
-                  <Text style={styles.readonlyValue}>{RECOGNIZED_INFO.speciesLabel}</Text>
-                </View>
-                <View style={styles.readonlyItem}>
-                  <Text style={styles.label}>品种</Text>
-                  <Text style={styles.readonlyValue}>{RECOGNIZED_INFO.breed}</Text>
-                </View>
-                <View style={styles.readonlyItem}>
-                  <Text style={styles.label}>城市</Text>
-                  <Text style={styles.readonlyValue}>{RECOGNIZED_INFO.location}</Text>
-                </View>
-              </View>
-            )}
-          </View>
-          {!isManual ? <Text style={styles.referenceHint}>识别仅供参考，可在下方调整。</Text> : null}
-          {resolvedPhotoUri ? (
-            <Text style={styles.photoUploadHint}>
-              {photoUploadStatus === 'uploading'
-                ? '照片上传中...'
-                : photoUploadStatus === 'ready'
-                  ? '照片已上传'
-                  : '照片将随发布一起上传。'}
-            </Text>
-          ) : null}
-          {photoUploadError ? <Text style={styles.photoUploadError}>{photoUploadError}</Text> : null}
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>医疗证明</Text>
-          {isManual ? (
-            <Text style={styles.proofEmptyText}>暂无上传，可后续补充。</Text>
+        <Pressable
+          onPress={handlePickPhoto}
+          style={({ pressed }) => [
+            styles.photoUpload,
+            pressed && styles.photoUploadPressed,
+          ]}>
+          {photoUriState ? (
+            <Image source={{ uri: photoUriState }} style={styles.photoImage} contentFit="cover" />
           ) : (
-            <>
-              <View style={styles.proofList}>
-                {RECOGNIZED_INFO.medicalProofs.map((item) => (
-                  <View key={item} style={styles.proofItem}>
-                    <Text style={styles.proofText}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-              <View style={styles.proofList}>
-                {RECOGNIZED_INFO.docIds.map((item) => (
-                  <View key={item} style={styles.docItem}>
-                    <Text style={styles.docText}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-            </>
+            <View style={styles.photoPlaceholder}>
+              <FontAwesome5 name="camera" size={Theme.sizes.s24} color={Theme.colors.textWarm} />
+              <Text style={styles.photoPlaceholderText}>拍照/上传宠物照片</Text>
+            </View>
           )}
+        </Pressable>
+        <Text style={styles.photoHint}>支持多图上传，最多6张</Text>
+        {photoUploadError ? <Text style={styles.inlineError}>{photoUploadError}</Text> : null}
+
+        <View style={styles.field}>
+          <Text style={styles.label}>名字</Text>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="输入宠物名字"
+            placeholderTextColor={Theme.colors.placeholder}
+            style={styles.input}
+          />
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>宠物基础信息</Text>
-          <View style={styles.field}>
-            <Text style={styles.label}>名字</Text>
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder="请输入名字"
-              placeholderTextColor={Theme.colors.placeholder}
-              style={styles.input}
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>年龄</Text>
-            <TextInput
-              value={age}
-              onChangeText={setAge}
-              placeholder="请输入年龄"
-              placeholderTextColor={Theme.colors.placeholder}
-              style={styles.input}
-              keyboardType="number-pad"
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>类型</Text>
+        <View style={styles.field}>
+          <Text style={styles.label}>品种</Text>
+          <Pressable
+            onPress={() => setBreedOpen((prev) => !prev)}
+            style={({ pressed }) => [styles.selectInput, pressed && styles.selectInputPressed]}>
+            <Text style={breed ? styles.selectValue : styles.selectPlaceholder}>
+              {breed ?? '选择或输入品种'}
+            </Text>
+            <FontAwesome5 name="chevron-down" size={Theme.sizes.s12} color={Theme.colors.textWarm} />
+          </Pressable>
+          {breedOpen ? (
             <View style={styles.optionRow}>
-              {speciesOptions.map((option) => {
-                const isActive = species === option.id;
-                return (
-                  <Pressable
-                    key={option.id}
-                    onPress={() => setSpecies(option.id)}
-                    style={({ pressed }) => [
-                      styles.optionPill,
-                      isActive && styles.optionPillActive,
-                      pressed && styles.optionPillPressed,
-                    ]}>
-                    <Text style={[styles.optionText, isActive && styles.optionTextActive]}>
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>品种</Text>
-            <View style={styles.optionRow}>
-              {selectedBreeds.length ? (
-                selectedBreeds.map((option) => {
-                  const isActive = breed === option;
-                  return (
-                    <Pressable
-                      key={option}
-                      onPress={() => setBreed(option)}
-                      style={({ pressed }) => [
-                        styles.optionPill,
-                        isActive && styles.optionPillActive,
-                        pressed && styles.optionPillPressed,
-                      ]}>
-                      <Text style={[styles.optionText, isActive && styles.optionTextActive]}>
-                        {option}
-                      </Text>
-                    </Pressable>
-                  );
-                })
-              ) : (
-                <Text style={styles.optionHint}>请先选择类型。</Text>
-              )}
-            </View>
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>城市</Text>
-            <View style={styles.optionRow}>
-              {locationOptions.map((option) => {
-                const isActive = location === option;
+              {allBreeds.map((option) => {
+                const isActive = breed === option;
                 return (
                   <Pressable
                     key={option}
-                    onPress={() => setLocation(option)}
+                    onPress={() => {
+                      setBreed(option);
+                      setBreedOpen(false);
+                    }}
                     style={({ pressed }) => [
                       styles.optionPill,
                       isActive && styles.optionPillActive,
@@ -498,54 +467,129 @@ export default function PetRehomeVerifyScreen() {
                 );
               })}
             </View>
-          </View>
+          ) : null}
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>个人说明</Text>
-          <View style={styles.videoCard}>
-            <FontAwesome5 name="play" size={Theme.sizes.s18} color={Theme.colors.textInverse} />
-            <View>
-              <Text style={styles.videoTitle}>视频已上传</Text>
-              <Text style={styles.videoHint}>00:12 · 行为记录</Text>
-            </View>
-          </View>
+        <View style={styles.field}>
+          <Text style={styles.label}>年龄</Text>
           <TextInput
-            value={noteText}
-            onChangeText={setNoteText}
-            placeholder="输入视频描述或补充说明..."
+            value={age}
+            onChangeText={setAge}
+            placeholder="输入年龄"
             placeholderTextColor={Theme.colors.placeholder}
-            style={styles.textArea}
-            multiline
+            style={styles.input}
+            keyboardType="number-pad"
           />
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>识别标签</Text>
+        <View style={styles.field}>
+          <Text style={styles.label}>性别与状态</Text>
+          <View style={styles.optionRow}>
+            {GENDER_OPTIONS.map((option) => {
+              const isActive = gender === option.id;
+              return (
+                <Pressable
+                  key={option.id}
+                  onPress={() => setGender(option.id)}
+                  style={({ pressed }) => [
+                    styles.optionPill,
+                    isActive && styles.optionPillActive,
+                    pressed && styles.optionPillPressed,
+                  ]}>
+                  <Text style={[styles.optionText, isActive && styles.optionTextActive]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={styles.optionRow}>
+            {STATUS_OPTIONS.map((option) => {
+              const isActive = careStatus === option;
+              return (
+                <Pressable
+                  key={option}
+                  onPress={() => setCareStatus(option)}
+                  style={({ pressed }) => [
+                    styles.optionPill,
+                    isActive && styles.optionPillActive,
+                    pressed && styles.optionPillPressed,
+                  ]}>
+                  <Text style={[styles.optionText, isActive && styles.optionTextActive]}>
+                    {option}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.sectionTitle}>AI 性格侧写</Text>
+          <Text style={styles.helperText}>
+            请介绍你家宝贝的个性（例如它是否特别粘人？它吃饭护食吗？它怕打雷吗？）
+          </Text>
+          <View style={styles.textAreaWrap}>
+            <TextInput
+              value={personalityText}
+              onChangeText={setPersonalityText}
+              placeholder="描述你家宝贝的性格特点...(可粘贴小红书/朋友圈文案)"
+              placeholderTextColor={Theme.colors.placeholder}
+              style={styles.textArea}
+              multiline
+            />
+            <View style={styles.micBadge}>
+              <FontAwesome5 name="microphone" size={Theme.sizes.s14} color={Theme.colors.textWarm} />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.field}>
+          <View style={styles.tagHeader}>
+            <Text style={styles.sectionTitle}>tag 生成</Text>
+            <Pressable
+              onPress={handleGenerateTags}
+              disabled={!canGenerateTags}
+              style={({ pressed }) => [
+                styles.tagButton,
+                pressed && styles.tagButtonPressed,
+                !canGenerateTags && styles.tagButtonDisabled,
+              ]}>
+              {tagStatus === 'generating' ? (
+                <ActivityIndicator size="small" color={Theme.colors.textWarmStrong} />
+              ) : null}
+              <Text style={styles.tagButtonText}>{tagButtonText}</Text>
+            </Pressable>
+          </View>
           <View style={styles.tagRow}>
             {tags.length ? (
               tags.map((tag) => (
                 <View key={tag} style={styles.tagPill}>
-                  <Text style={styles.tagText}>{tag}</Text>
+                  <Text style={styles.tagText}># {tag}</Text>
                 </View>
               ))
             ) : (
-              <Text style={styles.tagEmpty}>暂无识别结果</Text>
+              <Text style={styles.tagEmpty}>暂未生成标签</Text>
             )}
           </View>
-          <Pressable
-            onPress={handleGenerateTags}
-            disabled={tagStatus === 'generating'}
-            style={({ pressed }) => [
-              styles.tagButton,
-              pressed && styles.tagButtonPressed,
-              tagStatus === 'generating' && styles.tagButtonDisabled,
-            ]}>
-            {tagStatus === 'generating' ? (
-              <ActivityIndicator size="small" color={Theme.colors.textWarmStrong} />
-            ) : null}
-            <Text style={styles.tagButtonText}>{tagButtonText}</Text>
-          </Pressable>
+          {tagError ? <Text style={styles.inlineError}>{tagError}</Text> : null}
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.sectionTitle}>您觉得什么样的人千万不要养这只宠物?</Text>
+          <View style={styles.textAreaWrap}>
+            <TextInput
+              value={avoidAdopterText}
+              onChangeText={setAvoidAdopterText}
+              placeholder="比如：禁止宿舍..."
+              placeholderTextColor={Theme.colors.placeholder}
+              style={styles.textArea}
+              multiline
+            />
+            <View style={styles.micBadge}>
+              <FontAwesome5 name="microphone" size={Theme.sizes.s14} color={Theme.colors.textWarm} />
+            </View>
+          </View>
         </View>
 
         <Pressable
@@ -556,7 +600,9 @@ export default function PetRehomeVerifyScreen() {
             pressed && styles.actionButtonPressed,
             saving && styles.actionButtonDisabled,
           ]}>
-          <Text style={styles.actionButtonText}>{saving ? '发布中...' : '发布宠物卡片'}</Text>
+          <Text style={styles.actionButtonText}>
+            {saving ? '生成中...' : '生成专属宠物信息卡'}
+          </Text>
         </Pressable>
 
         {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
@@ -566,158 +612,180 @@ export default function PetRehomeVerifyScreen() {
   );
 }
 
-function buildTags(text: string) {
-  const hits = TAG_RULES.filter((rule) => text.includes(rule.keyword)).map((rule) => rule.tag);
-  const deduped = Array.from(new Set(hits));
-  for (const fallback of DEFAULT_TAGS) {
-    if (deduped.length >= 3) {
+function normalizeTags(tags: string[]) {
+  const cleaned = tags
+    .filter((tag): tag is string => typeof tag === 'string')
+    .map((tag) => tag.replace(/^#/, '').trim())
+    .filter((tag) => tag.length > 0);
+  return Array.from(new Set(cleaned));
+}
+
+function fillTags(tags: string[]) {
+  const merged = [...tags];
+  for (const fallback of FALLBACK_TAGS) {
+    if (merged.length >= 4) {
       break;
     }
-    if (!deduped.includes(fallback)) {
-      deduped.push(fallback);
+    if (!merged.includes(fallback)) {
+      merged.push(fallback);
     }
   }
-  return deduped.slice(0, 4);
+  return merged.slice(0, 4);
+}
+
+function resolveSpeciesFromBreed(breed: string | null) {
+  if (!breed) {
+    return null;
+  }
+  if (breedOptions.CAT.includes(breed)) {
+    return 'CAT';
+  }
+  if (breedOptions.DOG.includes(breed)) {
+    return 'DOG';
+  }
+  return null;
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: Theme.layout.full,
-    backgroundColor: Theme.colors.background,
+    backgroundColor: Theme.colors.backgroundWarmAlt,
   },
   content: {
-    padding: Theme.spacing.l,
-    gap: Theme.spacing.l,
-    paddingBottom: Theme.sizes.s120,
+    paddingHorizontal: Theme.spacing.s20,
+    paddingTop: Theme.spacing.s16,
+    paddingBottom: Theme.sizes.s140,
+    gap: Theme.spacing.s18,
   },
-  header: {
-    gap: Theme.spacing.s,
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Theme.spacing.s16,
+    paddingVertical: Theme.spacing.s12,
+    borderBottomWidth: Theme.borderWidth.hairline,
+    borderBottomColor: Theme.colors.borderWarm,
+    backgroundColor: Theme.colors.backgroundWarmAlt,
   },
-  title: {
-    color: Theme.colors.text,
-    fontSize: Theme.typography.size.s22,
-    fontFamily: Theme.fonts.semiBold,
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.s6,
+    minWidth: Theme.sizes.s60,
+    paddingVertical: Theme.spacing.s4,
+    paddingHorizontal: Theme.spacing.s6,
+    borderRadius: Theme.radius.r12,
   },
-  subtitle: {
-    color: Theme.colors.textSecondary,
+  backButtonPressed: {
+    opacity: Theme.opacity.o7,
+  },
+  backText: {
+    color: Theme.colors.textWarm,
     fontSize: Theme.typography.size.s14,
   },
-  card: {
-    backgroundColor: Theme.colors.cardTranslucentSoft,
-    borderRadius: Theme.layout.radius,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarm,
-    padding: Theme.spacing.m,
-    gap: Theme.spacing.m,
-  },
-  sectionTitle: {
-    color: Theme.colors.text,
+  topTitle: {
+    flex: 1,
+    textAlign: 'center',
+    color: Theme.colors.textWarmStrong,
     fontSize: Theme.typography.size.s16,
     fontFamily: Theme.fonts.semiBold,
   },
-  photoRow: {
-    flexDirection: 'row',
-    gap: Theme.spacing.m,
+  saveButton: {
+    minWidth: Theme.sizes.s60,
     alignItems: 'center',
-  },
-  photoBox: {
-    width: Theme.sizes.s110,
-    height: Theme.sizes.s110,
-    borderRadius: Theme.layout.radius,
-    backgroundColor: Theme.colors.surfaceNeutral,
+    paddingVertical: Theme.spacing.s4,
+    paddingHorizontal: Theme.spacing.s10,
+    borderRadius: Theme.radius.r12,
+    backgroundColor: Theme.colors.decorativePeachAlt,
     borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderNeutral,
+    borderColor: Theme.colors.borderWarmSoft,
+  },
+  saveButtonPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
+  saveButtonDisabled: {
+    opacity: Theme.opacity.o6,
+  },
+  saveButtonText: {
+    color: Theme.colors.textWarmStrong,
+    fontSize: Theme.typography.size.s12,
+    fontFamily: Theme.fonts.semiBold,
+  },
+  photoUpload: {
+    minHeight: Theme.sizes.s180,
+    borderRadius: Theme.radius.r18,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.ctaBorder,
+    borderStyle: 'dashed',
+    backgroundColor: Theme.colors.card,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Theme.spacing.s,
     overflow: 'hidden',
+  },
+  photoUploadPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
+  photoPlaceholder: {
+    alignItems: 'center',
+    gap: Theme.spacing.s8,
+  },
+  photoPlaceholderText: {
+    color: Theme.colors.textWarm,
+    fontSize: Theme.typography.size.s14,
+    fontFamily: Theme.fonts.semiBold,
   },
   photoImage: {
     width: '100%',
     height: '100%',
   },
-  photoText: {
-    color: Theme.colors.textSecondary,
-    fontSize: Theme.typography.size.s12,
-  },
   photoHint: {
     color: Theme.colors.textSecondary,
     fontSize: Theme.typography.size.s12,
+    textAlign: 'center',
   },
-  referenceHint: {
-    color: Theme.colors.textSecondary,
-    fontSize: Theme.typography.size.s12,
-    marginTop: Theme.spacing.s,
-  },
-  photoUploadHint: {
-    color: Theme.colors.textSecondary,
-    fontSize: Theme.typography.size.s12,
-    marginTop: Theme.spacing.s2,
-  },
-  photoUploadError: {
+  inlineError: {
     color: Theme.colors.textError,
     fontSize: Theme.typography.size.s12,
-    marginTop: Theme.spacing.s2,
-  },
-  readonlyColumn: {
-    flex: Theme.layout.full,
-    gap: Theme.spacing.s,
-  },
-  readonlyItem: {
-    gap: Theme.spacing.s2,
   },
   field: {
     gap: Theme.spacing.s,
   },
   label: {
-    color: Theme.colors.textSubtle,
-    fontSize: Theme.typography.size.s13,
-    fontFamily: Theme.fonts.semiBold,
-  },
-  readonlyValue: {
-    color: Theme.colors.text,
+    color: Theme.colors.textWarmStrong,
     fontSize: Theme.typography.size.s14,
-  },
-  proofList: {
-    gap: Theme.spacing.s6,
-  },
-  proofItem: {
-    paddingVertical: Theme.spacing.s6,
-    paddingHorizontal: Theme.spacing.s10,
-    borderRadius: Theme.radius.r12,
-    backgroundColor: Theme.colors.surfaceNeutral,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderNeutral,
-  },
-  proofText: {
-    color: Theme.colors.text,
-    fontSize: Theme.typography.size.s13,
-  },
-  proofEmptyText: {
-    color: Theme.colors.textSecondary,
-    fontSize: Theme.typography.size.s12,
-  },
-  docItem: {
-    paddingVertical: Theme.spacing.s6,
-    paddingHorizontal: Theme.spacing.s10,
-    borderRadius: Theme.radius.r12,
-    backgroundColor: Theme.colors.card,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmAlt,
-  },
-  docText: {
-    color: Theme.colors.textSecondary,
-    fontSize: Theme.typography.size.s12,
+    fontFamily: Theme.fonts.semiBold,
   },
   input: {
     minHeight: Theme.sizes.s44,
     paddingVertical: Theme.spacing.s,
-    paddingHorizontal: Theme.spacing.m,
-    borderRadius: Theme.layout.radius,
+    paddingHorizontal: Theme.spacing.s16,
+    borderRadius: Theme.radius.r22,
     backgroundColor: Theme.colors.card,
     borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmAlt,
-    color: Theme.colors.text,
+    borderColor: Theme.colors.ctaBorder,
+    color: Theme.colors.textWarmStrong,
+    fontSize: Theme.typography.size.s14,
+  },
+  selectInput: {
+    minHeight: Theme.sizes.s44,
+    paddingVertical: Theme.spacing.s,
+    paddingHorizontal: Theme.spacing.s16,
+    borderRadius: Theme.radius.r22,
+    backgroundColor: Theme.colors.card,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.ctaBorder,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectInputPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
+  selectValue: {
+    color: Theme.colors.textWarmStrong,
+    fontSize: Theme.typography.size.s14,
+  },
+  selectPlaceholder: {
+    color: Theme.colors.placeholder,
     fontSize: Theme.typography.size.s14,
   },
   optionRow: {
@@ -727,61 +795,60 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   optionPill: {
-    paddingVertical: Theme.spacing.s4,
-    paddingHorizontal: Theme.spacing.s12,
+    paddingVertical: Theme.spacing.s6,
+    paddingHorizontal: Theme.spacing.s14,
     borderRadius: Theme.radius.pill,
     backgroundColor: Theme.colors.card,
     borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmAlt,
+    borderColor: Theme.colors.ctaBorder,
   },
   optionPillActive: {
-    backgroundColor: Theme.colors.surfaceWarm,
-    borderColor: Theme.colors.borderWarmSoft,
+    backgroundColor: Theme.colors.ctaBackground,
+    borderColor: Theme.colors.ctaBorder,
   },
   optionPillPressed: {
     transform: [{ scale: Theme.scale.pressedSoft }],
   },
   optionText: {
-    color: Theme.colors.textSecondary,
+    color: Theme.colors.textWarm,
     fontSize: Theme.typography.size.s12,
   },
   optionTextActive: {
-    color: Theme.colors.textWarm,
-    fontWeight: Theme.typography.weight.semiBold,
-  },
-  optionHint: {
-    color: Theme.colors.textSecondary,
-    fontSize: Theme.typography.size.s12,
-  },
-  videoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Theme.spacing.s12,
-    paddingVertical: Theme.spacing.s10,
-    paddingHorizontal: Theme.spacing.s12,
-    borderRadius: Theme.radius.r14,
-    backgroundColor: Theme.colors.successDeep,
-  },
-  videoTitle: {
-    color: Theme.colors.textInverse,
-    fontSize: Theme.typography.size.s14,
     fontFamily: Theme.fonts.semiBold,
   },
-  videoHint: {
-    color: Theme.colors.textInverse,
+  sectionTitle: {
+    color: Theme.colors.textWarmStrong,
+    fontSize: Theme.typography.size.s15,
+    fontFamily: Theme.fonts.semiBold,
+  },
+  helperText: {
+    color: Theme.colors.textSecondary,
     fontSize: Theme.typography.size.s12,
+    lineHeight: Theme.typography.lineHeight.s16,
+  },
+  textAreaWrap: {
+    borderRadius: Theme.radius.r18,
+    backgroundColor: Theme.colors.card,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.ctaBorder,
+    padding: Theme.spacing.s12,
   },
   textArea: {
     minHeight: Theme.sizes.s90,
-    paddingVertical: Theme.spacing.s10,
-    paddingHorizontal: Theme.spacing.m,
-    borderRadius: Theme.layout.radius,
-    backgroundColor: Theme.colors.card,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmAlt,
-    color: Theme.colors.text,
+    color: Theme.colors.textWarmStrong,
     fontSize: Theme.typography.size.s14,
     textAlignVertical: 'top',
+    padding: Theme.spacing.s0,
+  },
+  micBadge: {
+    position: 'absolute',
+    right: Theme.spacing.s12,
+    bottom: Theme.spacing.s12,
+  },
+  tagHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   tagRow: {
     flexDirection: 'row',
@@ -790,15 +857,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tagPill: {
-    paddingHorizontal: Theme.spacing.s10,
-    paddingVertical: Theme.spacing.s4,
+    paddingHorizontal: Theme.spacing.s12,
+    paddingVertical: Theme.spacing.s6,
     borderRadius: Theme.radius.pill,
-    backgroundColor: Theme.colors.surfaceWarm,
+    backgroundColor: Theme.colors.ctaBackground,
     borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmSoft,
+    borderColor: Theme.colors.ctaBorder,
   },
   tagText: {
-    color: Theme.colors.textWarm,
+    color: Theme.colors.textWarmStrong,
     fontSize: Theme.typography.size.s12,
     fontFamily: Theme.fonts.semiBold,
   },
@@ -811,11 +878,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Theme.spacing.s8,
-    paddingVertical: Theme.spacing.s10,
-    borderRadius: Theme.radius.r18,
-    backgroundColor: Theme.colors.card,
+    paddingVertical: Theme.spacing.s6,
+    paddingHorizontal: Theme.spacing.s12,
+    borderRadius: Theme.radius.pill,
+    backgroundColor: Theme.colors.decorativePeachAlt,
     borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmAlt,
+    borderColor: Theme.colors.borderWarmSoft,
   },
   tagButtonPressed: {
     transform: [{ scale: Theme.scale.pressedSoft }],
@@ -825,13 +893,14 @@ const styles = StyleSheet.create({
   },
   tagButtonText: {
     color: Theme.colors.textWarmStrong,
-    fontSize: Theme.typography.size.s13,
+    fontSize: Theme.typography.size.s12,
     fontFamily: Theme.fonts.semiBold,
   },
   actionButton: {
-    backgroundColor: Theme.colors.successDeep,
-    paddingVertical: Theme.spacing.m,
-    borderRadius: Theme.layout.radius,
+    marginTop: Theme.spacing.s4,
+    backgroundColor: Theme.colors.primary,
+    paddingVertical: Theme.spacing.s12,
+    borderRadius: Theme.radius.pill,
     alignItems: 'center',
   },
   actionButtonPressed: {
@@ -842,7 +911,7 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: Theme.colors.textInverse,
-    fontSize: Theme.typography.size.s14,
+    fontSize: Theme.typography.size.s16,
     fontFamily: Theme.fonts.semiBold,
   },
   errorText: {

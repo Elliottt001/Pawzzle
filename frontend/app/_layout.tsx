@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { Text, TextInput } from 'react-native';
@@ -19,10 +18,6 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const [fontsLoaded] = useFonts({
-    'ZhenyanGB2-Bold': require('@/assets/font/ZhenyanGB2.0-Bold.ttf'),
-    'REEJI-JinGang-ExtraBold': require('@/assets/font/REEJI-JinGang-ExtraBoldGB1.0 Regular.ttf'),
-  });
 
   useEffect(() => {
     const baseStyle = { fontFamily: Theme.fonts.regular };
@@ -33,14 +28,8 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync().catch(() => {});
-    }
-  }, [fontsLoaded]);
-
-  if (!fontsLoaded) {
-    return null;
-  }
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
 
   return (
     <SafeAreaProvider>
