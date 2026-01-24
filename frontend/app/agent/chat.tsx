@@ -3,13 +3,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import { Text } from '@/components/base-text';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Theme } from '../../constants/theme';
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   title: {
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s22,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     marginBottom: Theme.spacing.s,
   },
   subtitle: {
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s18,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   cardMeta: {
     color: Theme.colors.textSecondary,
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   cardDetailValue: {
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   cardTag: {
     alignSelf: 'flex-start',
@@ -368,7 +368,7 @@ const styles = StyleSheet.create({
   cardTagText: {
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   inputDock: {
     borderTopWidth: Theme.borderWidth.hairline,
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
   micButtonText: {
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s14,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   micButtonTextRecording: {
     color: Theme.colors.textInverse,
@@ -436,6 +436,6 @@ const styles = StyleSheet.create({
   sendButtonText: {
     color: Theme.colors.textInverse,
     fontSize: Theme.typography.size.s14,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
 });

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, View, ScrollView, Platform, Alert } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
@@ -75,9 +76,10 @@ export default function RegisterScreen() {
   };
 
   return (
-    <ScrollView style={styles.scroll}>
-       <ThemedView style={styles.container}>
-        <ThemedText type="title" style={styles.title}>创建账号</ThemedText>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView style={styles.scroll}>
+        <ThemedView style={styles.container}>
+          <ThemedText type="title" style={styles.title}>创建账号</ThemedText>
 
         <View style={styles.formGroup}>
           <ThemedText style={styles.label}>姓名</ThemedText>
@@ -169,12 +171,17 @@ export default function RegisterScreen() {
           <ThemedText style={styles.submitBtnText}>{loading ? '创建中...' : '注册'}</ThemedText>
         </TouchableOpacity>
 
-      </ThemedView>
-    </ScrollView>
+        </ThemedView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: Theme.layout.full,
+    backgroundColor: Theme.colors.background,
+  },
   scroll: {
     flex: Theme.layout.full,
     backgroundColor: Theme.colors.background,
@@ -194,7 +201,7 @@ const styles = StyleSheet.create({
   },
   label: {
     marginBottom: Theme.spacing.s8,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   input: {
     borderWidth: Theme.borderWidth.hairline,
@@ -228,7 +235,7 @@ const styles = StyleSheet.create({
   },
   textSelected: {
     color: Theme.colors.textInverse,
-    fontWeight: Theme.typography.weight.heavy,
+    fontFamily: Theme.fonts.heavy,
   },
   textUnselected: {
     color: Theme.colors.textStrong,
@@ -252,6 +259,6 @@ const styles = StyleSheet.create({
   submitBtnText: {
     color: Theme.colors.textInverse,
     fontSize: Theme.typography.size.s18,
-    fontWeight: Theme.typography.weight.heavy,
+    fontFamily: Theme.fonts.heavy,
   },
 });

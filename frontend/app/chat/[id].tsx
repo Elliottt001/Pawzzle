@@ -4,13 +4,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import { Text } from '@/components/base-text';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
 
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
   },
   pinnedName: {
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
   },
   pinnedMeta: {
@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
   },
   adoptionTitle: {
     fontSize: Theme.typography.size.s14,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
   },
   adoptionPill: {
@@ -562,7 +562,7 @@ const styles = StyleSheet.create({
   adoptionPillText: {
     fontSize: Theme.typography.size.s11,
     color: Theme.colors.warningText,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   adoptionDescription: {
     fontSize: Theme.typography.size.s12,
@@ -589,12 +589,12 @@ const styles = StyleSheet.create({
   adoptionButtonText: {
     fontSize: Theme.typography.size.s13,
     color: Theme.colors.text,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   adoptionButtonTextInverse: {
     fontSize: Theme.typography.size.s13,
     color: Theme.colors.textInverse,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   adoptionError: {
     fontSize: Theme.typography.size.s12,
@@ -615,7 +615,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: Theme.typography.size.s18,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
   },
   subtitle: {
@@ -637,7 +637,7 @@ const styles = StyleSheet.create({
   },
   welcomeTitle: {
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
     marginBottom: Theme.spacing.s6,
   },
@@ -713,7 +713,7 @@ const styles = StyleSheet.create({
   sendButtonText: {
     fontSize: Theme.typography.size.s14,
     color: Theme.colors.textInverse,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   errorText: {
     paddingHorizontal: Theme.spacing.s20,
@@ -729,7 +729,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
   },
   emptyText: {
@@ -749,7 +749,7 @@ const styles = StyleSheet.create({
   loginButtonText: {
     fontSize: Theme.typography.size.s13,
     color: Theme.colors.textInverse,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   loadingState: {
     flex: Theme.layout.full,

@@ -1,6 +1,8 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/base-text';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
@@ -53,42 +55,48 @@ export default function UserProfileScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" />
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (error || !profile) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>错误：{error || '未找到用户'}</Text>
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.center}>
+          <Text style={styles.errorText}>错误：{error || '未找到用户'}</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView style={styles.scroll}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.name}>{profile.name}</Text>
-          <View style={styles.typePill}>
-            <Text style={styles.typeText}>{getUserTypeLabel(profile.userType)}</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView style={styles.scroll}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <Text style={styles.name}>{profile.name}</Text>
+            <View style={styles.typePill}>
+              <Text style={styles.typeText}>{getUserTypeLabel(profile.userType)}</Text>
+            </View>
           </View>
-        </View>
 
-        <Text style={styles.sectionTitle}>发布的宠物卡片</Text>
-        {profile.pets && profile.pets.length ? (
-          <View style={styles.cardList}>
-            {profile.pets.map((pet) => (
-              <PetCard key={pet.id} pet={pet} />
-            ))}
-          </View>
-        ) : (
-          <Text style={styles.emptyText}>暂无发布的宠物卡片。</Text>
-        )}
-      </View>
-    </ScrollView>
+          <Text style={styles.sectionTitle}>发布的宠物卡片</Text>
+          {profile.pets && profile.pets.length ? (
+            <View style={styles.cardList}>
+              {profile.pets.map((pet) => (
+                <PetCard key={pet.id} pet={pet} />
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.emptyText}>暂无发布的宠物卡片。</Text>
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -111,6 +119,10 @@ function getUserTypeLabel(userType: UserProfile['userType']) {
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: Theme.layout.full,
+    backgroundColor: Theme.colors.backgroundWarmAlt,
+  },
   scroll: {
     flex: Theme.layout.full,
     backgroundColor: Theme.colors.backgroundWarmAlt,
@@ -133,7 +145,7 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: Theme.typography.size.s22,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
   },
   typePill: {
@@ -147,12 +159,12 @@ const styles = StyleSheet.create({
   },
   typeText: {
     fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.warningText,
   },
   sectionTitle: {
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
   },
   cardList: {

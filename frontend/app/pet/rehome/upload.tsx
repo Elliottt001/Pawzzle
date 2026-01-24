@@ -1,5 +1,7 @@
 import * as React from 'react';
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/base-text';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Theme } from '../../../constants/theme';
 
@@ -66,7 +68,7 @@ const styles = StyleSheet.create({
   title: {
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s22,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     marginBottom: Theme.spacing.s,
   },
   subtitle: {
@@ -93,7 +95,7 @@ const styles = StyleSheet.create({
   uploadTitle: {
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s18,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     marginBottom: Theme.spacing.s,
   },
   uploadHint: {

@@ -1,5 +1,7 @@
 import * as React from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Text } from '@/components/base-text';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Theme } from '../../constants/theme';
 
@@ -70,7 +72,7 @@ const styles = StyleSheet.create({
   title: {
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s22,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   subtitle: {
     color: Theme.colors.textSecondary,
@@ -101,7 +103,7 @@ const styles = StyleSheet.create({
   label: {
     color: Theme.colors.textSubtle,
     fontSize: Theme.typography.size.s13,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   input: {
     minHeight: Theme.sizes.s44,
@@ -126,6 +128,6 @@ const styles = StyleSheet.create({
   actionButtonText: {
     color: Theme.colors.textInverse,
     fontSize: Theme.typography.size.s14,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
 });

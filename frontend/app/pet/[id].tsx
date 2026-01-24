@@ -9,6 +9,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
@@ -90,17 +91,21 @@ export default function PetDetailsScreen() {
 
   if (loading) {
     return (
-      <ThemedView style={styles.center}>
-        <ActivityIndicator size="large" />
-      </ThemedView>
+      <SafeAreaView style={styles.safeArea}>
+        <ThemedView style={styles.center}>
+          <ActivityIndicator size="large" />
+        </ThemedView>
+      </SafeAreaView>
     );
   }
 
   if (error || !pet) {
     return (
-      <ThemedView style={styles.center}>
-        <ThemedText>错误：{error || '未找到宠物'}</ThemedText>
-      </ThemedView>
+      <SafeAreaView style={styles.safeArea}>
+        <ThemedView style={styles.center}>
+          <ThemedText>错误：{error || '未找到宠物'}</ThemedText>
+        </ThemedView>
+      </SafeAreaView>
     );
   }
 
@@ -173,88 +178,90 @@ export default function PetDetailsScreen() {
   };
 
   return (
-    <ScrollView style={styles.scrollContainer}>
-      <ThemedView style={styles.container}>
-        <Image
-          source={{ uri: `https://placedog.net/500/500?id=${pet.id}` }} 
-          style={styles.image}
-        />
-        
-        <ThemedView style={styles.detailsContainer}>
-          <ThemedText type="title">{pet.name}</ThemedText>
-          <ThemedText type="subtitle" style={styles.status}>
-            {getSpeciesLabel(pet.species)} • {getStatusLabel(pet.status)}
-          </ThemedText>
-          
-          <ThemedText type="defaultSemiBold" style={styles.sectionHeader}>简介</ThemedText>
-          <ThemedText>{pet.description}</ThemedText>
-          
-          <ThemedView style={styles.ownerCard}>
-            <ThemedText type="title" style={styles.ownerTitle}>发布者</ThemedText>
-            {pet.ownerId ? (
-              <>
-                <Pressable
-                  onPress={() => router.push(`/user/${pet.ownerId}`)}
-                  style={({ pressed }) => [
-                    styles.ownerRow,
-                    pressed && styles.ownerRowPressed,
-                  ]}>
-                  <View style={styles.ownerAvatar}>
-                    <FontAwesome5 name="user" size={Theme.sizes.s24} color={Theme.colors.text} />
-                  </View>
-                  <View>
-                    <ThemedText type="defaultSemiBold">
-                      {pet.ownerName ?? '未命名'}
-                    </ThemedText>
-                    <ThemedText style={styles.ownerMeta}>
-                      {getUserTypeLabel(pet.ownerType)}
-                    </ThemedText>
-                  </View>
-                </Pressable>
-                <Pressable
-                  onPress={handleStartChat}
-                  disabled={chatLoading}
-                  style={({ pressed }) => [
-                    styles.chatButton,
-                    pressed && styles.chatButtonPressed,
-                    chatLoading && styles.chatButtonDisabled,
-                  ]}>
-                  <ThemedText style={styles.chatButtonText}>
-                    {chatLoading ? '正在创建...' : '私聊发布者'}
-                  </ThemedText>
-                </Pressable>
-                {!isOwner ? (
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView style={styles.scrollContainer}>
+        <ThemedView style={styles.container}>
+          <Image
+            source={{ uri: `https://placedog.net/500/500?id=${pet.id}` }}
+            style={styles.image}
+          />
+
+          <ThemedView style={styles.detailsContainer}>
+            <ThemedText type="title">{pet.name}</ThemedText>
+            <ThemedText type="subtitle" style={styles.status}>
+              {getSpeciesLabel(pet.species)} • {getStatusLabel(pet.status)}
+            </ThemedText>
+
+            <ThemedText type="defaultSemiBold" style={styles.sectionHeader}>简介</ThemedText>
+            <ThemedText>{pet.description}</ThemedText>
+
+            <ThemedView style={styles.ownerCard}>
+              <ThemedText type="title" style={styles.ownerTitle}>发布者</ThemedText>
+              {pet.ownerId ? (
+                <>
                   <Pressable
-                    onPress={handleRequestAdoption}
-                    disabled={adoptionLoading || !canRequestAdoption}
+                    onPress={() => router.push(`/user/${pet.ownerId}`)}
                     style={({ pressed }) => [
-                      styles.adoptionButton,
-                      pressed && canRequestAdoption && styles.adoptionButtonPressed,
-                      (adoptionLoading || !canRequestAdoption) && styles.adoptionButtonDisabled,
+                      styles.ownerRow,
+                      pressed && styles.ownerRowPressed,
                     ]}>
-                    <ThemedText style={styles.adoptionButtonText}>
-                      {adoptionLoading
-                        ? '提交中...'
-                        : pet.status === 'OPEN'
-                          ? '申请领养'
-                          : '暂不可领养'}
+                    <View style={styles.ownerAvatar}>
+                      <FontAwesome5 name="user" size={Theme.sizes.s24} color={Theme.colors.text} />
+                    </View>
+                    <View>
+                      <ThemedText type="defaultSemiBold">
+                        {pet.ownerName ?? '未命名'}
+                      </ThemedText>
+                      <ThemedText style={styles.ownerMeta}>
+                        {getUserTypeLabel(pet.ownerType)}
+                      </ThemedText>
+                    </View>
+                  </Pressable>
+                  <Pressable
+                    onPress={handleStartChat}
+                    disabled={chatLoading}
+                    style={({ pressed }) => [
+                      styles.chatButton,
+                      pressed && styles.chatButtonPressed,
+                      chatLoading && styles.chatButtonDisabled,
+                    ]}>
+                    <ThemedText style={styles.chatButtonText}>
+                      {chatLoading ? '正在创建...' : '私聊发布者'}
                     </ThemedText>
                   </Pressable>
-                ) : null}
-                {chatError ? (
-                  <ThemedText style={styles.chatErrorText}>{chatError}</ThemedText>
-                ) : null}
-                {adoptionError ? (
-                  <ThemedText style={styles.adoptionErrorText}>{adoptionError}</ThemedText>
-                ) : null}
-              </>
-            ) : (
-                <ThemedText style={styles.noInfo}>暂无送养人信息。</ThemedText>
-            )}
+                  {!isOwner ? (
+                    <Pressable
+                      onPress={handleRequestAdoption}
+                      disabled={adoptionLoading || !canRequestAdoption}
+                      style={({ pressed }) => [
+                        styles.adoptionButton,
+                        pressed && canRequestAdoption && styles.adoptionButtonPressed,
+                        (adoptionLoading || !canRequestAdoption) && styles.adoptionButtonDisabled,
+                      ]}>
+                      <ThemedText style={styles.adoptionButtonText}>
+                        {adoptionLoading
+                          ? '提交中...'
+                          : pet.status === 'OPEN'
+                            ? '申请领养'
+                            : '暂不可领养'}
+                      </ThemedText>
+                    </Pressable>
+                  ) : null}
+                  {chatError ? (
+                    <ThemedText style={styles.chatErrorText}>{chatError}</ThemedText>
+                  ) : null}
+                  {adoptionError ? (
+                    <ThemedText style={styles.adoptionErrorText}>{adoptionError}</ThemedText>
+                  ) : null}
+                </>
+              ) : (
+                  <ThemedText style={styles.noInfo}>暂无送养人信息。</ThemedText>
+              )}
+            </ThemedView>
           </ThemedView>
         </ThemedView>
-      </ThemedView>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -300,6 +307,10 @@ function getUserTypeLabel(userType: Pet['ownerType']) {
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: Theme.layout.full,
+    backgroundColor: Theme.colors.background,
+  },
   scrollContainer: {
     flex: Theme.layout.full,
   },
@@ -379,7 +390,7 @@ const styles = StyleSheet.create({
   chatButtonText: {
     color: Theme.colors.textInverse,
     fontSize: Theme.typography.size.s13,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   adoptionButton: {
     alignSelf: 'flex-start',
@@ -398,7 +409,7 @@ const styles = StyleSheet.create({
   adoptionButtonText: {
     color: Theme.colors.textInverse,
     fontSize: Theme.typography.size.s13,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   chatErrorText: {
     fontSize: Theme.typography.size.s12,

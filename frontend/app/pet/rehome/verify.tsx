@@ -3,13 +3,13 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import { Text } from '@/components/base-text';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Theme } from '../../../constants/theme';
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
   title: {
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s22,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   subtitle: {
     color: Theme.colors.textSecondary,
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   photoRow: {
     flexDirection: 'row',
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
   label: {
     color: Theme.colors.textSubtle,
     fontSize: Theme.typography.size.s13,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   readonlyValue: {
     color: Theme.colors.text,
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
   videoTitle: {
     color: Theme.colors.textInverse,
     fontSize: Theme.typography.size.s14,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   videoHint: {
     color: Theme.colors.textInverse,
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
   tagText: {
     color: Theme.colors.textWarm,
     fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   tagEmpty: {
     color: Theme.colors.textSecondary,
@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
   tagButtonText: {
     color: Theme.colors.textWarmStrong,
     fontSize: Theme.typography.size.s13,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   actionButton: {
     backgroundColor: Theme.colors.successDeep,
@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     color: Theme.colors.textInverse,
     fontSize: Theme.typography.size.s14,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   errorText: {
     color: Theme.colors.textError,

@@ -3,13 +3,13 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import { Text } from '@/components/base-text';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Theme } from '../../constants/theme';
 import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
@@ -770,7 +770,7 @@ const styles = StyleSheet.create({
   title: {
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s22,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   subtitle: {
     color: Theme.colors.textSecondary,
@@ -803,7 +803,7 @@ const styles = StyleSheet.create({
   segmentText: {
     color: Theme.colors.textSecondary,
     fontSize: Theme.typography.size.s14,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   segmentTextActive: {
     color: Theme.colors.text,
@@ -828,7 +828,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   sectionSubtitle: {
     color: Theme.colors.textSecondary,
@@ -871,12 +871,12 @@ const styles = StyleSheet.create({
   contentTagText: {
     fontSize: Theme.typography.size.s11,
     color: Theme.colors.text,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   contentTitle: {
     fontSize: Theme.typography.size.s15,
     color: Theme.colors.text,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   contentSubtitle: {
     fontSize: Theme.typography.size.s13,
@@ -893,7 +893,7 @@ const styles = StyleSheet.create({
   placeholderTitle: {
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   placeholderText: {
     color: Theme.colors.textSecondary,
@@ -919,7 +919,7 @@ const styles = StyleSheet.create({
   uploadTitle: {
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   uploadSubtitle: {
     marginTop: Theme.spacing.s2,
@@ -929,7 +929,7 @@ const styles = StyleSheet.create({
   uploadToggle: {
     color: Theme.colors.textSecondary,
     fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   uploadBody: {
     gap: Theme.spacing.m,
@@ -956,7 +956,7 @@ const styles = StyleSheet.create({
   },
   uploadTypeText: {
     fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.textEmphasis,
   },
   uploadTypeTextActive: {
@@ -967,7 +967,7 @@ const styles = StyleSheet.create({
   },
   formLabel: {
     fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.textSubtle,
   },
   formInput: {
@@ -1011,7 +1011,7 @@ const styles = StyleSheet.create({
   },
   choiceText: {
     fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.textEmphasis,
   },
   choiceTextActive: {
@@ -1034,7 +1034,7 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: Theme.colors.textInverse,
     fontSize: Theme.typography.size.s14,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   submitMessage: {
     marginTop: Theme.spacing.s4,
@@ -1068,7 +1068,7 @@ const styles = StyleSheet.create({
   loginButtonText: {
     fontSize: Theme.typography.size.s12,
     color: Theme.colors.textEmphasis,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   postPanel: {
     gap: Theme.spacing.m,
@@ -1085,7 +1085,7 @@ const styles = StyleSheet.create({
   snapButtonText: {
     color: Theme.colors.textInverse,
     fontSize: Theme.typography.size.s14,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   statusPill: {
     alignSelf: 'flex-start',
@@ -1099,7 +1099,7 @@ const styles = StyleSheet.create({
   statusText: {
     color: Theme.colors.warningText,
     fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   resultCard: {
     backgroundColor: Theme.colors.cardTranslucentSoft,
@@ -1112,7 +1112,7 @@ const styles = StyleSheet.create({
   resultTitle: {
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   resultSubtitle: {
     color: Theme.colors.textSecondary,
@@ -1134,7 +1134,7 @@ const styles = StyleSheet.create({
   tagText: {
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s12,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   pushButton: {
     backgroundColor: Theme.colors.successDeep,
@@ -1148,7 +1148,7 @@ const styles = StyleSheet.create({
   pushButtonText: {
     color: Theme.colors.textInverse,
     fontSize: Theme.typography.size.s13,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     textAlign: 'center',
   },
   pushStatusText: {

@@ -188,6 +188,16 @@ const Typography = {
   },
 };
 
+const FontFamilies = {
+  regular: 'PingFang-Regular',
+  medium: 'PingFang-Medium',
+  semiBold: 'PingFang-Medium',
+  bold: 'PingFang-Bold',
+  heavy: 'PingFang-Heavy',
+  light: 'PingFang-Light',
+  extraLight: 'PingFang-ExtraLight',
+};
+
 const Opacity = {
   o4: 0.4,
   o5: 0.5,
@@ -376,6 +386,7 @@ export const Theme = {
   sizes: Sizes,
   radius: Radius,
   typography: Typography,
+  fonts: FontFamilies,
   opacity: Opacity,
   scale: Scale,
   borderWidth: BorderWidth,

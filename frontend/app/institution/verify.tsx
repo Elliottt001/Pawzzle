@@ -1,4 +1,6 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import { View, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { Text } from '@/components/base-text';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Theme } from '../../constants/theme';
 
@@ -50,7 +52,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: Theme.typography.size.s24,
-    fontWeight: Theme.typography.weight.heavy,
+    fontFamily: Theme.fonts.heavy,
     color: Theme.colors.text,
     marginBottom: Theme.spacing.s,
   },
@@ -66,7 +68,7 @@ const styles = StyleSheet.create({
     fontSize: Theme.typography.size.s14,
     color: Theme.colors.text,
     marginBottom: Theme.spacing.s,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   input: {
     backgroundColor: Theme.colors.surface,
@@ -87,6 +89,6 @@ const styles = StyleSheet.create({
   buttonText: {
     color: Theme.colors.textInverse,
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.heavy,
+    fontFamily: Theme.fonts.heavy,
   },
 });

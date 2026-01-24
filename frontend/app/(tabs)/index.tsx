@@ -5,13 +5,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import { Text } from '@/components/base-text';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { Theme } from '@/constants/theme';
@@ -508,7 +508,11 @@ export default function ProfileScreen() {
 
     return (
       <View style={styles.brandBlock}>
-        <Image source={require('@/assets/images/icon.png')} style={styles.brandLogo} />
+        <Image
+          source={require('@/assets/images/logo.png')}
+          style={styles.brandLogo}
+          contentFit="contain"
+        />
         <Text style={styles.brandText}>Pawzzle 寻爪</Text>
       </View>
     );
@@ -773,7 +777,7 @@ export default function ProfileScreen() {
                     styles.avatarWrap,
                     pressed && session && styles.avatarPressed,
                   ]}>
-                  <Image source={require('@/assets/images/icon.png')} style={styles.avatar} />
+                  <Image source={require('@/assets/images/logo.png')} style={styles.avatar} />
                 </Pressable>
                 <Text style={styles.name}>{displayName}</Text>
                 <Text style={styles.nicknameLabel}>状态</Text>
@@ -1060,7 +1064,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: Theme.typography.size.s22,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
   },
   content: {
@@ -1072,9 +1076,9 @@ const styles = StyleSheet.create({
     flexGrow: Theme.layout.full,
     alignItems: 'center',
     paddingHorizontal: Theme.spacing.s24,
-    paddingTop: Theme.spacing.s24,
+    paddingTop: Theme.spacing.s40,
     paddingBottom: Theme.spacing.s40,
-    gap: Theme.spacing.s20,
+    gap: Theme.spacing.s24,
   },
   backButton: {
     alignSelf: 'flex-start',
@@ -1090,12 +1094,12 @@ const styles = StyleSheet.create({
     gap: Theme.spacing.s10,
   },
   brandLogo: {
-    width: Theme.sizes.s110,
-    height: Theme.sizes.s110,
+    width: Theme.sizes.s140,
+    height: Theme.sizes.s140,
   },
   brandText: {
     fontSize: Theme.typography.size.s24,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.textWarmStrong,
   },
   authStack: {
@@ -1128,7 +1132,7 @@ const styles = StyleSheet.create({
   },
   authButtonText: {
     fontSize: Theme.typography.size.s14,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.textWarmStrong,
   },
   authButtonTextInverse: {
@@ -1216,7 +1220,7 @@ const styles = StyleSheet.create({
   },
   ctaButtonText: {
     fontSize: Theme.typography.size.s14,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.textWarmStrong,
   },
   ctaButtonTextDisabled: {
@@ -1286,7 +1290,7 @@ const styles = StyleSheet.create({
   },
   nicknameTitle: {
     fontSize: Theme.typography.size.s24,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.textWarmStrong,
   },
   nicknameInput: {
@@ -1313,7 +1317,7 @@ const styles = StyleSheet.create({
   },
   wechatTitle: {
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
   },
   wechatHint: {
@@ -1369,7 +1373,7 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: Theme.typography.size.s20,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
   },
   nicknameLabel: {
@@ -1391,7 +1395,7 @@ const styles = StyleSheet.create({
   nicknameText: {
     fontSize: Theme.typography.size.s14,
     color: Theme.colors.successStrong,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   userTypePill: {
     marginTop: Theme.spacing.s6,
@@ -1405,7 +1409,7 @@ const styles = StyleSheet.create({
   userTypeText: {
     fontSize: Theme.typography.size.s13,
     color: Theme.colors.warningText,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   emailText: {
     marginTop: Theme.spacing.s10,
@@ -1432,7 +1436,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
   },
   sectionSubtitle: {
@@ -1465,7 +1469,7 @@ const styles = StyleSheet.create({
   adoptionMetaText: {
     fontSize: Theme.typography.size.s12,
     color: Theme.colors.textWarm,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   petsList: {
     gap: Theme.spacing.s12,
@@ -1488,7 +1492,7 @@ const styles = StyleSheet.create({
   },
   formTitle: {
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
     marginBottom: Theme.spacing.s12,
   },
@@ -1512,7 +1516,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     color: Theme.colors.textInverse,
     fontSize: Theme.typography.size.s14,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   institutionFab: {
     position: 'absolute',

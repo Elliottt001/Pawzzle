@@ -1,7 +1,8 @@
 import * as React from 'react';
 import type { ComponentProps } from 'react';
 import { Image } from 'expo-image';
-import { StyleSheet, Text, View, Pressable } from 'react-native';
+import { StyleSheet, View, Pressable } from 'react-native';
+import { Text } from '@/components/base-text';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
@@ -161,7 +162,7 @@ const styles = StyleSheet.create({
   },
   petName: {
     fontSize: Theme.typography.size.s20,
-    fontWeight: Theme.typography.weight.bold,
+    fontFamily: Theme.fonts.bold,
     color: Theme.colors.textWarmStrong,
   },
   genderBadge: {
@@ -203,7 +204,7 @@ const styles = StyleSheet.create({
   tagText: {
     fontSize: Theme.typography.size.s12,
     color: Theme.colors.textWarm,
-    fontWeight: Theme.typography.weight.medium,
+    fontFamily: Theme.fonts.medium,
   },
   metaRow: {
     flexDirection: 'row',
@@ -238,6 +239,6 @@ const styles = StyleSheet.create({
   ctaText: {
     fontSize: Theme.typography.size.s14,
     color: Theme.colors.ctaText,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
 });

@@ -2,12 +2,12 @@ import * as React from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import { Text } from '@/components/base-text';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: Theme.typography.size.s22,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
   },
   subtitle: {
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
   },
   emptyText: {
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   loginButtonText: {
     fontSize: Theme.typography.size.s13,
     color: Theme.colors.textInverse,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   loadingCard: {
     padding: Theme.spacing.s20,
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
   },
   threadName: {
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
   },
   petPill: {
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
   petPillText: {
     fontSize: Theme.typography.size.s11,
     color: Theme.colors.warningText,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
   },
   threadPreview: {
     fontSize: Theme.typography.size.s13,

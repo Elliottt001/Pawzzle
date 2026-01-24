@@ -1,4 +1,6 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { Text } from '@/components/base-text';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Theme } from '../../constants/theme';
 
@@ -81,7 +83,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: Theme.typography.size.s20,
-    fontWeight: Theme.typography.weight.heavy,
+    fontFamily: Theme.fonts.heavy,
     color: Theme.colors.text,
   },
   filterBar: {
@@ -101,7 +103,7 @@ const styles = StyleSheet.create({
   },
   filterButtonText: {
     color: Theme.colors.textInverse,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     fontSize: Theme.typography.size.s14,
   },
   inactiveFilter: {
@@ -109,7 +111,7 @@ const styles = StyleSheet.create({
   },
   inactiveFilterText: {
     color: Theme.colors.textSecondary,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     fontSize: Theme.typography.size.s14,
   },
   separator: {
@@ -136,12 +138,12 @@ const styles = StyleSheet.create({
   },
   petName: {
     fontSize: Theme.typography.size.s18,
-    fontWeight: Theme.typography.weight.heavy,
+    fontFamily: Theme.fonts.heavy,
     color: Theme.colors.text,
   },
   matchScore: {
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.heavy,
+    fontFamily: Theme.fonts.heavy,
     color: Theme.colors.primary,
   },
   cardBody: {

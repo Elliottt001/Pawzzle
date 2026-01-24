@@ -3,13 +3,13 @@ import { Image } from 'expo-image';
 import {
   ActivityIndicator,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import { Text } from '@/components/base-text';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 
 import { PetCard } from '@/components/pet-card';
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.textWarmStrong,
   },
   emptyText: {

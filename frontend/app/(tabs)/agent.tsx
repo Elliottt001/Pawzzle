@@ -1,16 +1,17 @@
 import * as React from 'react';
 import {
   KeyboardAvoidingView,
+  Image,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import { Text } from '@/components/base-text';
 import { Feather, FontAwesome5 } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
@@ -449,22 +450,12 @@ function AgentStartScreen({ onStart }: { onStart: () => void }) {
         <View style={startStyles.hero}>
           <View style={startStyles.mascotWrap}>
             <View style={startStyles.mascotGlow} />
-            <View style={startStyles.puzzlePiece}>
-              <View style={[startStyles.connector, startStyles.connectorTop]} />
-              <View style={[startStyles.connector, startStyles.connectorLeft]} />
-              <View style={[startStyles.connector, startStyles.connectorRight]} />
-              <View style={[startStyles.connector, startStyles.connectorBottom]} />
-              <View style={startStyles.catBadge}>
-                <FontAwesome5 name="cat" size={Theme.sizes.s50} color={Theme.colors.textWarning} />
-                <View style={startStyles.badgePaw}>
-                  <FontAwesome5
-                    name="paw"
-                    size={Theme.sizes.s16}
-                    color={Theme.colors.decorativePeachSoft}
-                  />
-                </View>
-              </View>
-            </View>
+            <Image
+              source={require('@/assets/images/Agent.png')}
+              style={startStyles.agentHero}
+              resizeMode="contain"
+              accessibilityLabel="Pawzy"
+            />
           </View>
 
           <Text style={startStyles.headline}>你好！我是Pawzy</Text>
@@ -617,7 +608,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: Theme.typography.size.s22,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
   },
   chatList: {
@@ -738,10 +729,6 @@ const styles = StyleSheet.create({
   },
 });
 
-const PUZZLE_SIZE = Theme.sizes.s140;
-const CONNECTOR_SIZE = Theme.sizes.s40;
-const CONNECTOR_OFFSET = (PUZZLE_SIZE - CONNECTOR_SIZE) / 2;
-
 const startStyles = StyleSheet.create({
   safeArea: {
     flex: Theme.layout.full,
@@ -785,7 +772,7 @@ const startStyles = StyleSheet.create({
   },
   brandText: {
     fontSize: Theme.typography.size.s20,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.textWarning,
     letterSpacing: Theme.typography.letterSpacing.s1_6,
   },
@@ -806,59 +793,13 @@ const startStyles = StyleSheet.create({
     backgroundColor: Theme.colors.decorativePeachSoft,
     opacity: Theme.opacity.o6,
   },
-  puzzlePiece: {
-    width: PUZZLE_SIZE,
-    height: PUZZLE_SIZE,
-    borderRadius: Theme.radius.r24,
-    backgroundColor: Theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmSoft,
-    ...Theme.shadows.cardLarge,
-  },
-  connector: {
-    position: 'absolute',
-    width: CONNECTOR_SIZE,
-    height: CONNECTOR_SIZE,
-    borderRadius: CONNECTOR_SIZE / 2,
-    backgroundColor: Theme.colors.primary,
-  },
-  connectorTop: {
-    top: -Theme.sizes.s20,
-    left: CONNECTOR_OFFSET,
-  },
-  connectorLeft: {
-    left: -Theme.sizes.s20,
-    top: CONNECTOR_OFFSET,
-  },
-  connectorRight: {
-    right: -Theme.sizes.s20,
-    top: CONNECTOR_OFFSET,
-  },
-  connectorBottom: {
-    bottom: -Theme.sizes.s20,
-    left: CONNECTOR_OFFSET,
-  },
-  catBadge: {
-    width: Theme.sizes.s90,
-    height: Theme.sizes.s90,
-    borderRadius: Theme.sizes.s90 / 2,
-    backgroundColor: Theme.colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarm,
-    ...Theme.shadows.elevated,
-  },
-  badgePaw: {
-    position: 'absolute',
-    bottom: Theme.spacing.s6,
-    right: Theme.spacing.s6,
+  agentHero: {
+    width: Theme.sizes.s220,
+    height: Theme.sizes.s220,
   },
   headline: {
     fontSize: Theme.typography.size.s20,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.textWarning,
   },
   subhead: {
@@ -886,7 +827,7 @@ const startStyles = StyleSheet.create({
   },
   ctaText: {
     fontSize: Theme.typography.size.s16,
-    fontWeight: Theme.typography.weight.semiBold,
+    fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.textInverse,
   },
   tipText: {
