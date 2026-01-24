@@ -14,6 +14,7 @@ import { Text } from '@/components/base-text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Theme } from '@/constants/theme';
 import {
   getSession,
@@ -742,9 +743,17 @@ export default function ProfileScreen() {
       <View style={styles.background}>
         {session ? (
           <>
-            <View style={[styles.blob, styles.blobTop]} />
-            <View style={[styles.blob, styles.blobSide]} />
-            <View style={[styles.blob, styles.blobBottom]} />
+            <View style={styles.profileBackdrop} pointerEvents="none">
+              <Svg width="100%" height="100%" viewBox="0 0 378 315" preserveAspectRatio="none">
+                <Defs>
+                  <LinearGradient id="profileGradient" x1="0" y1="1" x2="0" y2="0">
+                    <Stop offset="14.44%" stopColor="#FFFEF9" stopOpacity={0} />
+                    <Stop offset="108.37%" stopColor="#F4C17F" />
+                  </LinearGradient>
+                </Defs>
+                <Rect x="0" y="0" width="378" height="315" fill="url(#profileGradient)" />
+              </Svg>
+            </View>
           </>
         ) : (
           <>
@@ -1011,6 +1020,13 @@ const styles = StyleSheet.create({
   background: {
     ...StyleSheet.absoluteFillObject,
   },
+  profileBackdrop: {
+    position: 'absolute',
+    width: 378,
+    height: 315,
+    left: -3,
+    top: -3,
+  },
   authGlow: {
     position: 'absolute',
     width: Theme.sizes.s250,
@@ -1027,28 +1043,6 @@ const styles = StyleSheet.create({
     bottom: -Theme.sizes.s120,
     right: -Theme.sizes.s70,
     backgroundColor: Theme.colors.decorativePeachAlt,
-  },
-  blob: {
-    position: 'absolute',
-    width: Theme.sizes.s220,
-    height: Theme.sizes.s220,
-    borderRadius: Theme.radius.r110,
-    opacity: Theme.opacity.o65,
-  },
-  blobTop: {
-    top: -Theme.sizes.s80,
-    left: -Theme.sizes.s40,
-    backgroundColor: Theme.colors.decorativePeachSoft,
-  },
-  blobSide: {
-    top: Theme.sizes.s80,
-    right: -Theme.sizes.s60,
-    backgroundColor: Theme.colors.decorativeMint,
-  },
-  blobBottom: {
-    bottom: -Theme.sizes.s70,
-    left: Theme.percent.p30,
-    backgroundColor: Theme.colors.decorativeSkySoft,
   },
   header: {
     paddingHorizontal: Theme.spacing.s20,
@@ -1346,12 +1340,7 @@ const styles = StyleSheet.create({
   profileCard: {
     marginTop: Theme.spacing.s8,
     padding: Theme.spacing.s20,
-    backgroundColor: Theme.colors.cardTranslucentSoft,
-    borderRadius: Theme.radius.r24,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarm,
     alignItems: 'center',
-    ...Theme.shadows.cardLarge,
   },
   avatarWrap: {
     width: Theme.sizes.s96,

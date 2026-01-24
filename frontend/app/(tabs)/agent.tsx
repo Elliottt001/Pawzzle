@@ -2,6 +2,7 @@ import * as React from 'react';
 import {
   Animated,
   Easing,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -11,13 +12,14 @@ import {
   View,
 } from 'react-native';
 import { Text } from '@/components/base-text';
-import { Feather, FontAwesome5 } from '@expo/vector-icons';
+import { FontAwesome5 } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
 import { Theme } from '@/constants/theme';
-import AgentAvatar from '@/assets/images/Agent.svg';
+import AgentAvatarSvg from '@/assets/images/Agent.svg';
+import SendIcon from '@/assets/images/send.svg';
 
 type ChatRole = 'user' | 'ai' | 'debug';
 
@@ -136,13 +138,9 @@ export default function AgentScreen() {
     setMessages((prev) => [...prev, { id: createId(), role, content }]);
   }, []);
 
-  const appendDebug = React.useCallback(
-    (title: string, payload?: string | null) => {
-      const normalized = payload && payload.trim().length > 0 ? payload : '【空】';
-      appendMessage('debug', `${title}\n${normalized}`);
-    },
-    [appendMessage]
-  );
+  const appendDebug = React.useCallback((_title: string, _payload?: string | null) => {
+    // Debug output disabled on the agent page.
+  }, []);
 
   const buildAgentMessages = React.useCallback((items: ChatMessage[]) => {
     return items
@@ -335,10 +333,10 @@ export default function AgentScreen() {
 
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.header}>
-          <Text style={styles.overline}>顾问</Text>
-          <Text style={styles.title}>领养顾问</Text>
+          <Text style={styles.overline}></Text>
+          <Text style={styles.title}></Text>
         </View>
 
         <ScrollView
@@ -387,10 +385,10 @@ export default function AgentScreen() {
                   !canSend && styles.sendButtonDisabled,
                   pressed && canSend && styles.sendButtonPressed,
                 ]}>
-                <Feather name="send" size={Theme.sizes.s18} color={Theme.colors.textInverse} />
+                <SendIcon width={Theme.sizes.s18} height={Theme.sizes.s18} />
               </Pressable>
             </View>
-            <Text style={styles.helperText}>顾问会分批提问（共15题）直到资料完善。</Text>
+            <Text style={styles.helperText}></Text>
           </View>
         ) : null}
       </KeyboardAvoidingView>
@@ -411,7 +409,11 @@ function ChatBubble({ role, text }: { role: ChatRole; text: string }) {
       ]}>
       {!isUser && !isDebug ? (
         <View style={styles.avatar}>
-          <AgentAvatar style={styles.avatarImage} accessibilityLabel="Pawzy" />
+          <Image
+            source={require('@/assets/images/Agent.png')}
+            style={styles.avatarImage}
+            accessibilityLabel="Pawzy"
+          />
         </View>
       ) : null}
       <View
@@ -477,7 +479,7 @@ function AgentStartScreen({ onStart }: { onStart: () => void }) {
           <View style={startStyles.mascotWrap}>
             <View style={startStyles.mascotGlow} />
             <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
-              <AgentAvatar style={startStyles.agentHero} accessibilityLabel="Pawzy" />
+              <AgentAvatarSvg style={startStyles.agentHero} accessibilityLabel="Pawzy" />
             </Animated.View>
           </View>
 
@@ -654,16 +656,15 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   avatar: {
-    width: Theme.sizes.s56,
-    height: Theme.sizes.s56,
+    width: Theme.sizes.s40 ,
+    height: Theme.sizes.s40 ,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Theme.spacing.s8,
-    transform: [{ translateY: -Theme.spacing.s6 }],
   },
   avatarImage: {
-    width: Theme.sizes.s56,
-    height: Theme.sizes.s56,
+    width: Theme.sizes.s40,
+    height: Theme.sizes.s40,
   },
   bubble: {
     maxWidth: Theme.percent.p80,
@@ -734,11 +735,12 @@ const styles = StyleSheet.create({
     width: Theme.sizes.s44,
     height: Theme.sizes.s44,
     borderRadius: Theme.radius.r22,
-    backgroundColor: Theme.colors.successDeep,
+    backgroundColor: Theme.colors.card,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarmAlt,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: Theme.spacing.s10,
-    ...Theme.shadows.button,
   },
   sendButtonDisabled: {
     opacity: Theme.opacity.o5,
