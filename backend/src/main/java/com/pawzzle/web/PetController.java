@@ -9,7 +9,6 @@ import com.pawzzle.domain.pet.PetDTO;
 import com.pawzzle.domain.pet.PetRepository;
 import com.pawzzle.domain.user.SessionService;
 import com.pawzzle.domain.user.User;
-import com.pawzzle.domain.user.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.List;
 import java.util.Objects;
@@ -39,7 +38,6 @@ public class PetController {
     private final OpenAiChatClient chatClient;
     private final ObjectMapper objectMapper;
     private final SessionService sessionService;
-    private final UserRepository userRepository;
     private static final Set<String> LOCATIONS = Set.of("杭州", "北京", "上海");
     private static final Set<String> CAT_BREEDS = Set.of(
         "British Shorthair",
@@ -58,7 +56,6 @@ public class PetController {
         "迷你贵宾"
     );
     private static final int AI_GENERATED_PET_COUNT = 20;
-    private static final long AI_OWNER_ID = 2L;
     private static final String AI_PET_GENERATION_PROMPT = """
         You generate pet adoption card data for a mobile app.
         Return ONLY valid JSON with an array of exactly 20 objects.
@@ -95,8 +92,10 @@ public class PetController {
     }
 
     @PostMapping("/generate")
-    public GeneratePetsResponse generatePets() {
-        User owner = resolveAiOwner();
+    public GeneratePetsResponse generatePets(
+        @RequestHeader(value = "Authorization", required = false) String authorization
+    ) {
+        User owner = sessionService.requireUser(authorization, null);
         String content = callChat(AI_PET_GENERATION_PROMPT);
         GenerationResult result = parseAndSaveGeneratedPets(content, owner);
         return new GeneratePetsResponse(
@@ -363,14 +362,6 @@ public class PetController {
             }
         }
         return trimmed.trim();
-    }
-
-    private User resolveAiOwner() {
-        return userRepository.findById(AI_OWNER_ID)
-            .orElseThrow(() -> new ResponseStatusException(
-                HttpStatus.PRECONDITION_FAILED,
-                "AI owner user (id=2) not found"
-            ));
     }
 
     private ResponseStatusException badRequest(String message) {

@@ -456,11 +456,18 @@ export default function ProfileScreen() {
     if (isGenerating) {
       return;
     }
+    if (!session?.token) {
+      setAiStatus('error');
+      setAiMessage('请先登录后再生成。');
+      return;
+    }
     setAiStatus('generating');
     setAiMessage(null);
 
     try {
-      const data = await request<GeneratePetsResponse>('/api/pets/generate', {});
+      const data = await request<GeneratePetsResponse>('/api/pets/generate', {}, {
+        token: session.token,
+      });
       const parsed = data?.parsed ?? 0;
       const created = data?.created ?? 0;
       const skipped = data?.skipped ?? 0;
@@ -947,12 +954,20 @@ class ApiError extends Error {
   }
 }
 
-async function request<T = unknown>(path: string, payload?: Record<string, unknown>) {
+async function request<T = unknown>(
+  path: string,
+  payload?: Record<string, unknown>,
+  options?: { token?: string }
+) {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (options?.token) {
+    headers.Authorization = `Bearer ${options.token}`;
+  }
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: payload ? JSON.stringify(payload) : undefined,
   });
 
