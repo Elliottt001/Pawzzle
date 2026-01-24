@@ -98,6 +98,15 @@ public class PetController {
 
         Do NOT include id fields, and do NOT wrap in markdown.
         """;
+    private static final String AI_PERSONALITY_TAG_PROMPT = """
+        You are a creative assistant for a Chinese pet adoption app.
+        Based on the user's description, generate 3-4 short Chinese personality tags.
+        Tags should be 2-4 Chinese characters, warm or playful, and human-sounding.
+        If possible, mix one playful tag with classic traits.
+        Examples: 干饭王, 小粘人, 高冷, 温顺, 小太阳.
+        Avoid emojis, punctuation, or duplicates. Do NOT include extra text.
+        Return ONLY a JSON array of strings.
+        """;
 
     @GetMapping
     public List<PetCardDTO> listPetCards() {
@@ -134,6 +143,20 @@ public class PetController {
             result.skippedReasons(),
             content == null ? "" : content
         );
+    }
+
+    @PostMapping("/personality-tags")
+    public PersonalityTagsResponse generatePersonalityTags(@RequestBody PersonalityTagsRequest request) {
+        if (request == null) {
+            throw badRequest("Missing request body");
+        }
+        String text = normalize(request.text());
+        if (text == null) {
+            throw badRequest("Text is required");
+        }
+        String content = callChat(AI_PERSONALITY_TAG_PROMPT, buildTagPrompt(text));
+        List<String> tags = parseTagList(content);
+        return new PersonalityTagsResponse(tags);
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -338,10 +361,25 @@ public class PetController {
             .build();
     }
 
+    private String buildTagPrompt(String text) {
+        return """
+            Description: %s
+            """.formatted(text);
+    }
+
     private String callChat(String systemPrompt) {
         Prompt prompt = new Prompt(List.of(
             new SystemMessage(systemPrompt),
             new UserMessage("Generate now.")
+        ));
+        ChatResponse response = chatClient.call(prompt);
+        return response.getResult().getOutput().getContent();
+    }
+
+    private String callChat(String systemPrompt, String userPrompt) {
+        Prompt prompt = new Prompt(List.of(
+            new SystemMessage(systemPrompt),
+            new UserMessage(userPrompt)
         ));
         ChatResponse response = chatClient.call(prompt);
         return response.getResult().getOutput().getContent();
@@ -407,6 +445,53 @@ public class PetController {
 
         int skipped = parsed - created;
         return new GenerationResult(parsed, created, skipped, limitReasons(skippedReasons, 20));
+    }
+
+    private List<String> parseTagList(String response) {
+        String cleaned = stripCodeFences(response);
+        JsonNode root;
+        try {
+            root = objectMapper.readTree(cleaned);
+        } catch (JsonProcessingException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI JSON parse failed");
+        }
+        JsonNode tagsNode = root.isArray() ? root : root.has("tags") ? root.get("tags") : null;
+        if (tagsNode == null || !tagsNode.isArray()) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI response is not an array");
+        }
+
+        java.util.LinkedHashSet<String> deduped = new java.util.LinkedHashSet<>();
+        for (JsonNode item : tagsNode) {
+            String normalized = normalizeTag(readText(item));
+            if (normalized == null || containsWhitespace(normalized)) {
+                continue;
+            }
+            deduped.add(normalized);
+        }
+
+        if (deduped.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI response is empty");
+        }
+
+        List<String> output = new java.util.ArrayList<>();
+        for (String tag : deduped) {
+            if (output.size() >= 4) {
+                break;
+            }
+            output.add(tag);
+        }
+        return output;
+    }
+
+    private String normalizeTag(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.startsWith("#")) {
+            trimmed = trimmed.substring(1).trim();
+        }
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private List<String> limitReasons(List<String> reasons, int limit) {
@@ -484,6 +569,12 @@ public class PetController {
         String imageUrl,
         String token
     ) {
+    }
+
+    public record PersonalityTagsRequest(String text) {
+    }
+
+    public record PersonalityTagsResponse(List<String> tags) {
     }
 
     public record GeneratePetsResponse(
