@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,12 +14,9 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Theme } from '@/constants/theme';
+import { API_BASE_URL } from '@/lib/apiBase';
 import { createThread, requestAdoption } from '@/lib/chatApi';
 import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
-
-const API_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
-  (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 
 const resolvePetImageUri = (imageUrl?: string | null) => {
   if (!imageUrl) {
@@ -30,7 +26,7 @@ const resolvePetImageUri = (imageUrl?: string | null) => {
     return imageUrl;
   }
   const normalized = imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`;
-  return `${API_URL}${normalized}`;
+  return `${API_BASE_URL}${normalized}`;
 };
 
 type Pet = {
@@ -70,7 +66,7 @@ export default function PetDetailsScreen() {
 
     async function fetchPet() {
       try {
-        const response = await fetch(`${API_URL}/api/pets/${apiId}`);
+        const response = await fetch(`${API_BASE_URL}/api/pets/${apiId}`);
         if (!response.ok) {
           throw new Error('获取宠物详情失败');
         }

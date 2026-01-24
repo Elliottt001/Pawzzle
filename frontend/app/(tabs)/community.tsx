@@ -15,6 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { Theme } from '../../constants/theme';
+import { API_BASE_URL } from '@/lib/apiBase';
 import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
 
 const SCAN_DELAY_MS = 900;
@@ -45,9 +46,6 @@ const GENDER_OPTIONS = [
 ] as const;
 const STATUS_OPTIONS = ['已绝育', '已完成疫苗', '疫苗进行中', '未接种/不确定'] as const;
 
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
-  (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 const ensureChinese = (message: string, fallback: string) =>
   /[\u4e00-\u9fff]/.test(message) ? message : fallback;
 

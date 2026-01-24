@@ -1,17 +1,14 @@
 import * as React from 'react';
 import type { ComponentProps } from 'react';
 import { Image } from 'expo-image';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/base-text';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import type { PetCardData } from '@/types/pet';
 import { Theme } from '@/constants/theme';
-
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
-  (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
+import { API_BASE_URL } from '@/lib/apiBase';
 
 const resolvePetImageUri = (imageUrl?: string | null) => {
   if (!imageUrl) {

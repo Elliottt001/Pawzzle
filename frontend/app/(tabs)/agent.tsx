@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
 import { Theme } from '@/constants/theme';
+import { API_BASE_URL } from '@/lib/apiBase';
 import AgentAvatarSvg from '@/assets/images/Agent.svg';
 import SendIcon from '@/assets/images/send.svg';
 
@@ -55,10 +56,6 @@ type AgentDecisionResponse = {
   prompt?: string;
   debug?: string;
 };
-
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
-  (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 
 const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const ensureChinese = (message: string, fallback: string) =>

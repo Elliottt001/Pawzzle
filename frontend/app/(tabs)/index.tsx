@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Theme } from '@/constants/theme';
+import { API_BASE_URL } from '@/lib/apiBase';
 import {
   getSession,
   setGuestMode,
@@ -27,15 +28,6 @@ import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
 
 type UserType = 'INDIVIDUAL' | 'INSTITUTION';
-
-type GeneratePetsResponse = {
-  requested: number;
-  parsed: number;
-  created: number;
-  skipped: number;
-  skippedReasons?: string[];
-  rawResponse?: string;
-};
 
 type UserProfile = {
   id: number;
@@ -57,9 +49,6 @@ const CODE_LENGTH = 4;
 const CODE_RESEND_SECONDS = 30;
 const createEmptyCode = () => Array.from({ length: CODE_LENGTH }, () => '');
 
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
-  (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 const ensureChinese = (message: string, fallback: string) =>
   /[\u4e00-\u9fff]/.test(message) ? message : fallback;
 
@@ -84,11 +73,6 @@ export default function ProfileScreen() {
   const lastCodeAttempt = React.useRef<string | null>(null);
   const codeInputRefs = React.useRef<Array<TextInput | null>>([]);
   const wechatLoginAttempt = React.useRef(0);
-  const [aiStatus, setAiStatus] = React.useState<'idle' | 'generating' | 'success' | 'error'>(
-    'idle'
-  );
-  const [aiMessage, setAiMessage] = React.useState<string | null>(null);
-  const isGenerating = aiStatus === 'generating';
   const phoneDigits = phone.replace(/\D/g, '');
   const codeValue = codeDigits.join('');
   const isPhoneReady = phoneDigits.length === 11;
@@ -452,38 +436,6 @@ export default function ProfileScreen() {
       setUserProfile(null);
       setStatus('已退出登录。');
     });
-
-  const handleGenerateCards = async () => {
-    if (isGenerating) {
-      return;
-    }
-    if (!session?.token) {
-      setAiStatus('error');
-      setAiMessage('请先登录后再生成。');
-      return;
-    }
-    setAiStatus('generating');
-    setAiMessage(null);
-
-    try {
-      const data = await request<GeneratePetsResponse>('/api/pets/generate', {}, {
-        token: session.token,
-      });
-      const parsed = data?.parsed ?? 0;
-      const created = data?.created ?? 0;
-      const skipped = data?.skipped ?? 0;
-      const reasons =
-        data?.skippedReasons && data.skippedReasons.length
-          ? ` 跳过原因：${data.skippedReasons.join(' | ')}`
-          : '';
-      setAiStatus('success');
-      setAiMessage(`AI生成完成：解析${parsed}条，新增${created}条，跳过${skipped}条。${reasons}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '';
-      setAiStatus('error');
-      setAiMessage(ensureChinese(message, 'AI生成失败，请稍后再试。'));
-    }
-  };
 
   const displayName = userProfile?.name ?? session?.user.name ?? '游客';
   const resolvedUserType = userProfile?.userType ?? session?.user.userType ?? null;
@@ -854,30 +806,6 @@ export default function ProfileScreen() {
                 ) : null}
               </View>
 
-              <FormSection title="AI 生成宠物卡片">
-                <Text style={styles.formSubtitle}>一键生成 20 张宠物卡片并写入数据库。</Text>
-                <Pressable
-                  onPress={handleGenerateCards}
-                  disabled={isGenerating}
-                  style={({ pressed }) => [
-                    styles.actionButton,
-                    pressed && styles.actionButtonPressed,
-                  ]}>
-                  <Text style={styles.actionButtonText}>
-                    {isGenerating ? '生成中...' : '生成20张卡片'}
-                  </Text>
-                </Pressable>
-                {aiMessage ? (
-                  <Text
-                    style={[
-                      styles.statusText,
-                      aiStatus === 'error' ? styles.aiMessageError : styles.aiMessageSuccess,
-                    ]}>
-                    {aiMessage}
-                  </Text>
-                ) : null}
-              </FormSection>
-
               <View style={styles.formCard}>
                 <Text style={styles.formTitle}>账户管理</Text>
                 <Text style={styles.formSubtitle}>如需退出登录，可在此设备操作。</Text>
@@ -921,15 +849,6 @@ export default function ProfileScreen() {
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
-  );
-}
-
-function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.formCard}>
-      <Text style={styles.formTitle}>{title}</Text>
-      <View style={styles.formFields}>{children}</View>
-    </View>
   );
 }
 
@@ -1490,11 +1409,10 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     marginBottom: Theme.spacing.s12,
   },
-  formFields: {
-    gap: Theme.spacing.s12,
-  },
   actionButton: {
-    backgroundColor: Theme.colors.successDeep,
+    backgroundColor: Theme.colors.ctaBackground,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.ctaBorder,
     paddingVertical: Theme.spacing.s12,
     borderRadius: Theme.radius.r14,
     alignItems: 'center',
@@ -1503,7 +1421,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: Theme.scale.pressedSoft }],
   },
   actionButtonText: {
-    color: Theme.colors.textInverse,
+    color: Theme.colors.ctaText,
     fontSize: Theme.typography.size.s14,
     fontFamily: Theme.fonts.semiBold,
   },
@@ -1523,11 +1441,5 @@ const styles = StyleSheet.create({
   },
   institutionFabPressed: {
     transform: [{ scale: Theme.scale.pressedSoft }],
-  },
-  aiMessageError: {
-    color: Theme.colors.textError,
-  },
-  aiMessageSuccess: {
-    color: Theme.colors.textSuccess,
   },
 });

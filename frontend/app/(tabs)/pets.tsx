@@ -2,7 +2,6 @@ import * as React from 'react';
 import { Image } from 'expo-image';
 import {
   ActivityIndicator,
-  Platform,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -15,11 +14,9 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
 import { Theme } from '@/constants/theme';
+import { API_BASE_URL } from '@/lib/apiBase';
 import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
 
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
-  (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 const HERO_IMAGE_URL = `https://placedog.net/${Theme.sizes.s300}/${Theme.sizes.s200}?id=120`;
 
 type UserProfileResponse = {

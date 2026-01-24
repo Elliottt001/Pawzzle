@@ -1,16 +1,13 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/base-text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
 import { Theme } from '@/constants/theme';
-
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
-  (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
+import { API_BASE_URL } from '@/lib/apiBase';
 
 type UserProfile = {
   id: number;

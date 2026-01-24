@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -7,13 +7,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Theme } from '@/constants/theme';
 import { setSession, type AuthSession } from '@/lib/session';
+import { API_BASE_URL } from '@/lib/apiBase';
 
-// Helper for localhost
-const API_URL = Platform.select({
-  android: 'http://10.0.2.2:8080',
-  ios: 'http://localhost:8080',
-  default: 'http://localhost:8080',
-});
 const ensureChinese = (message: string, fallback: string) =>
   /[\u4e00-\u9fff]/.test(message) ? message : fallback;
 
@@ -44,7 +39,7 @@ export default function RegisterScreen() {
     const finalIntent = userType === 'INSTITUTION' ? 'GIVER' : userIntent;
 
     try {
-      const response = await fetch(`${API_URL}/api/auth/register`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

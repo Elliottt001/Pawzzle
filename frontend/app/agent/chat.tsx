@@ -13,9 +13,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Theme } from '../../constants/theme';
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
+import { API_BASE_URL } from '@/lib/apiBase';
 
 const AI_RESPONSE_DELAY_MS = 600;
-const BAIDU_TRANSCRIBE_URL = 'http://<YOUR_IP>:8080/api/voice/transcribe-baidu';
+const BAIDU_TRANSCRIBE_URL = `${API_BASE_URL}/api/voice/transcribe-baidu`;
 
 const MOCK_PET = {
   name: '麻糬',

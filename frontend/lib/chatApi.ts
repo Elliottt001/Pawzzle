@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { API_BASE_URL } from '@/lib/apiBase';
 
 export type ChatMessage = {
   id: string;
@@ -24,9 +24,6 @@ export type ChatThread = {
   adoption?: AdoptionInfo | null;
 };
 
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
-  (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 const ensureChinese = (message: string, fallback: string) =>
   /[\u4e00-\u9fff]/.test(message) ? message : fallback;
 

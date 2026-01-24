@@ -15,6 +15,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
 
 import { Theme } from '@/constants/theme';
+import { API_BASE_URL } from '@/lib/apiBase';
 import {
   fetchThread,
   sendMessage,
@@ -25,10 +26,6 @@ import {
   type AdoptionInfo,
 } from '@/lib/chatApi';
 import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
-
-const API_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
-  (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 
 type PetSummary = {
   id: number;
@@ -105,7 +102,7 @@ export default function ChatDetailScreen() {
     }
     let isActive = true;
     setPetLoading(true);
-    fetch(`${API_URL}/api/pets/${petId}`)
+    fetch(`${API_BASE_URL}/api/pets/${petId}`)
       .then((response) => {
         if (!response.ok) {
           throw new Error('获取宠物信息失败');

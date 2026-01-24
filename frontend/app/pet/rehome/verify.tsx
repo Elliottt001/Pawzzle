@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Text } from '@/components/base-text';
@@ -15,11 +16,9 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Theme } from '../../../constants/theme';
+import { API_BASE_URL } from '@/lib/apiBase';
 import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
 
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
-  (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 const ensureChinese = (message: string, fallback: string) =>
   /[\u4e00-\u9fff]/.test(message) ? message : fallback;
 
@@ -78,6 +77,12 @@ export default function PetRehomeVerifyScreen() {
   );
   const [personalityText, setPersonalityText] = React.useState('');
   const [avoidAdopterText, setAvoidAdopterText] = React.useState('');
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const contentWidth = Math.max(windowWidth - Theme.spacing.s20 * 2, Theme.sizes.s180);
+  const photoPreviewHeight = Math.max(
+    Theme.sizes.s180,
+    Math.min(Math.round(contentWidth * 0.65), Math.round(windowHeight * 0.4))
+  );
   const [gender, setGender] = React.useState<(typeof GENDER_OPTIONS)[number]['id'] | null>(
     null,
   );
@@ -409,6 +414,7 @@ export default function PetRehomeVerifyScreen() {
           onPress={handlePickPhoto}
           style={({ pressed }) => [
             styles.photoUpload,
+            { height: photoPreviewHeight },
             pressed && styles.photoUploadPressed,
           ]}>
           {photoUriState ? (
