@@ -102,7 +102,7 @@ public class AuthService {
     public AuthResponse loginWithWeChatMock() {
         String openId = "mock-" + UUID.randomUUID();
         User user = User.builder()
-            .name("微信体验用户")
+            .name("微信用户")
             .email(buildWeChatEmail(openId))
             .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString()))
             .userType(User.UserType.INDIVIDUAL)
