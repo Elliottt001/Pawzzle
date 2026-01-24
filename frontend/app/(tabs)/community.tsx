@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { Text } from '@/components/base-text';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { Theme } from '../../constants/theme';
 import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
@@ -83,6 +85,14 @@ export default function CommunityScreen() {
   const [cardLocation, setCardLocation] = React.useState<string | null>(null);
   const [cardPersonality, setCardPersonality] = React.useState('');
   const [cardDescription, setCardDescription] = React.useState('');
+  const [cardPhotoUri, setCardPhotoUri] = React.useState<string | null>(null);
+  const [cardPhotoName, setCardPhotoName] = React.useState<string | null>(null);
+  const [cardPhotoType, setCardPhotoType] = React.useState<string | null>(null);
+  const [cardPhotoUploadStatus, setCardPhotoUploadStatus] = React.useState<
+    'idle' | 'uploading' | 'ready' | 'error'
+  >('idle');
+  const [cardPhotoUploadError, setCardPhotoUploadError] = React.useState<string | null>(null);
+  const [cardPhotoImageUrl, setCardPhotoImageUrl] = React.useState<string | null>(null);
   const [contentTitle, setContentTitle] = React.useState('');
   const [contentSubtitle, setContentSubtitle] = React.useState('');
   const [contentTag, setContentTag] = React.useState('');
@@ -128,7 +138,153 @@ export default function CommunityScreen() {
   React.useEffect(() => {
     setSubmitStatus('idle');
     setSubmitMessage(null);
+    if (uploadType !== 'card') {
+      setCardPhotoUri(null);
+      setCardPhotoName(null);
+      setCardPhotoType(null);
+      setCardPhotoUploadStatus('idle');
+      setCardPhotoUploadError(null);
+      setCardPhotoImageUrl(null);
+    }
   }, [uploadType]);
+
+  const resolveExtension = (name: string | null, type: string | null) => {
+    if (name) {
+      const trimmed = name.trim();
+      const dot = trimmed.lastIndexOf('.');
+      if (dot > -1 && dot < trimmed.length - 1) {
+        return trimmed.slice(dot + 1).toLowerCase();
+      }
+    }
+    if (type && type.includes('/')) {
+      return type.split('/')[1].toLowerCase();
+    }
+    return 'jpg';
+  };
+
+  const buildFileName = (name: string | null, extension: string) => {
+    const raw = name?.split('/').pop()?.split('\\').pop()?.trim();
+    if (!raw) {
+      return `pet-photo-${Date.now()}.${extension}`;
+    }
+    if (raw.includes('.')) {
+      return raw;
+    }
+    return `${raw}.${extension}`;
+  };
+
+  const resolveMimeType = (type: string | null, extension: string) => {
+    if (type) {
+      return type;
+    }
+    switch (extension) {
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'heic':
+        return 'image/heic';
+      case 'heif':
+        return 'image/heif';
+      default:
+        return 'image/jpeg';
+    }
+  };
+
+  const handlePickCardPhoto = async () => {
+    if (isSubmitting) {
+      return;
+    }
+    setCardPhotoUploadError(null);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setCardPhotoUploadError('需要相册权限才能选择照片。');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled) {
+        return;
+      }
+      const asset = result.assets?.[0];
+      if (!asset?.uri) {
+        setCardPhotoUploadError('未获取到照片，请重试。');
+        return;
+      }
+      const fallbackName = `pet-photo-${Date.now()}.jpg`;
+      const resolvedName = asset.fileName?.trim() || fallbackName;
+      const resolvedType = asset.mimeType?.trim() || 'image/jpeg';
+      setCardPhotoUri(asset.uri);
+      setCardPhotoName(resolvedName);
+      setCardPhotoType(resolvedType);
+      setCardPhotoUploadStatus('idle');
+      setCardPhotoImageUrl(null);
+    } catch {
+      setCardPhotoUploadError('选择照片失败，请稍后再试。');
+    }
+  };
+
+  const uploadCardPhoto = async () => {
+    if (!cardPhotoUri || !session?.token) {
+      return null;
+    }
+    setCardPhotoUploadStatus('uploading');
+    setCardPhotoUploadError(null);
+    try {
+      const extension = resolveExtension(cardPhotoName, cardPhotoType);
+      const fileName = buildFileName(cardPhotoName, extension);
+      const mimeType = resolveMimeType(cardPhotoType, extension);
+      const formData = new FormData();
+      if (Platform.OS === 'web') {
+        const response = await fetch(cardPhotoUri);
+        const blob = await response.blob();
+        const finalType = blob.type || mimeType;
+        const file = new File([blob], fileName, { type: finalType });
+        formData.append('file', file);
+      } else {
+        formData.append('file', {
+          uri: cardPhotoUri,
+          name: fileName,
+          type: mimeType,
+        } as unknown as Blob);
+      }
+      const response = await fetch(`${API_BASE_URL}/api/pets/upload`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.token}`,
+        },
+        body: formData,
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        let message = '';
+        try {
+          const data = JSON.parse(text) as { message?: string };
+          message = data?.message ?? '';
+        } catch {
+          message = text;
+        }
+        throw new Error(message || response.statusText);
+      }
+      const data = (await response.json()) as { url?: string };
+      if (!data?.url) {
+        throw new Error('图片上传失败。');
+      }
+      setCardPhotoUploadStatus('ready');
+      setCardPhotoImageUrl(data.url);
+      return data.url;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      const friendly = ensureChinese(message, '图片上传失败，请稍后再试。');
+      setCardPhotoUploadStatus('error');
+      setCardPhotoUploadError(friendly);
+      return null;
+    }
+  };
 
   const loadContent = React.useCallback(async (isActive?: () => boolean) => {
     const shouldUpdate = () => (isActive ? isActive() : true);
@@ -238,6 +394,14 @@ export default function CommunityScreen() {
     }
 
     try {
+      let imageUrl = cardPhotoImageUrl;
+      if (cardPhotoUri && !imageUrl) {
+        imageUrl = await uploadCardPhoto();
+        if (!imageUrl) {
+          setSubmitStatus('error');
+          return;
+        }
+      }
       await postJson(
         '/api/pets',
         {
@@ -248,6 +412,7 @@ export default function CommunityScreen() {
           location,
           personalityTag,
           description: description || undefined,
+          imageUrl: imageUrl ?? undefined,
         },
         session?.token
       );
@@ -260,6 +425,12 @@ export default function CommunityScreen() {
       setCardLocation(null);
       setCardPersonality('');
       setCardDescription('');
+      setCardPhotoUri(null);
+      setCardPhotoName(null);
+      setCardPhotoType(null);
+      setCardPhotoUploadStatus('idle');
+      setCardPhotoUploadError(null);
+      setCardPhotoImageUrl(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       setSubmitStatus('error');
@@ -538,6 +709,46 @@ export default function CommunityScreen() {
                             );
                           })}
                         </View>
+
+                        <FieldLabel text="宠物照片（可选）" />
+                        <Pressable
+                          onPress={handlePickCardPhoto}
+                          disabled={isSubmitting}
+                          style={({ pressed }) => [
+                            styles.photoPicker,
+                            pressed && styles.photoPickerPressed,
+                            isSubmitting && styles.photoPickerDisabled,
+                          ]}>
+                          <Text style={styles.photoPickerText}>
+                            {cardPhotoUri ? '重新选择照片' : '选择照片'}
+                          </Text>
+                        </Pressable>
+                        {cardPhotoUri ? (
+                          <View style={styles.photoPreviewRow}>
+                            <Image
+                              source={{ uri: cardPhotoUri }}
+                              style={styles.photoPreview}
+                              contentFit="cover"
+                            />
+                            <View style={styles.photoMeta}>
+                              <Text style={styles.photoNameText}>
+                                {cardPhotoName ?? '已选择照片'}
+                              </Text>
+                              <Text style={styles.photoStatusText}>
+                                {cardPhotoUploadStatus === 'uploading'
+                                  ? '照片上传中...'
+                                  : cardPhotoUploadStatus === 'ready'
+                                    ? '照片已上传'
+                                    : '照片将随发布上传'}
+                              </Text>
+                            </View>
+                          </View>
+                        ) : (
+                          <Text style={styles.formHint}>未选择照片。</Text>
+                        )}
+                        {cardPhotoUploadError ? (
+                          <Text style={styles.photoErrorText}>{cardPhotoUploadError}</Text>
+                        ) : null}
 
                         <FieldLabel text="性格标签（一个词）" />
                         <TextInput
@@ -988,6 +1199,54 @@ const styles = StyleSheet.create({
   formHint: {
     fontSize: Theme.typography.size.s12,
     color: Theme.colors.textSecondary,
+  },
+  photoPicker: {
+    paddingVertical: Theme.spacing.s10,
+    borderRadius: Theme.radius.r12,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarmAlt,
+    backgroundColor: Theme.colors.card,
+    alignItems: 'center',
+  },
+  photoPickerPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
+  photoPickerDisabled: {
+    opacity: Theme.opacity.o6,
+  },
+  photoPickerText: {
+    fontSize: Theme.typography.size.s13,
+    fontWeight: Theme.typography.weight.semiBold,
+    color: Theme.colors.textWarmStrong,
+  },
+  photoPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.s10,
+  },
+  photoPreview: {
+    width: Theme.sizes.s56,
+    height: Theme.sizes.s56,
+    borderRadius: Theme.radius.r10,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarmAlt,
+    backgroundColor: Theme.colors.surfaceWarm,
+  },
+  photoMeta: {
+    flex: Theme.layout.full,
+    gap: Theme.spacing.s4,
+  },
+  photoNameText: {
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.text,
+  },
+  photoStatusText: {
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.textSecondary,
+  },
+  photoErrorText: {
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.textError,
   },
   choiceRow: {
     flexDirection: 'row',

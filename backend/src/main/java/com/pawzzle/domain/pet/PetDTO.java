@@ -14,6 +14,7 @@ public class PetDTO {
     private Pet.Status status;
     private String description;
     private JsonNode tags;
+    private String imageUrl;
     private Long ownerId;
     private String ownerName;
     private User.UserType ownerType;

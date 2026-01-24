@@ -71,6 +71,9 @@ public class Pet {
 
 	private String tone;
 
+	@Column(name = "image_url")
+	private String imageUrl;
+
 	@Column(name = "raw_description", columnDefinition = "text")
 	private String rawDescription;
 

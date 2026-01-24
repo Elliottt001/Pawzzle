@@ -1,13 +1,28 @@
 import * as React from 'react';
 import type { ComponentProps } from 'react';
 import { Image } from 'expo-image';
-import { StyleSheet, View, Pressable } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/base-text';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import type { PetCardData } from '@/types/pet';
 import { Theme } from '@/constants/theme';
+
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL ??
+  (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
+
+const resolvePetImageUri = (imageUrl?: string | null) => {
+  if (!imageUrl) {
+    return null;
+  }
+  if (/^(https?:|file:|blob:|data:)/.test(imageUrl)) {
+    return imageUrl;
+  }
+  const normalized = imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`;
+  return `${API_BASE_URL}${normalized}`;
+};
 
 type PetCardProps = {
   pet: PetCardData;
@@ -26,10 +41,11 @@ export function PetCard({ pet, confidence }: PetCardProps) {
   const imageDimension = Theme.sizes.s200;
   const avatarSeed = Number.parseInt(pet.id, 10);
   const avatarId = Number.isFinite(avatarSeed) ? avatarSeed : 1;
-  const avatarUri =
+  const fallbackAvatarUri =
     pet.icon === 'cat'
       ? `https://placekitten.com/${imageDimension}/${imageDimension}`
       : `https://placedog.net/${imageDimension}/${imageDimension}?id=${avatarId}`;
+  const avatarUri = resolvePetImageUri(pet.imageUrl) ?? fallbackAvatarUri;
   const genderTone =
     pet.icon === 'cat' ? 'female' : pet.icon === 'dog' ? 'male' : 'neutral';
   const genderIcon: FontAwesome5IconName =

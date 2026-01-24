@@ -9,7 +9,8 @@ public record PetCardDTO(
     String trait,
     String distance,
     String icon,
-    String tone
+    String tone,
+    String imageUrl
 ) {
     public static PetCardDTO from(Pet pet) {
         if (pet == null) {
@@ -25,7 +26,8 @@ public record PetCardDTO(
             pet.getTrait(),
             pet.getDistance(),
             pet.getIcon(),
-            pet.getTone()
+            pet.getTone(),
+            pet.getImageUrl()
         );
     }
 }

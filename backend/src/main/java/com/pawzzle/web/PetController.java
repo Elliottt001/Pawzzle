@@ -10,24 +10,35 @@ import com.pawzzle.domain.pet.PetRepository;
 import com.pawzzle.domain.user.SessionService;
 import com.pawzzle.domain.user.User;
 import jakarta.persistence.EntityNotFoundException;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.ChatResponse;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/pets")
@@ -38,6 +49,8 @@ public class PetController {
     private final OpenAiChatClient chatClient;
     private final ObjectMapper objectMapper;
     private final SessionService sessionService;
+    @Value("${pawzzle.upload.dir:uploads}")
+    private String uploadDir;
     private static final Set<String> LOCATIONS = Set.of("杭州", "北京", "上海");
     private static final Set<String> CAT_BREEDS = Set.of(
         "British Shorthair",
@@ -54,6 +67,21 @@ public class PetController {
         "柯基",
         "柴犬",
         "迷你贵宾"
+    );
+    private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of(
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/heic",
+        "image/heif"
+    );
+    private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of(
+        "jpg",
+        "jpeg",
+        "png",
+        "webp",
+        "heic",
+        "heif"
     );
     private static final int AI_GENERATED_PET_COUNT = 20;
     private static final String AI_PET_GENERATION_PROMPT = """
@@ -108,6 +136,32 @@ public class PetController {
         );
     }
 
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public UploadResponse uploadPetImage(
+        @RequestParam("file") MultipartFile file,
+        @RequestHeader(value = "Authorization", required = false) String authorization
+    ) {
+        sessionService.requireUser(authorization, null);
+        if (file == null || file.isEmpty()) {
+            throw badRequest("File is required");
+        }
+        String contentType = file.getContentType();
+        if (contentType != null && !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
+            throw badRequest("Only image files are allowed");
+        }
+        String extension = resolveImageExtension(contentType, file.getOriginalFilename());
+        String filename = UUID.randomUUID().toString().replace("-", "") + "." + extension;
+        Path uploadRoot = resolveUploadRoot();
+        try {
+            Files.createDirectories(uploadRoot);
+            Path target = uploadRoot.resolve(filename);
+            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store image");
+        }
+        return new UploadResponse("/uploads/" + filename);
+    }
+
     @GetMapping("/{id}")
     public PetDTO getPetById(@PathVariable Long id) {
         Pet pet = petRepository.findById(id)
@@ -121,6 +175,7 @@ public class PetController {
                 .status(pet.getStatus())
                 .description(pet.getRawDescription())
                 .tags(pet.getStructuredTags())
+                .imageUrl(pet.getImageUrl())
                 .ownerId(owner != null ? owner.getId() : null)
                 .ownerName(owner != null ? owner.getName() : null)
                 .ownerType(owner != null ? owner.getUserType() : null)
@@ -159,6 +214,7 @@ public class PetController {
             throw badRequest("Personality tag must be a single word");
         }
         String description = normalize(request.description());
+        String imageUrl = normalize(request.imageUrl());
         String rawDescription = description != null ? description : name + " is ready to meet you.";
         String trait = description != null ? description : "Personality: " + personalityTag + ".";
         String ageLabel = formatAge(age);
@@ -175,7 +231,8 @@ public class PetController {
             trait,
             icon,
             tone,
-            rawDescription
+            rawDescription,
+            imageUrl
         );
     }
 
@@ -217,6 +274,52 @@ public class PetController {
         return age == 1 ? "1 yr" : age + " yrs";
     }
 
+    private Path resolveUploadRoot() {
+        return Paths.get(uploadDir).toAbsolutePath().normalize();
+    }
+
+    private String resolveImageExtension(String contentType, String originalFilename) {
+        String contentExtension = extensionFromContentType(contentType);
+        if (contentExtension != null) {
+            return contentExtension;
+        }
+        String filenameExtension = extensionFromFilename(originalFilename);
+        if (filenameExtension != null) {
+            return filenameExtension;
+        }
+        return "jpg";
+    }
+
+    private String extensionFromContentType(String contentType) {
+        if (contentType == null) {
+            return null;
+        }
+        String normalized = contentType.toLowerCase(Locale.ROOT);
+        if (!normalized.startsWith("image/")) {
+            return null;
+        }
+        if (ALLOWED_IMAGE_TYPES.contains(normalized)) {
+            return normalized.equals("image/jpeg") ? "jpg" : normalized.substring("image/".length());
+        }
+        String extension = normalized.substring("image/".length());
+        return extension.isBlank() ? null : extension;
+    }
+
+    private String extensionFromFilename(String filename) {
+        if (filename == null) {
+            return null;
+        }
+        int dot = filename.lastIndexOf('.');
+        if (dot < 0 || dot == filename.length() - 1) {
+            return null;
+        }
+        String extension = filename.substring(dot + 1).toLowerCase(Locale.ROOT);
+        if (extension.isBlank()) {
+            return null;
+        }
+        return ALLOWED_IMAGE_EXTENSIONS.contains(extension) ? extension : null;
+    }
+
     private Pet buildPet(CreatePetPayload payload, User owner) {
         return Pet.builder()
             .name(payload.name())
@@ -229,6 +332,7 @@ public class PetController {
             .distance(payload.location())
             .icon(payload.icon())
             .tone(payload.tone())
+            .imageUrl(payload.imageUrl())
             .rawDescription(payload.rawDescription())
             .owner(owner)
             .build();
@@ -287,6 +391,7 @@ public class PetController {
                 location,
                 personalityTag,
                 description,
+                null,
                 null
             );
             try {
@@ -376,6 +481,7 @@ public class PetController {
         String location,
         String personalityTag,
         String description,
+        String imageUrl,
         String token
     ) {
     }
@@ -390,6 +496,9 @@ public class PetController {
     ) {
     }
 
+    public record UploadResponse(String url) {
+    }
+
     private record CreatePetPayload(
         String name,
         Pet.Species species,
@@ -400,7 +509,8 @@ public class PetController {
         String trait,
         String icon,
         String tone,
-        String rawDescription
+        String rawDescription,
+        String imageUrl
     ) {
     }
 

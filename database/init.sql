@@ -47,3 +47,5 @@ CREATE INDEX IF NOT EXISTS idx_chat_messages_thread_id ON chat_messages(thread_i
 
 -- Pets (with JSONB attributes and vector embedding)
 -- Adoption orders/processes
+ALTER TABLE IF EXISTS pets
+    ADD COLUMN IF NOT EXISTS image_url VARCHAR(2048);

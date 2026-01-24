@@ -8,4 +8,5 @@ export type PetCardData = {
   distance: string;
   icon: 'dog' | 'cat' | 'paw';
   tone: string;
+  imageUrl?: string | null;
 };

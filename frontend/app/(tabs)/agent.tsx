@@ -1,7 +1,8 @@
 import * as React from 'react';
 import {
+  Animated,
+  Easing,
   KeyboardAvoidingView,
-  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -16,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
 import { Theme } from '@/constants/theme';
+import AgentAvatar from '@/assets/images/Agent.svg';
 
 type ChatRole = 'user' | 'ai' | 'debug';
 
@@ -409,7 +411,7 @@ function ChatBubble({ role, text }: { role: ChatRole; text: string }) {
       ]}>
       {!isUser && !isDebug ? (
         <View style={styles.avatar}>
-          <FontAwesome5 name="paw" size={Theme.sizes.s16} color={Theme.colors.successStrong} />
+          <AgentAvatar style={styles.avatarImage} accessibilityLabel="Pawzy" />
         </View>
       ) : null}
       <View
@@ -434,6 +436,30 @@ function ChatBubble({ role, text }: { role: ChatRole; text: string }) {
 }
 
 function AgentStartScreen({ onStart }: { onStart: () => void }) {
+  const floatAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, {
+          toValue: -6,
+          duration: 1600,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatAnim, {
+          toValue: 0,
+          duration: 1600,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    animation.start();
+    return () => animation.stop();
+  }, [floatAnim]);
+
   return (
     <SafeAreaView style={startStyles.safeArea}>
       <View style={startStyles.background}>
@@ -450,12 +476,9 @@ function AgentStartScreen({ onStart }: { onStart: () => void }) {
         <View style={startStyles.hero}>
           <View style={startStyles.mascotWrap}>
             <View style={startStyles.mascotGlow} />
-            <Image
-              source={require('@/assets/images/Agent.png')}
-              style={startStyles.agentHero}
-              resizeMode="contain"
-              accessibilityLabel="Pawzy"
-            />
+            <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
+              <AgentAvatar style={startStyles.agentHero} accessibilityLabel="Pawzy" />
+            </Animated.View>
           </View>
 
           <Text style={startStyles.headline}>你好！我是Pawzy</Text>
@@ -631,15 +654,16 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   avatar: {
-    width: Theme.sizes.s34,
-    height: Theme.sizes.s34,
-    borderRadius: Theme.sizes.s34 / 2,
+    width: Theme.sizes.s56,
+    height: Theme.sizes.s56,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Theme.colors.successSurfaceSoft,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.successBorderAlt,
     marginRight: Theme.spacing.s8,
+    transform: [{ translateY: -Theme.spacing.s6 }],
+  },
+  avatarImage: {
+    width: Theme.sizes.s56,
+    height: Theme.sizes.s56,
   },
   bubble: {
     maxWidth: Theme.percent.p80,
@@ -648,13 +672,13 @@ const styles = StyleSheet.create({
     borderRadius: Theme.radius.r18,
   },
   userBubble: {
-    backgroundColor: Theme.colors.successDeep,
+    backgroundColor: Theme.colors.ctaBackground,
     borderTopRightRadius: Theme.radius.r6,
   },
   aiBubble: {
-    backgroundColor: Theme.colors.cardTranslucent,
+    backgroundColor: Theme.colors.surfaceWarm,
     borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmAlt,
+    borderColor: Theme.colors.borderWarmSoft,
     borderTopLeftRadius: Theme.radius.r6,
     ...Theme.shadows.elevatedLarge,
   },
@@ -669,10 +693,10 @@ const styles = StyleSheet.create({
     lineHeight: Theme.typography.lineHeight.s20,
   },
   userText: {
-    color: Theme.colors.textOnAccent,
+    color: Theme.colors.textInverse,
   },
   aiText: {
-    color: Theme.colors.text,
+    color: Theme.colors.textWarm,
   },
   debugText: {
     color: Theme.colors.textMuted,
