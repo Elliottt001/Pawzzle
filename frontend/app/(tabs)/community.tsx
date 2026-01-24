@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
+import { FontAwesome5 } from '@expo/vector-icons';
 import { Theme } from '../../constants/theme';
 import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
 
@@ -30,17 +31,19 @@ const uploadTypes = [
   { id: 'guide', label: '指南' },
 ] as const;
 
-const speciesOptions = [
-  { id: 'CAT', label: '猫' },
-  { id: 'DOG', label: '狗' },
-] as const;
-
 const breedOptions = {
   CAT: ['英短', '布偶', '暹罗'],
   DOG: ['柯基', '柴犬', '迷你贵宾'],
 } as const;
 
 const locationOptions = ['杭州', '北京', '上海'] as const;
+const DEFAULT_DESCRIPTION = '性格友好，适合家庭领养。';
+const FALLBACK_TAGS = ['干饭王', '小粘人', '高冷', '温顺', '小太阳', '机灵鬼'];
+const GENDER_OPTIONS = [
+  { id: 'male', label: '公' },
+  { id: 'female', label: '母' },
+] as const;
+const STATUS_OPTIONS = ['已绝育', '已完成疫苗', '疫苗进行中', '未接种/不确定'] as const;
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ??
@@ -50,7 +53,6 @@ const ensureChinese = (message: string, fallback: string) =>
 
 type TabId = (typeof TABS)[number]['id'];
 type UploadType = (typeof uploadTypes)[number]['id'];
-type SpeciesId = (typeof speciesOptions)[number]['id'];
 
 type ContentItem = {
   id: string;
@@ -79,12 +81,21 @@ export default function CommunityScreen() {
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [uploadType, setUploadType] = React.useState<UploadType>('card');
   const [cardName, setCardName] = React.useState('');
-  const [cardSpecies, setCardSpecies] = React.useState<SpeciesId | null>(null);
   const [cardBreed, setCardBreed] = React.useState<string | null>(null);
   const [cardAge, setCardAge] = React.useState('');
-  const [cardLocation, setCardLocation] = React.useState<string | null>(null);
-  const [cardPersonality, setCardPersonality] = React.useState('');
-  const [cardDescription, setCardDescription] = React.useState('');
+  const [cardLocation, setCardLocation] = React.useState<string>(locationOptions[0]);
+  const [cardPersonalityText, setCardPersonalityText] = React.useState('');
+  const [cardAvoidAdopterText, setCardAvoidAdopterText] = React.useState('');
+  const [cardGender, setCardGender] = React.useState<(typeof GENDER_OPTIONS)[number]['id'] | null>(
+    null,
+  );
+  const [cardCareStatus, setCardCareStatus] = React.useState<
+    (typeof STATUS_OPTIONS)[number] | null
+  >(null);
+  const [cardTags, setCardTags] = React.useState<string[]>([]);
+  const [cardTagStatus, setCardTagStatus] = React.useState<'idle' | 'generating' | 'ready'>('idle');
+  const [cardTagError, setCardTagError] = React.useState<string | null>(null);
+  const [cardBreedOpen, setCardBreedOpen] = React.useState(false);
   const [cardPhotoUri, setCardPhotoUri] = React.useState<string | null>(null);
   const [cardPhotoName, setCardPhotoName] = React.useState<string | null>(null);
   const [cardPhotoType, setCardPhotoType] = React.useState<string | null>(null);
@@ -102,8 +113,10 @@ export default function CommunityScreen() {
   const [submitMessage, setSubmitMessage] = React.useState<string | null>(null);
   const isSubmitting = submitStatus === 'submitting';
   const isLoggedIn = Boolean(session?.token);
-  const selectedBreeds = cardSpecies ? breedOptions[cardSpecies] : [];
   const contentLabel = uploadType === 'update' ? '动态' : '指南';
+  const allBreeds = React.useMemo(() => [...breedOptions.CAT, ...breedOptions.DOG], []);
+  const canGenerateCardTags =
+    cardPersonalityText.trim().length > 0 && cardTagStatus !== 'generating';
 
   React.useEffect(() => {
     if (!isScanning) {
@@ -125,15 +138,10 @@ export default function CommunityScreen() {
   }, []);
 
   React.useEffect(() => {
-    if (!cardSpecies) {
-      setCardBreed(null);
-      return;
-    }
-    const speciesBreeds = breedOptions[cardSpecies];
-    if (cardBreed && !speciesBreeds.some((breed) => breed === cardBreed)) {
+    if (cardBreed && !allBreeds.includes(cardBreed)) {
       setCardBreed(null);
     }
-  }, [cardBreed, cardSpecies]);
+  }, [allBreeds, cardBreed]);
 
   React.useEffect(() => {
     setSubmitStatus('idle');
@@ -145,6 +153,14 @@ export default function CommunityScreen() {
       setCardPhotoUploadStatus('idle');
       setCardPhotoUploadError(null);
       setCardPhotoImageUrl(null);
+      setCardTags([]);
+      setCardTagStatus('idle');
+      setCardTagError(null);
+      setCardPersonalityText('');
+      setCardAvoidAdopterText('');
+      setCardGender(null);
+      setCardCareStatus(null);
+      setCardBreedOpen(false);
     }
   }, [uploadType]);
 
@@ -286,6 +302,55 @@ export default function CommunityScreen() {
     }
   };
 
+  const handleGenerateCardTags = async () => {
+    if (!canGenerateCardTags) {
+      if (!cardPersonalityText.trim()) {
+        setCardTagError('请先填写性格侧写内容。');
+      }
+      return;
+    }
+    setCardTagError(null);
+    setCardTagStatus('generating');
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (session?.token) {
+        headers.Authorization = `Bearer ${session.token}`;
+      }
+      const response = await fetch(`${API_BASE_URL}/api/pets/personality-tags`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ text: cardPersonalityText.trim() }),
+      });
+      const text = await response.text();
+      let payload: { tags?: string[] } | null = null;
+      if (text) {
+        try {
+          payload = JSON.parse(text) as { tags?: string[] };
+        } catch {
+          payload = null;
+        }
+      }
+      if (!response.ok) {
+        const message =
+          payload && typeof payload === 'object' && 'message' in payload
+            ? String((payload as { message?: string }).message ?? '')
+            : response.statusText ?? '';
+        throw new Error(message);
+      }
+      const aiTags = normalizeTags(Array.isArray(payload?.tags) ? payload?.tags ?? [] : []);
+      const finalTags = fillTags(aiTags);
+      setCardTags(finalTags);
+      setCardTagStatus('ready');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      setCardTagError(ensureChinese(message, '标签生成失败，请稍后再试。'));
+      setCardTagStatus('idle');
+    }
+  };
+
   const loadContent = React.useCallback(async (isActive?: () => boolean) => {
     const shouldUpdate = () => (isActive ? isActive() : true);
     if (shouldUpdate()) {
@@ -352,9 +417,8 @@ export default function CommunityScreen() {
     setSubmitMessage(null);
 
     const name = cardName.trim();
-    const personalityTag = cardPersonality.trim();
-    const location = cardLocation?.trim() ?? '';
-    const description = cardDescription.trim();
+    const location = cardLocation.trim();
+    const description = cardPersonalityText.trim();
     const ageValue = Number(cardAge);
 
     if (!name) {
@@ -362,12 +426,13 @@ export default function CommunityScreen() {
       setSubmitMessage('请输入名字。');
       return;
     }
-    if (!cardSpecies) {
+    if (!cardBreed) {
       setSubmitStatus('error');
-      setSubmitMessage('请选择物种。');
+      setSubmitMessage('请选择品种。');
       return;
     }
-    if (!cardBreed) {
+    const resolvedSpecies = resolveSpeciesFromBreed(cardBreed);
+    if (!resolvedSpecies) {
       setSubmitStatus('error');
       setSubmitMessage('请选择品种。');
       return;
@@ -380,16 +445,6 @@ export default function CommunityScreen() {
     if (!location) {
       setSubmitStatus('error');
       setSubmitMessage('请选择城市。');
-      return;
-    }
-    if (!personalityTag) {
-      setSubmitStatus('error');
-      setSubmitMessage('请填写性格标签。');
-      return;
-    }
-    if (/\s/.test(personalityTag)) {
-      setSubmitStatus('error');
-      setSubmitMessage('性格标签请填写一个词。');
       return;
     }
 
@@ -406,25 +461,30 @@ export default function CommunityScreen() {
         '/api/pets',
         {
           name,
-          species: cardSpecies,
+          species: resolvedSpecies,
           breed: cardBreed,
           age: ageValue,
           location,
-          personalityTag,
-          description: description || undefined,
+          personalityTag: cardTags[0] ?? '亲人',
+          description: description || DEFAULT_DESCRIPTION,
           imageUrl: imageUrl ?? undefined,
         },
         session?.token
       );
       setSubmitStatus('success');
-      setSubmitMessage('卡片已发布。');
+      setSubmitMessage('卡片已生成。');
       setCardName('');
-      setCardSpecies(null);
       setCardBreed(null);
       setCardAge('');
-      setCardLocation(null);
-      setCardPersonality('');
-      setCardDescription('');
+      setCardLocation(locationOptions[0]);
+      setCardPersonalityText('');
+      setCardAvoidAdopterText('');
+      setCardGender(null);
+      setCardCareStatus(null);
+      setCardTags([]);
+      setCardTagStatus('idle');
+      setCardTagError(null);
+      setCardBreedOpen(false);
       setCardPhotoUri(null);
       setCardPhotoName(null);
       setCardPhotoType(null);
@@ -611,175 +671,249 @@ export default function CommunityScreen() {
                     </View>
 
                     {uploadType === 'card' ? (
-                      <View style={styles.formFields}>
-                        <FieldLabel text="名字" />
-                        <TextInput
-                          value={cardName}
-                          onChangeText={setCardName}
-                          placeholder="宠物名字"
-                          placeholderTextColor={Theme.colors.placeholder}
-                          style={styles.formInput}
-                        />
+                      <View style={styles.cardForm}>
+                        <Pressable
+                          onPress={handlePickCardPhoto}
+                          disabled={isSubmitting}
+                          style={({ pressed }) => [
+                            styles.cardPhotoUpload,
+                            pressed && styles.cardPhotoUploadPressed,
+                          ]}>
+                          {cardPhotoUri ? (
+                            <Image
+                              source={{ uri: cardPhotoUri }}
+                              style={styles.cardPhotoImage}
+                              contentFit="cover"
+                            />
+                          ) : (
+                            <View style={styles.cardPhotoPlaceholder}>
+                              <FontAwesome5
+                                name="camera"
+                                size={Theme.sizes.s24}
+                                color={Theme.colors.textWarm}
+                              />
+                              <Text style={styles.cardPhotoPlaceholderText}>
+                                拍照/上传宠物照片
+                              </Text>
+                            </View>
+                          )}
+                        </Pressable>
+                        <Text style={styles.cardPhotoHint}>支持多图上传，最多6张</Text>
+                        {cardPhotoUploadError ? (
+                          <Text style={styles.cardInlineError}>{cardPhotoUploadError}</Text>
+                        ) : null}
 
-                        <FieldLabel text="物种" />
-                        <View style={styles.choiceRow}>
-                          {speciesOptions.map((option) => {
-                            const isActive = cardSpecies === option.id;
-                            return (
-                              <Pressable
-                                key={option.id}
-                                onPress={() => setCardSpecies(option.id)}
-                                style={({ pressed }) => [
-                                  styles.choicePill,
-                                  isActive && styles.choicePillActive,
-                                  pressed && styles.choicePillPressed,
-                                ]}>
-                                <Text
-                                  style={[
-                                    styles.choiceText,
-                                    isActive && styles.choiceTextActive,
-                                  ]}>
-                                  {option.label}
-                                </Text>
-                              </Pressable>
-                            );
-                          })}
+                        <View style={styles.cardField}>
+                          <Text style={styles.cardLabel}>名字</Text>
+                          <TextInput
+                            value={cardName}
+                            onChangeText={setCardName}
+                            placeholder="输入宠物名字"
+                            placeholderTextColor={Theme.colors.placeholder}
+                            style={styles.cardInput}
+                          />
                         </View>
 
-                        <FieldLabel text="品种" />
-                        {selectedBreeds.length ? (
-                          <View style={styles.choiceRow}>
-                            {selectedBreeds.map((breed) => {
-                              const isActive = cardBreed === breed;
+                        <View style={styles.cardField}>
+                          <Text style={styles.cardLabel}>品种</Text>
+                          <Pressable
+                            onPress={() => setCardBreedOpen((prev) => !prev)}
+                            style={({ pressed }) => [
+                              styles.cardSelect,
+                              pressed && styles.cardSelectPressed,
+                            ]}>
+                            <Text
+                              style={cardBreed ? styles.cardSelectValue : styles.cardSelectPlaceholder}>
+                              {cardBreed ?? '选择或输入品种'}
+                            </Text>
+                            <FontAwesome5
+                              name="chevron-down"
+                              size={Theme.sizes.s12}
+                              color={Theme.colors.textWarm}
+                            />
+                          </Pressable>
+                          {cardBreedOpen ? (
+                            <View style={styles.cardOptionRow}>
+                              {allBreeds.map((breed) => {
+                                const isActive = cardBreed === breed;
+                                return (
+                                  <Pressable
+                                    key={breed}
+                                    onPress={() => {
+                                      setCardBreed(breed);
+                                      setCardBreedOpen(false);
+                                    }}
+                                    style={({ pressed }) => [
+                                      styles.cardOptionPill,
+                                      isActive && styles.cardOptionPillActive,
+                                      pressed && styles.cardOptionPillPressed,
+                                    ]}>
+                                    <Text
+                                      style={[
+                                        styles.cardOptionText,
+                                        isActive && styles.cardOptionTextActive,
+                                      ]}>
+                                      {breed}
+                                    </Text>
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+                          ) : null}
+                        </View>
+
+                        <View style={styles.cardField}>
+                          <Text style={styles.cardLabel}>年龄</Text>
+                          <TextInput
+                            value={cardAge}
+                            onChangeText={(value) => setCardAge(value.replace(/[^0-9]/g, ''))}
+                            placeholder="输入年龄"
+                            placeholderTextColor={Theme.colors.placeholder}
+                            keyboardType="number-pad"
+                            style={styles.cardInput}
+                          />
+                        </View>
+
+                        <View style={styles.cardField}>
+                          <Text style={styles.cardLabel}>性别与状态</Text>
+                          <View style={styles.cardOptionRow}>
+                            {GENDER_OPTIONS.map((option) => {
+                              const isActive = cardGender === option.id;
                               return (
                                 <Pressable
-                                  key={breed}
-                                  onPress={() => setCardBreed(breed)}
+                                  key={option.id}
+                                  onPress={() => setCardGender(option.id)}
                                   style={({ pressed }) => [
-                                    styles.choicePill,
-                                    isActive && styles.choicePillActive,
-                                    pressed && styles.choicePillPressed,
+                                    styles.cardOptionPill,
+                                    isActive && styles.cardOptionPillActive,
+                                    pressed && styles.cardOptionPillPressed,
                                   ]}>
                                   <Text
                                     style={[
-                                      styles.choiceText,
-                                      isActive && styles.choiceTextActive,
+                                      styles.cardOptionText,
+                                      isActive && styles.cardOptionTextActive,
                                     ]}>
-                                    {breed}
+                                    {option.label}
                                   </Text>
                                 </Pressable>
                               );
                             })}
                           </View>
-                        ) : (
-                          <Text style={styles.formHint}>请先选择物种以查看品种。</Text>
-                        )}
-
-                        <FieldLabel text="年龄（岁）" />
-                        <TextInput
-                          value={cardAge}
-                          onChangeText={(value) => setCardAge(value.replace(/[^0-9]/g, ''))}
-                          placeholder="例如：2"
-                          placeholderTextColor={Theme.colors.placeholder}
-                          keyboardType="number-pad"
-                          style={styles.formInput}
-                        />
-
-                        <FieldLabel text="城市" />
-                        <View style={styles.choiceRow}>
-                          {locationOptions.map((location) => {
-                            const isActive = cardLocation === location;
-                            return (
-                              <Pressable
-                                key={location}
-                                onPress={() => setCardLocation(location)}
-                                style={({ pressed }) => [
-                                  styles.choicePill,
-                                  isActive && styles.choicePillActive,
-                                  pressed && styles.choicePillPressed,
-                                ]}>
-                                <Text
-                                  style={[
-                                    styles.choiceText,
-                                    isActive && styles.choiceTextActive,
+                          <View style={styles.cardOptionRow}>
+                            {STATUS_OPTIONS.map((option) => {
+                              const isActive = cardCareStatus === option;
+                              return (
+                                <Pressable
+                                  key={option}
+                                  onPress={() => setCardCareStatus(option)}
+                                  style={({ pressed }) => [
+                                    styles.cardOptionPill,
+                                    isActive && styles.cardOptionPillActive,
+                                    pressed && styles.cardOptionPillPressed,
                                   ]}>
-                                  {location}
-                                </Text>
-                              </Pressable>
-                            );
-                          })}
+                                  <Text
+                                    style={[
+                                      styles.cardOptionText,
+                                      isActive && styles.cardOptionTextActive,
+                                    ]}>
+                                    {option}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
                         </View>
 
-                        <FieldLabel text="宠物照片（可选）" />
-                        <Pressable
-                          onPress={handlePickCardPhoto}
-                          disabled={isSubmitting}
-                          style={({ pressed }) => [
-                            styles.photoPicker,
-                            pressed && styles.photoPickerPressed,
-                            isSubmitting && styles.photoPickerDisabled,
-                          ]}>
-                          <Text style={styles.photoPickerText}>
-                            {cardPhotoUri ? '重新选择照片' : '选择照片'}
+                        <View style={styles.cardField}>
+                          <Text style={styles.cardSectionTitle}>AI 性格侧写</Text>
+                          <Text style={styles.cardHelperText}>
+                            请介绍你家宝贝的个性（例如它是否特别粘人？它吃饭护食吗？它怕打雷吗？）
                           </Text>
-                        </Pressable>
-                        {cardPhotoUri ? (
-                          <View style={styles.photoPreviewRow}>
-                            <Image
-                              source={{ uri: cardPhotoUri }}
-                              style={styles.photoPreview}
-                              contentFit="cover"
+                          <View style={styles.cardTextAreaWrap}>
+                            <TextInput
+                              value={cardPersonalityText}
+                              onChangeText={setCardPersonalityText}
+                              placeholder="描述你家宝贝的性格特点...(可粘贴小红书/朋友圈文案)"
+                              placeholderTextColor={Theme.colors.placeholder}
+                              style={styles.cardTextArea}
+                              multiline
                             />
-                            <View style={styles.photoMeta}>
-                              <Text style={styles.photoNameText}>
-                                {cardPhotoName ?? '已选择照片'}
-                              </Text>
-                              <Text style={styles.photoStatusText}>
-                                {cardPhotoUploadStatus === 'uploading'
-                                  ? '照片上传中...'
-                                  : cardPhotoUploadStatus === 'ready'
-                                    ? '照片已上传'
-                                    : '照片将随发布上传'}
-                              </Text>
+                            <View style={styles.cardMicBadge}>
+                              <FontAwesome5
+                                name="microphone"
+                                size={Theme.sizes.s14}
+                                color={Theme.colors.textWarm}
+                              />
                             </View>
                           </View>
-                        ) : (
-                          <Text style={styles.formHint}>未选择照片。</Text>
-                        )}
-                        {cardPhotoUploadError ? (
-                          <Text style={styles.photoErrorText}>{cardPhotoUploadError}</Text>
-                        ) : null}
+                        </View>
 
-                        <FieldLabel text="性格标签（一个词）" />
-                        <TextInput
-                          value={cardPersonality}
-                          onChangeText={setCardPersonality}
-                          placeholder="活泼"
-                          placeholderTextColor={Theme.colors.placeholder}
-                          style={styles.formInput}
-                          autoCapitalize="none"
-                        />
+                        <View style={styles.cardField}>
+                          <View style={styles.cardTagHeader}>
+                            <Text style={styles.cardSectionTitle}>tag 生成</Text>
+                            <Pressable
+                              onPress={handleGenerateCardTags}
+                              disabled={!canGenerateCardTags}
+                              style={({ pressed }) => [
+                                styles.cardTagButton,
+                                pressed && styles.cardTagButtonPressed,
+                                !canGenerateCardTags && styles.cardTagButtonDisabled,
+                              ]}>
+                              {cardTagStatus === 'generating' ? (
+                                <ActivityIndicator size="small" color={Theme.colors.textWarmStrong} />
+                              ) : null}
+                              <Text style={styles.cardTagButtonText}>
+                                {cardTagStatus === 'generating' ? '生成中...' : '生成'}
+                              </Text>
+                            </Pressable>
+                          </View>
+                          <View style={styles.cardTagRow}>
+                            {cardTags.length ? (
+                              cardTags.map((tag) => (
+                                <View key={tag} style={styles.cardTagPill}>
+                                  <Text style={styles.cardTagText}># {tag}</Text>
+                                </View>
+                              ))
+                            ) : (
+                              <Text style={styles.cardTagEmpty}>暂未生成标签</Text>
+                            )}
+                          </View>
+                          {cardTagError ? (
+                            <Text style={styles.cardInlineError}>{cardTagError}</Text>
+                          ) : null}
+                        </View>
 
-                        <FieldLabel text="描述（可选）" />
-                        <TextInput
-                          value={cardDescription}
-                          onChangeText={setCardDescription}
-                          placeholder="简单介绍..."
-                          placeholderTextColor={Theme.colors.placeholder}
-                          style={[styles.formInput, styles.formInputMultiline]}
-                          multiline
-                        />
+                        <View style={styles.cardField}>
+                          <Text style={styles.cardSectionTitle}>您觉得什么样的人千万不要养这只宠物?</Text>
+                          <View style={styles.cardTextAreaWrap}>
+                            <TextInput
+                              value={cardAvoidAdopterText}
+                              onChangeText={setCardAvoidAdopterText}
+                              placeholder="比如：禁止宿舍..."
+                              placeholderTextColor={Theme.colors.placeholder}
+                              style={styles.cardTextArea}
+                              multiline
+                            />
+                            <View style={styles.cardMicBadge}>
+                              <FontAwesome5
+                                name="microphone"
+                                size={Theme.sizes.s14}
+                                color={Theme.colors.textWarm}
+                              />
+                            </View>
+                          </View>
+                        </View>
 
                         <Pressable
                           onPress={handleCreateCard}
                           disabled={isSubmitting}
                           style={({ pressed }) => [
-                            styles.submitButton,
-                            isSubmitting && styles.submitButtonDisabled,
-                            pressed && !isSubmitting && styles.submitButtonPressed,
+                            styles.cardSubmitButton,
+                            isSubmitting && styles.cardSubmitButtonDisabled,
+                            pressed && !isSubmitting && styles.cardSubmitButtonPressed,
                           ]}>
-                          <Text style={styles.submitButtonText}>
-                            {isSubmitting ? '发布中...' : '发布卡片'}
+                          <Text style={styles.cardSubmitButtonText}>
+                            {isSubmitting ? '生成中...' : '生成专属宠物信息卡'}
                           </Text>
                         </Pressable>
                       </View>
@@ -967,6 +1101,40 @@ async function postJson<T = unknown>(path: string, payload: Record<string, unkno
   return data;
 }
 
+function normalizeTags(tags: string[]) {
+  const cleaned = tags
+    .filter((tag): tag is string => typeof tag === 'string')
+    .map((tag) => tag.replace(/^#/, '').trim())
+    .filter((tag) => tag.length > 0);
+  return Array.from(new Set(cleaned));
+}
+
+function fillTags(tags: string[]) {
+  const merged = [...tags];
+  for (const fallback of FALLBACK_TAGS) {
+    if (merged.length >= 4) {
+      break;
+    }
+    if (!merged.includes(fallback)) {
+      merged.push(fallback);
+    }
+  }
+  return merged.slice(0, 4);
+}
+
+function resolveSpeciesFromBreed(breed: string | null) {
+  if (!breed) {
+    return null;
+  }
+  if (breedOptions.CAT.includes(breed)) {
+    return 'CAT';
+  }
+  if (breedOptions.DOG.includes(breed)) {
+    return 'DOG';
+  }
+  return null;
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: Theme.layout.full,
@@ -1111,7 +1279,7 @@ const styles = StyleSheet.create({
     fontSize: Theme.typography.size.s14,
   },
   uploadCard: {
-    backgroundColor: Theme.colors.cardTranslucentSoft,
+    backgroundColor: Theme.colors.backgroundWarmAlt,
     borderRadius: Theme.layout.radius,
     borderWidth: Theme.borderWidth.hairline,
     borderColor: Theme.colors.borderWarm,
@@ -1159,8 +1327,8 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.surfaceNeutral,
   },
   uploadTypePillActive: {
-    backgroundColor: Theme.colors.successDeep,
-    borderColor: Theme.colors.successDeep,
+    backgroundColor: Theme.colors.ctaBackground,
+    borderColor: Theme.colors.ctaBorder,
   },
   uploadTypePillPressed: {
     transform: [{ scale: Theme.scale.pressedSoft }],
@@ -1171,10 +1339,217 @@ const styles = StyleSheet.create({
     color: Theme.colors.textEmphasis,
   },
   uploadTypeTextActive: {
-    color: Theme.colors.textInverse,
+    color: Theme.colors.textWarmStrong,
   },
   formFields: {
     gap: Theme.spacing.s10,
+  },
+  cardForm: {
+    gap: Theme.spacing.s16,
+  },
+  cardPhotoUpload: {
+    minHeight: Theme.sizes.s180,
+    borderRadius: Theme.radius.r18,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.ctaBorder,
+    borderStyle: 'dashed',
+    backgroundColor: Theme.colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  cardPhotoUploadPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
+  cardPhotoPlaceholder: {
+    alignItems: 'center',
+    gap: Theme.spacing.s8,
+  },
+  cardPhotoPlaceholderText: {
+    color: Theme.colors.textWarm,
+    fontSize: Theme.typography.size.s14,
+    fontFamily: Theme.fonts.semiBold,
+  },
+  cardPhotoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardPhotoHint: {
+    color: Theme.colors.textSecondary,
+    fontSize: Theme.typography.size.s12,
+    textAlign: 'center',
+  },
+  cardInlineError: {
+    color: Theme.colors.textError,
+    fontSize: Theme.typography.size.s12,
+  },
+  cardField: {
+    gap: Theme.spacing.s,
+  },
+  cardLabel: {
+    color: Theme.colors.textWarmStrong,
+    fontSize: Theme.typography.size.s14,
+    fontFamily: Theme.fonts.semiBold,
+  },
+  cardInput: {
+    minHeight: Theme.sizes.s44,
+    paddingVertical: Theme.spacing.s,
+    paddingHorizontal: Theme.spacing.s16,
+    borderRadius: Theme.radius.r22,
+    backgroundColor: Theme.colors.card,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.ctaBorder,
+    color: Theme.colors.textWarmStrong,
+    fontSize: Theme.typography.size.s14,
+  },
+  cardSelect: {
+    minHeight: Theme.sizes.s44,
+    paddingVertical: Theme.spacing.s,
+    paddingHorizontal: Theme.spacing.s16,
+    borderRadius: Theme.radius.r22,
+    backgroundColor: Theme.colors.card,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.ctaBorder,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cardSelectPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
+  cardSelectValue: {
+    color: Theme.colors.textWarmStrong,
+    fontSize: Theme.typography.size.s14,
+  },
+  cardSelectPlaceholder: {
+    color: Theme.colors.placeholder,
+    fontSize: Theme.typography.size.s14,
+  },
+  cardOptionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Theme.spacing.s8,
+    alignItems: 'center',
+  },
+  cardOptionPill: {
+    paddingVertical: Theme.spacing.s6,
+    paddingHorizontal: Theme.spacing.s14,
+    borderRadius: Theme.radius.pill,
+    backgroundColor: Theme.colors.card,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.ctaBorder,
+  },
+  cardOptionPillActive: {
+    backgroundColor: Theme.colors.ctaBackground,
+    borderColor: Theme.colors.ctaBorder,
+  },
+  cardOptionPillPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
+  cardOptionText: {
+    color: Theme.colors.textWarm,
+    fontSize: Theme.typography.size.s12,
+  },
+  cardOptionTextActive: {
+    fontFamily: Theme.fonts.semiBold,
+  },
+  cardSectionTitle: {
+    color: Theme.colors.textWarmStrong,
+    fontSize: Theme.typography.size.s15,
+    fontFamily: Theme.fonts.semiBold,
+  },
+  cardHelperText: {
+    color: Theme.colors.textSecondary,
+    fontSize: Theme.typography.size.s12,
+    lineHeight: Theme.typography.lineHeight.s16,
+  },
+  cardTextAreaWrap: {
+    borderRadius: Theme.radius.r18,
+    backgroundColor: Theme.colors.card,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.ctaBorder,
+    padding: Theme.spacing.s12,
+  },
+  cardTextArea: {
+    minHeight: Theme.sizes.s90,
+    color: Theme.colors.textWarmStrong,
+    fontSize: Theme.typography.size.s14,
+    textAlignVertical: 'top',
+    padding: Theme.spacing.s0,
+  },
+  cardMicBadge: {
+    position: 'absolute',
+    right: Theme.spacing.s12,
+    bottom: Theme.spacing.s12,
+  },
+  cardTagHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cardTagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Theme.spacing.s8,
+    alignItems: 'center',
+  },
+  cardTagPill: {
+    paddingHorizontal: Theme.spacing.s12,
+    paddingVertical: Theme.spacing.s6,
+    borderRadius: Theme.radius.pill,
+    backgroundColor: Theme.colors.ctaBackground,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.ctaBorder,
+  },
+  cardTagText: {
+    color: Theme.colors.textWarmStrong,
+    fontSize: Theme.typography.size.s12,
+    fontFamily: Theme.fonts.semiBold,
+  },
+  cardTagEmpty: {
+    color: Theme.colors.textSecondary,
+    fontSize: Theme.typography.size.s12,
+  },
+  cardTagButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Theme.spacing.s8,
+    paddingVertical: Theme.spacing.s6,
+    paddingHorizontal: Theme.spacing.s12,
+    borderRadius: Theme.radius.pill,
+    backgroundColor: Theme.colors.decorativePeachAlt,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarmSoft,
+  },
+  cardTagButtonPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
+  cardTagButtonDisabled: {
+    opacity: Theme.opacity.o6,
+  },
+  cardTagButtonText: {
+    color: Theme.colors.textWarmStrong,
+    fontSize: Theme.typography.size.s12,
+    fontFamily: Theme.fonts.semiBold,
+  },
+  cardSubmitButton: {
+    marginTop: Theme.spacing.s4,
+    backgroundColor: Theme.colors.primary,
+    paddingVertical: Theme.spacing.s12,
+    borderRadius: Theme.radius.pill,
+    alignItems: 'center',
+  },
+  cardSubmitButtonPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
+  cardSubmitButtonDisabled: {
+    opacity: Theme.opacity.o7,
+  },
+  cardSubmitButtonText: {
+    color: Theme.colors.textInverse,
+    fontSize: Theme.typography.size.s16,
+    fontFamily: Theme.fonts.semiBold,
   },
   formLabel: {
     fontSize: Theme.typography.size.s12,
