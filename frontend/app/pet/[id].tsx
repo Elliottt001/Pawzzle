@@ -14,7 +14,7 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Theme } from '@/constants/theme';
-import { createThread } from '@/lib/chatApi';
+import { createThread, requestAdoption } from '@/lib/chatApi';
 import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
 
 const API_URL =
@@ -42,6 +42,8 @@ export default function PetDetailsScreen() {
   const [session, setSessionState] = useState<AuthSession | null>(() => getSession());
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [adoptionLoading, setAdoptionLoading] = useState(false);
+  const [adoptionError, setAdoptionError] = useState<string | null>(null);
 
   useEffect(() => {
     const rawId = Array.isArray(id) ? id[0] : id;
@@ -82,6 +84,7 @@ export default function PetDetailsScreen() {
   useEffect(() => {
     if (session?.token) {
       setChatError(null);
+      setAdoptionError(null);
     }
   }, [session?.token]);
 
@@ -100,6 +103,9 @@ export default function PetDetailsScreen() {
       </ThemedView>
     );
   }
+
+  const isOwner = session?.user?.id === pet.ownerId;
+  const canRequestAdoption = pet.status === 'OPEN' && !isOwner;
 
   const handleStartChat = async () => {
     if (!pet.ownerId) {
@@ -126,6 +132,43 @@ export default function PetDetailsScreen() {
       setChatError(/[\u4e00-\u9fff]/.test(message) ? message : '创建私聊失败');
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  const handleRequestAdoption = async () => {
+    if (!pet.ownerId) {
+      return;
+    }
+    if (!session?.token) {
+      setAdoptionError('请先登录后再申请领养。');
+      router.push('/');
+      return;
+    }
+    if (session.user.id === pet.ownerId) {
+      setAdoptionError('不能申请自己发布的宠物。');
+      return;
+    }
+    if (pet.status !== 'OPEN') {
+      setAdoptionError('该宠物已被领养或暂不可领养。');
+      return;
+    }
+    if (adoptionLoading) {
+      return;
+    }
+    setAdoptionLoading(true);
+    setAdoptionError(null);
+    try {
+      const thread = await createThread(
+        { ownerId: pet.ownerId, petId: pet.id },
+        session.token
+      );
+      await requestAdoption(thread.id, session.token);
+      router.push(`/chat/${thread.id}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      setAdoptionError(/[\u4e00-\u9fff]/.test(message) ? message : '申请领养失败');
+    } finally {
+      setAdoptionLoading(false);
     }
   };
 
@@ -180,8 +223,29 @@ export default function PetDetailsScreen() {
                     {chatLoading ? '正在创建...' : '私聊发布者'}
                   </ThemedText>
                 </Pressable>
+                {!isOwner ? (
+                  <Pressable
+                    onPress={handleRequestAdoption}
+                    disabled={adoptionLoading || !canRequestAdoption}
+                    style={({ pressed }) => [
+                      styles.adoptionButton,
+                      pressed && canRequestAdoption && styles.adoptionButtonPressed,
+                      (adoptionLoading || !canRequestAdoption) && styles.adoptionButtonDisabled,
+                    ]}>
+                    <ThemedText style={styles.adoptionButtonText}>
+                      {adoptionLoading
+                        ? '提交中...'
+                        : pet.status === 'OPEN'
+                          ? '申请领养'
+                          : '暂不可领养'}
+                    </ThemedText>
+                  </Pressable>
+                ) : null}
                 {chatError ? (
                   <ThemedText style={styles.chatErrorText}>{chatError}</ThemedText>
+                ) : null}
+                {adoptionError ? (
+                  <ThemedText style={styles.adoptionErrorText}>{adoptionError}</ThemedText>
                 ) : null}
               </>
             ) : (
@@ -317,7 +381,30 @@ const styles = StyleSheet.create({
     fontSize: Theme.typography.size.s13,
     fontWeight: Theme.typography.weight.semiBold,
   },
+  adoptionButton: {
+    alignSelf: 'flex-start',
+    marginTop: Theme.spacing.s8,
+    paddingVertical: Theme.spacing.s8,
+    paddingHorizontal: Theme.spacing.s16,
+    borderRadius: Theme.radius.r20,
+    backgroundColor: Theme.colors.primary,
+  },
+  adoptionButtonPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
+  adoptionButtonDisabled: {
+    opacity: Theme.opacity.o6,
+  },
+  adoptionButtonText: {
+    color: Theme.colors.textInverse,
+    fontSize: Theme.typography.size.s13,
+    fontWeight: Theme.typography.weight.semiBold,
+  },
   chatErrorText: {
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.textError,
+  },
+  adoptionErrorText: {
     fontSize: Theme.typography.size.s12,
     color: Theme.colors.textError,
   },

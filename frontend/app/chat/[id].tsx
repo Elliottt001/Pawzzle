@@ -18,8 +18,11 @@ import { Theme } from '@/constants/theme';
 import {
   fetchThread,
   sendMessage,
+  requestAdoption,
+  acceptAdoption,
   type ChatMessage,
   type ChatThread,
+  type AdoptionInfo,
 } from '@/lib/chatApi';
 import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
 
@@ -44,6 +47,8 @@ export default function ChatDetailScreen() {
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [sending, setSending] = React.useState(false);
   const [sendError, setSendError] = React.useState<string | null>(null);
+  const [adoptionLoading, setAdoptionLoading] = React.useState(false);
+  const [adoptionError, setAdoptionError] = React.useState<string | null>(null);
   const [session, setSessionState] = React.useState<AuthSession | null>(() => getSession());
   const [petSummary, setPetSummary] = React.useState<PetSummary | null>(null);
   const [petLoading, setPetLoading] = React.useState(false);
@@ -163,6 +168,44 @@ export default function ChatDetailScreen() {
       });
   };
 
+  const handleRequestAdoption = () => {
+    if (!threadId || !session?.token || adoptionLoading) {
+      return;
+    }
+    setAdoptionLoading(true);
+    setAdoptionError(null);
+    requestAdoption(threadId, session.token)
+      .then((updated) => {
+        setThread(updated);
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : '申请失败';
+        setAdoptionError(message);
+      })
+      .finally(() => {
+        setAdoptionLoading(false);
+      });
+  };
+
+  const handleAcceptAdoption = () => {
+    if (!threadId || !session?.token || adoptionLoading) {
+      return;
+    }
+    setAdoptionLoading(true);
+    setAdoptionError(null);
+    acceptAdoption(threadId, session.token)
+      .then((updated) => {
+        setThread(updated);
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : '确认失败';
+        setAdoptionError(message);
+      })
+      .finally(() => {
+        setAdoptionLoading(false);
+      });
+  };
+
   if (!session?.token) {
     return (
       <SafeAreaView style={styles.container}>
@@ -205,6 +248,12 @@ export default function ChatDetailScreen() {
       </SafeAreaView>
     );
   }
+
+  const adoption = thread.adoption ?? null;
+  const viewerRole = thread.viewerRole;
+  const canRequestAdoption = viewerRole === 'ADOPTER' && !adoption;
+  const canAcceptAdoption = viewerRole === 'OWNER' && adoption?.status === 'APPLY';
+  const adoptionStatusLabel = adoption ? getAdoptionStageLabel(adoption) : null;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -268,6 +317,58 @@ export default function ChatDetailScreen() {
           </Pressable>
         ) : null}
 
+        {thread.petId && (viewerRole === 'ADOPTER' || adoption) ? (
+          <View style={styles.adoptionCard}>
+            <View style={styles.adoptionHeader}>
+              <Text style={styles.adoptionTitle}>领养申请</Text>
+              {adoptionStatusLabel ? (
+                <View style={styles.adoptionPill}>
+                  <Text style={styles.adoptionPillText}>{adoptionStatusLabel}</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.adoptionDescription}>
+              {canRequestAdoption
+                ? '提交领养申请后，对方可确认并完成领养。'
+                : canAcceptAdoption
+                  ? '对方已发起领养申请，确认后将完成领养。'
+                  : adoption
+                    ? '领养流程已开始，保持沟通并关注后续安排。'
+                    : '当前宠物已绑定聊天。'}
+            </Text>
+            {canRequestAdoption ? (
+              <Pressable
+                onPress={handleRequestAdoption}
+                disabled={adoptionLoading}
+                style={({ pressed }) => [
+                  styles.adoptionButton,
+                  pressed && styles.adoptionButtonPressed,
+                  adoptionLoading && styles.adoptionButtonDisabled,
+                ]}>
+                <Text style={styles.adoptionButtonText}>
+                  {adoptionLoading ? '提交中...' : '发送领养申请'}
+                </Text>
+              </Pressable>
+            ) : null}
+            {canAcceptAdoption ? (
+              <Pressable
+                onPress={handleAcceptAdoption}
+                disabled={adoptionLoading}
+                style={({ pressed }) => [
+                  styles.adoptionButton,
+                  styles.adoptionButtonPrimary,
+                  pressed && styles.adoptionButtonPressed,
+                  adoptionLoading && styles.adoptionButtonDisabled,
+                ]}>
+                <Text style={styles.adoptionButtonTextInverse}>
+                  {adoptionLoading ? '确认中...' : '同意领养申请'}
+                </Text>
+              </Pressable>
+            ) : null}
+            {adoptionError ? <Text style={styles.adoptionError}>{adoptionError}</Text> : null}
+          </View>
+        ) : null}
+
         <ScrollView ref={scrollRef} contentContainerStyle={styles.chatList}>
           {thread.messages.length === 0 ? (
             <View style={styles.welcomeCard}>
@@ -324,6 +425,31 @@ function getStatusLabel(status: PetSummary['status']) {
     ADOPTED: '已领养',
   };
   return labels[status] ?? status;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function getAdoptionStageLabel(adoption: AdoptionInfo) {
+  switch (adoption.status) {
+    case 'APPLY':
+      return '申请中';
+    case 'SCREENING':
+      return '审核中';
+    case 'TRIAL':
+      return formatAdoptionDay(adoption.adoptedAt, '试养');
+    case 'ADOPTED':
+      return formatAdoptionDay(adoption.adoptedAt, '领养');
+    default:
+      return adoption.status;
+  }
+}
+
+function formatAdoptionDay(adoptedAt: number | null | undefined, prefix: string) {
+  if (!adoptedAt) {
+    return `${prefix}中`;
+  }
+  const days = Math.max(1, Math.floor((Date.now() - adoptedAt) / DAY_MS) + 1);
+  return `${prefix}第${days}天`;
 }
 
 function ChatBubble({ message }: { message: ChatMessage }) {
@@ -404,6 +530,75 @@ const styles = StyleSheet.create({
   pinnedDesc: {
     fontSize: Theme.typography.size.s13,
     color: Theme.colors.textEmphasis,
+  },
+  adoptionCard: {
+    marginHorizontal: Theme.spacing.s20,
+    marginBottom: Theme.spacing.s10,
+    padding: Theme.spacing.s16,
+    borderRadius: Theme.radius.r20,
+    backgroundColor: Theme.colors.cardTranslucentSoft,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarm,
+    gap: Theme.spacing.s10,
+  },
+  adoptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  adoptionTitle: {
+    fontSize: Theme.typography.size.s14,
+    fontWeight: Theme.typography.weight.semiBold,
+    color: Theme.colors.text,
+  },
+  adoptionPill: {
+    paddingHorizontal: Theme.spacing.s8,
+    paddingVertical: Theme.spacing.s2,
+    borderRadius: Theme.radius.pill,
+    backgroundColor: Theme.colors.warningSurface,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.warningBorder,
+  },
+  adoptionPillText: {
+    fontSize: Theme.typography.size.s11,
+    color: Theme.colors.warningText,
+    fontWeight: Theme.typography.weight.semiBold,
+  },
+  adoptionDescription: {
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.textSecondary,
+  },
+  adoptionButton: {
+    paddingVertical: Theme.spacing.s10,
+    borderRadius: Theme.radius.r18,
+    backgroundColor: Theme.colors.card,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarmAlt,
+    alignItems: 'center',
+  },
+  adoptionButtonPrimary: {
+    backgroundColor: Theme.colors.successDeep,
+    borderColor: Theme.colors.successDeep,
+  },
+  adoptionButtonPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
+  adoptionButtonDisabled: {
+    opacity: Theme.opacity.o6,
+  },
+  adoptionButtonText: {
+    fontSize: Theme.typography.size.s13,
+    color: Theme.colors.text,
+    fontWeight: Theme.typography.weight.semiBold,
+  },
+  adoptionButtonTextInverse: {
+    fontSize: Theme.typography.size.s13,
+    color: Theme.colors.textInverse,
+    fontWeight: Theme.typography.weight.semiBold,
+  },
+  adoptionError: {
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.textError,
   },
   avatar: {
     width: Theme.sizes.s44,

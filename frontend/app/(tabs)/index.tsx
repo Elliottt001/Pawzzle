@@ -43,7 +43,14 @@ type UserProfile = {
   pets: PetCardData[];
 };
 
-type AuthStep = 'landing' | 'phone' | 'code' | 'nickname';
+type AdoptionSummary = {
+  id: string;
+  pet: PetCardData;
+  status: 'APPLY' | 'SCREENING' | 'TRIAL' | 'ADOPTED';
+  adoptedAt?: number | null;
+};
+
+type AuthStep = 'landing' | 'phone' | 'code' | 'nickname' | 'institution' | 'wechat';
 
 const CODE_LENGTH = 4;
 const CODE_RESEND_SECONDS = 30;
@@ -63,14 +70,19 @@ export default function ProfileScreen() {
   const [userProfile, setUserProfile] = React.useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = React.useState(false);
   const [profileError, setProfileError] = React.useState<string | null>(null);
+  const [adoptions, setAdoptions] = React.useState<AdoptionSummary[]>([]);
+  const [adoptionLoading, setAdoptionLoading] = React.useState(false);
+  const [adoptionError, setAdoptionError] = React.useState<string | null>(null);
   const [authStep, setAuthStep] = React.useState<AuthStep>('landing');
   const [phone, setPhone] = React.useState('');
   const [codeDigits, setCodeDigits] = React.useState<string[]>(() => createEmptyCode());
   const [nickname, setNickname] = React.useState('');
+  const [institutionCode, setInstitutionCode] = React.useState('');
   const [focusedCodeIndex, setFocusedCodeIndex] = React.useState<number | null>(null);
   const [resendCountdown, setResendCountdown] = React.useState(CODE_RESEND_SECONDS);
   const lastCodeAttempt = React.useRef<string | null>(null);
   const codeInputRefs = React.useRef<Array<TextInput | null>>([]);
+  const wechatLoginAttempt = React.useRef(0);
   const [aiStatus, setAiStatus] = React.useState<'idle' | 'generating' | 'success' | 'error'>(
     'idle'
   );
@@ -80,6 +92,7 @@ export default function ProfileScreen() {
   const codeValue = codeDigits.join('');
   const isPhoneReady = phoneDigits.length === 11;
   const canSubmitNickname = nickname.trim().length > 0;
+  const canSubmitInstitutionCode = institutionCode.trim().length > 0;
   const formattedPhone = phoneDigits ? `+86 ${phoneDigits}` : '+86';
 
   React.useEffect(() => {
@@ -128,6 +141,48 @@ export default function ProfileScreen() {
   }, [session?.user?.id]);
 
   React.useEffect(() => {
+    if (!session?.token) {
+      setAdoptions([]);
+      setAdoptionError(null);
+      setAdoptionLoading(false);
+      return;
+    }
+    let active = true;
+    setAdoptionLoading(true);
+    setAdoptionError(null);
+    fetch(`${API_BASE_URL}/api/adoptions`, {
+      headers: {
+        Authorization: `Bearer ${session.token}`,
+      },
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('获取领养信息失败');
+        }
+        return response.json() as Promise<AdoptionSummary[]>;
+      })
+      .then((data) => {
+        if (active) {
+          setAdoptions(Array.isArray(data) ? data : []);
+        }
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : '';
+        if (active) {
+          setAdoptionError(ensureChinese(message, '获取领养信息失败'));
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setAdoptionLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [session?.token]);
+
+  React.useEffect(() => {
     if (session) {
       return;
     }
@@ -135,6 +190,7 @@ export default function ProfileScreen() {
     setPhone('');
     setCodeDigits(createEmptyCode());
     setNickname('');
+    setInstitutionCode('');
     setFocusedCodeIndex(null);
     setResendCountdown(CODE_RESEND_SECONDS);
     lastCodeAttempt.current = null;
@@ -228,6 +284,58 @@ export default function ProfileScreen() {
     setAuthStep('phone');
   };
 
+  const handleWeChatLogin = () => {
+    setStatus(null);
+    setGuestMode(false);
+    setAuthStep('wechat');
+    setLoading(true);
+    const attemptId = Date.now();
+    wechatLoginAttempt.current = attemptId;
+    setTimeout(async () => {
+      if (wechatLoginAttempt.current !== attemptId) {
+        return;
+      }
+      try {
+        const data = await request<AuthSession>('/api/auth/wechat/mock', {});
+        setSession(data);
+        setStatus('已登录。');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        setStatus(ensureChinese(message, '微信登录失败，请稍后再试。'));
+        setAuthStep('landing');
+      } finally {
+        if (wechatLoginAttempt.current === attemptId) {
+          setLoading(false);
+        }
+      }
+    }, 900);
+  };
+
+  const handleInstitutionStart = () => {
+    setStatus(null);
+    setGuestMode(false);
+    setAuthStep('institution');
+  };
+
+  const handleInstitutionLogin = () =>
+    runAuthAction(async () => {
+      const code = institutionCode.trim();
+      if (!code) {
+        throw new Error('请输入机构验证码');
+      }
+      setGuestMode(false);
+      try {
+        const data = await request<AuthSession>('/api/auth/institution', { code });
+        setSession(data);
+        setStatus('已登录。');
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) {
+          throw new Error('机构登录接口未部署，请重启后端。');
+        }
+        throw error;
+      }
+    });
+
   const handleRequestCode = () => {
     if (!isPhoneReady || loading) {
       return;
@@ -246,13 +354,19 @@ export default function ProfileScreen() {
     router.replace('/(tabs)/pets');
   };
 
-  const handleUnavailableAuth = (label: string) => {
-    setStatus(`${label}暂未开放。`);
-  };
-
   const handleBack = () => {
     setStatus(null);
     if (authStep === 'phone') {
+      setAuthStep('landing');
+      return;
+    }
+    if (authStep === 'wechat') {
+      wechatLoginAttempt.current = 0;
+      setLoading(false);
+      setAuthStep('landing');
+      return;
+    }
+    if (authStep === 'institution') {
       setAuthStep('landing');
       return;
     }
@@ -407,7 +521,7 @@ export default function ProfileScreen() {
             <Text style={styles.authButtonText}>验证码登录</Text>
           </Pressable>
           <Pressable
-            onPress={() => handleUnavailableAuth('微信授权登录')}
+            onPress={handleWeChatLogin}
             style={({ pressed }) => [
               styles.authButton,
               styles.authButtonWeChat,
@@ -416,7 +530,7 @@ export default function ProfileScreen() {
             <Text style={styles.authButtonText}>微信授权登录</Text>
           </Pressable>
           <Pressable
-            onPress={() => handleUnavailableAuth('机构授权登录')}
+            onPress={handleInstitutionStart}
             style={({ pressed }) => [
               styles.authButton,
               styles.authButtonInstitution,
@@ -532,12 +646,62 @@ export default function ProfileScreen() {
       );
     }
 
+    if (authStep === 'wechat') {
+      return (
+        <View style={styles.authStack}>
+          <View style={styles.wechatCard}>
+            <FontAwesome5 name="shield-alt" size={Theme.sizes.s28} color={Theme.colors.text} />
+            <Text style={styles.wechatTitle}>微信安全验证</Text>
+            <Text style={styles.wechatHint}>正在验证登录，请稍候...</Text>
+            <ActivityIndicator size="small" color={Theme.colors.textSecondary} />
+          </View>
+          {status ? <Text style={styles.authStatus}>{status}</Text> : null}
+        </View>
+      );
+    }
+
+    if (authStep === 'institution') {
+      return (
+        <View style={styles.authStack}>
+          <Text style={styles.institutionHint}>请输入机构验证码完成登录。</Text>
+          <TextInput
+            value={institutionCode}
+            onChangeText={(value) => {
+              setStatus(null);
+              setInstitutionCode(value);
+            }}
+            placeholder="例如：A92731"
+            placeholderTextColor={Theme.colors.textPlaceholder}
+            style={styles.institutionInput}
+          />
+          <Pressable
+            onPress={handleInstitutionLogin}
+            disabled={!canSubmitInstitutionCode || loading}
+            style={({ pressed }) => [
+              styles.ctaButton,
+              (!canSubmitInstitutionCode || loading) && styles.ctaButtonDisabled,
+              pressed && canSubmitInstitutionCode && !loading && styles.ctaButtonPressed,
+            ]}>
+            <Text
+              style={[
+                styles.ctaButtonText,
+                (!canSubmitInstitutionCode || loading) && styles.ctaButtonTextDisabled,
+              ]}>
+              机构验证码登录
+            </Text>
+          </Pressable>
+          <Text style={styles.institutionTip}></Text>
+          {status ? <Text style={styles.authStatus}>{status}</Text> : null}
+        </View>
+      );
+    }
+
     return (
       <View style={styles.authStack}>
         <TextInput
           value={nickname}
           onChangeText={handleNicknameChange}
-          placeholder="请输入昵称，如：白鲨鱼"
+          placeholder="请输入昵称，如：白鲤鱼"
           placeholderTextColor={Theme.colors.textPlaceholder}
           style={styles.nicknameInput}
         />
@@ -622,6 +786,35 @@ export default function ProfileScreen() {
 
               <View style={styles.sectionCard}>
                 <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.sectionTitle}>我的领养</Text>
+                  <Text style={styles.sectionSubtitle}>{adoptions.length} 只</Text>
+                </View>
+                {adoptionLoading ? <ActivityIndicator size="small" /> : null}
+                {adoptionError ? <Text style={styles.errorText}>{adoptionError}</Text> : null}
+                {!adoptionLoading && !adoptionError && adoptions.length ? (
+                  <View style={styles.adoptionList}>
+                    {adoptions.map((adoption) => (
+                      <View key={adoption.id} style={styles.adoptionItem}>
+                        <PetCard pet={adoption.pet} />
+                        <View style={styles.adoptionMetaRow}>
+                          <Text style={styles.adoptionMetaLabel}>当前阶段</Text>
+                          <View style={styles.adoptionMetaPill}>
+                            <Text style={styles.adoptionMetaText}>
+                              {getAdoptionStageLabel(adoption)}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+                {!adoptionLoading && !adoptionError && !adoptions.length ? (
+                  <Text style={styles.emptyText}>暂无领养记录。</Text>
+                ) : null}
+              </View>
+
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionHeaderRow}>
                   <Text style={styles.sectionTitle}>我的宠物卡片</Text>
                   <Text style={styles.sectionSubtitle}>
                     {userProfile?.pets?.length ?? 0} 张
@@ -681,6 +874,16 @@ export default function ProfileScreen() {
                 </Pressable>
               </View>
             </ScrollView>
+            {resolvedUserType === 'INSTITUTION' ? (
+              <Pressable
+                onPress={() => router.push('/pet/rehome/upload')}
+                style={({ pressed }) => [
+                  styles.institutionFab,
+                  pressed && styles.institutionFabPressed,
+                ]}>
+                <FontAwesome5 name="plus" size={Theme.sizes.s24} color={Theme.colors.textInverse} />
+              </Pressable>
+            ) : null}
           </>
         ) : (
           <ScrollView
@@ -708,6 +911,31 @@ function FormSection({ title, children }: { title: string; children: React.React
       <View style={styles.formFields}>{children}</View>
     </View>
   );
+}
+
+const ADOPTION_DAY_MS = 24 * 60 * 60 * 1000;
+
+function getAdoptionStageLabel(adoption: AdoptionSummary) {
+  switch (adoption.status) {
+    case 'APPLY':
+      return '申请中';
+    case 'SCREENING':
+      return '审核中';
+    case 'TRIAL':
+      return formatAdoptionDay(adoption.adoptedAt, '试养');
+    case 'ADOPTED':
+      return formatAdoptionDay(adoption.adoptedAt, '领养');
+    default:
+      return adoption.status;
+  }
+}
+
+function formatAdoptionDay(adoptedAt: number | null | undefined, prefix: string) {
+  if (!adoptedAt) {
+    return `${prefix}中`;
+  }
+  const days = Math.max(1, Math.floor((Date.now() - adoptedAt) / ADOPTION_DAY_MS) + 1);
+  return `${prefix}第${days}天`;
 }
 
 class ApiError extends Error {
@@ -1057,6 +1285,45 @@ const styles = StyleSheet.create({
     fontSize: Theme.typography.size.s14,
     color: Theme.colors.textWarmStrong,
   },
+  wechatCard: {
+    width: Theme.percent.p80,
+    borderRadius: Theme.radius.r18,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarmStrong,
+    backgroundColor: Theme.colors.cardTranslucentSoft,
+    paddingVertical: Theme.spacing.s20,
+    paddingHorizontal: Theme.spacing.s16,
+    alignItems: 'center',
+    gap: Theme.spacing.s10,
+  },
+  wechatTitle: {
+    fontSize: Theme.typography.size.s16,
+    fontWeight: Theme.typography.weight.semiBold,
+    color: Theme.colors.text,
+  },
+  wechatHint: {
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.textSecondary,
+  },
+  institutionHint: {
+    fontSize: Theme.typography.size.s14,
+    color: Theme.colors.textSecondary,
+  },
+  institutionInput: {
+    width: Theme.percent.p80,
+    minHeight: Theme.sizes.s50,
+    borderRadius: Theme.radius.pill,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarmStrong,
+    backgroundColor: Theme.colors.overlayStrong,
+    paddingHorizontal: Theme.spacing.s16,
+    fontSize: Theme.typography.size.s14,
+    color: Theme.colors.textWarmStrong,
+  },
+  institutionTip: {
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.textSecondary,
+  },
   profileCard: {
     marginTop: Theme.spacing.s8,
     padding: Theme.spacing.s20,
@@ -1157,6 +1424,34 @@ const styles = StyleSheet.create({
     fontSize: Theme.typography.size.s12,
     color: Theme.colors.textSecondary,
   },
+  adoptionList: {
+    gap: Theme.spacing.s16,
+  },
+  adoptionItem: {
+    gap: Theme.spacing.s10,
+  },
+  adoptionMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.s8,
+  },
+  adoptionMetaLabel: {
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.textSecondary,
+  },
+  adoptionMetaPill: {
+    paddingHorizontal: Theme.spacing.s10,
+    paddingVertical: Theme.spacing.s2,
+    borderRadius: Theme.radius.pill,
+    backgroundColor: Theme.colors.surfaceWarm,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarmSoft,
+  },
+  adoptionMetaText: {
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.textWarm,
+    fontWeight: Theme.typography.weight.semiBold,
+  },
   petsList: {
     gap: Theme.spacing.s12,
   },
@@ -1203,6 +1498,23 @@ const styles = StyleSheet.create({
     color: Theme.colors.textInverse,
     fontSize: Theme.typography.size.s14,
     fontWeight: Theme.typography.weight.semiBold,
+  },
+  institutionFab: {
+    position: 'absolute',
+    right: Theme.spacing.s20,
+    bottom: Theme.sizes.s120,
+    width: Theme.sizes.s56,
+    height: Theme.sizes.s56,
+    borderRadius: Theme.sizes.s56 / 2,
+    backgroundColor: Theme.colors.successDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.successDeep,
+    ...Theme.shadows.card,
+  },
+  institutionFabPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
   },
   aiMessageError: {
     color: Theme.colors.textError,

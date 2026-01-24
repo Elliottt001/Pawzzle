@@ -4,11 +4,14 @@ import com.pawzzle.domain.chat.ChatMessage;
 import com.pawzzle.domain.chat.ChatMessageRepository;
 import com.pawzzle.domain.chat.ChatThread;
 import com.pawzzle.domain.chat.ChatThreadRepository;
+import com.pawzzle.domain.order.AdoptionProcess;
+import com.pawzzle.domain.order.AdoptionProcessRepository;
 import com.pawzzle.domain.pet.Pet;
 import com.pawzzle.domain.pet.PetRepository;
 import com.pawzzle.domain.user.SessionService;
 import com.pawzzle.domain.user.User;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -30,6 +33,7 @@ public class DirectMessageController {
     private final PetRepository petRepository;
     private final ChatThreadRepository chatThreadRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final AdoptionProcessRepository adoptionProcessRepository;
 
     @GetMapping
     public List<ChatThreadResponse> listThreads(
@@ -126,6 +130,109 @@ public class DirectMessageController {
         return toMessageResponse(saved, currentUser);
     }
 
+    @PostMapping("/{id}/adoption")
+    @Transactional
+    public ChatThreadResponse requestAdoption(
+        @PathVariable Long id,
+        @RequestHeader(value = "Authorization", required = false) String authorization
+    ) {
+        User currentUser = sessionService.requireUser(authorization, null);
+        ChatThread thread = chatThreadRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Thread not found"));
+        ensureParticipant(thread, currentUser);
+        if (!currentUser.getId().equals(thread.getUser().getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only adopter can request adoption");
+        }
+        Pet pet = thread.getPet();
+        if (pet == null || pet.getId() == null) {
+            throw badRequest("Pet is required");
+        }
+
+        AdoptionProcess existing = adoptionProcessRepository.findByUserIdAndPetId(
+            thread.getUser().getId(),
+            pet.getId()
+        ).orElse(null);
+        if (existing != null) {
+            return toThreadResponse(thread, currentUser);
+        }
+        if (pet.getStatus() != Pet.Status.OPEN) {
+            throw badRequest("Pet is not open for adoption");
+        }
+        boolean hasActive = adoptionProcessRepository.existsByPetIdAndStatusIn(
+            pet.getId(),
+            List.of(
+                AdoptionProcess.Status.APPLY,
+                AdoptionProcess.Status.SCREENING,
+                AdoptionProcess.Status.TRIAL,
+                AdoptionProcess.Status.ADOPTED
+            )
+        );
+        if (hasActive) {
+            throw badRequest("Pet already has an adoption process");
+        }
+
+        adoptionProcessRepository.save(AdoptionProcess.builder()
+            .user(thread.getUser())
+            .pet(pet)
+            .status(AdoptionProcess.Status.APPLY)
+            .build());
+        chatMessageRepository.save(ChatMessage.builder()
+            .thread(thread)
+            .sender(currentUser)
+            .text("我已提交领养申请，请确认。")
+            .build());
+        thread.setUpdatedAt(Instant.now());
+        chatThreadRepository.save(thread);
+        return toThreadResponse(thread, currentUser);
+    }
+
+    @PostMapping("/{id}/adoption/accept")
+    @Transactional
+    public ChatThreadResponse acceptAdoption(
+        @PathVariable Long id,
+        @RequestHeader(value = "Authorization", required = false) String authorization
+    ) {
+        User currentUser = sessionService.requireUser(authorization, null);
+        ChatThread thread = chatThreadRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Thread not found"));
+        ensureParticipant(thread, currentUser);
+        if (!currentUser.getId().equals(thread.getOwner().getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only owner can accept adoption");
+        }
+        Pet pet = thread.getPet();
+        if (pet == null || pet.getId() == null) {
+            throw badRequest("Pet is required");
+        }
+        AdoptionProcess process = adoptionProcessRepository.findByUserIdAndPetId(
+            thread.getUser().getId(),
+            pet.getId()
+        ).orElseThrow(() -> badRequest("Adoption request not found"));
+        if (process.getStatus() == AdoptionProcess.Status.ADOPTED) {
+            return toThreadResponse(thread, currentUser);
+        }
+        if (process.getStatus() != AdoptionProcess.Status.APPLY) {
+            throw badRequest("Adoption request is not pending");
+        }
+
+        Instant now = Instant.now();
+        process.setStatus(AdoptionProcess.Status.ADOPTED);
+        process.setAdoptionDate(LocalDate.now());
+        process.setAdoptedAt(now);
+        adoptionProcessRepository.save(process);
+
+        pet.setStatus(Pet.Status.ADOPTED);
+        petRepository.save(pet);
+
+        chatMessageRepository.save(ChatMessage.builder()
+            .thread(thread)
+            .sender(currentUser)
+            .text("已同意领养申请，恭喜成为新主人！")
+            .build());
+        thread.setUpdatedAt(now);
+        chatThreadRepository.save(thread);
+        return toThreadResponse(thread, currentUser);
+    }
+
     private ChatThread findExistingThread(User currentUser, User owner, Pet pet) {
         return chatThreadRepository.findByUserIdAndOwnerIdAndPetId(
             currentUser.getId(),
@@ -151,6 +258,14 @@ public class DirectMessageController {
         Pet pet = thread.getPet();
         String petId = pet == null || pet.getId() == null ? null : pet.getId().toString();
         String petName = pet == null ? null : pet.getName();
+        String viewerRole = currentUser.getId().equals(thread.getOwner().getId()) ? "OWNER" : "ADOPTER";
+        AdoptionSummary adoption = null;
+        if (pet != null && pet.getId() != null) {
+            adoption = adoptionProcessRepository.findByUserIdAndPetId(
+                thread.getUser().getId(),
+                pet.getId()
+            ).map(this::toAdoptionSummary).orElse(null);
+        }
         List<ChatMessageResponse> messages = chatMessageRepository
             .findByThreadIdOrderByCreatedAtAscIdAsc(thread.getId())
             .stream()
@@ -162,7 +277,9 @@ public class DirectMessageController {
             otherUser.getName(),
             petId,
             petName,
-            messages
+            messages,
+            viewerRole,
+            adoption
         );
     }
 
@@ -183,6 +300,15 @@ public class DirectMessageController {
             sender,
             message.getText(),
             createdAt
+        );
+    }
+
+    private AdoptionSummary toAdoptionSummary(AdoptionProcess process) {
+        Long adoptedAt = process.getAdoptedAt() == null ? null : process.getAdoptedAt().toEpochMilli();
+        return new AdoptionSummary(
+            process.getId().toString(),
+            process.getStatus().name(),
+            adoptedAt
         );
     }
 
@@ -210,7 +336,16 @@ public class DirectMessageController {
         String ownerName,
         String petId,
         String petName,
-        List<ChatMessageResponse> messages
+        List<ChatMessageResponse> messages,
+        String viewerRole,
+        AdoptionSummary adoption
+    ) {
+    }
+
+    public record AdoptionSummary(
+        String id,
+        String status,
+        Long adoptedAt
     ) {
     }
 

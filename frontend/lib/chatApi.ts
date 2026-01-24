@@ -7,6 +7,12 @@ export type ChatMessage = {
   createdAt: number;
 };
 
+export type AdoptionInfo = {
+  id: string;
+  status: 'APPLY' | 'SCREENING' | 'TRIAL' | 'ADOPTED';
+  adoptedAt?: number | null;
+};
+
 export type ChatThread = {
   id: string;
   ownerId: number;
@@ -14,6 +20,8 @@ export type ChatThread = {
   petId?: string | null;
   petName?: string | null;
   messages: ChatMessage[];
+  viewerRole?: 'OWNER' | 'ADOPTER';
+  adoption?: AdoptionInfo | null;
 };
 
 const API_BASE_URL =
@@ -49,6 +57,20 @@ export async function sendMessage(threadId: string, text: string, token: string)
     method: 'POST',
     token,
     body: { text },
+  });
+}
+
+export async function requestAdoption(threadId: string, token: string) {
+  return request<ChatThread>(`/api/threads/${threadId}/adoption`, {
+    method: 'POST',
+    token,
+  });
+}
+
+export async function acceptAdoption(threadId: string, token: string) {
+  return request<ChatThread>(`/api/threads/${threadId}/adoption/accept`, {
+    method: 'POST',
+    token,
   });
 }
 

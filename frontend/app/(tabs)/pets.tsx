@@ -15,27 +15,50 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
 import { Theme } from '@/constants/theme';
+import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 const HERO_IMAGE_URL = `https://placedog.net/${Theme.sizes.s300}/${Theme.sizes.s200}?id=120`;
 
+type UserProfileResponse = {
+  id: number;
+  name: string;
+  userType: 'INDIVIDUAL' | 'INSTITUTION' | null;
+  pets: PetCardData[];
+};
+
 export default function PetsScreen() {
+  const [session, setSessionState] = React.useState<AuthSession | null>(() => getSession());
   const [pets, setPets] = React.useState<PetCardData[]>([]);
   const [search, setSearch] = React.useState('');
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    const unsubscribe = subscribeSession((nextSession) => {
+      setSessionState(nextSession);
+    });
+    return unsubscribe;
+  }, []);
+
+  React.useEffect(() => {
     let active = true;
+    setLoading(true);
+    setError(null);
     async function loadPets() {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/pets`);
+        const isInstitution = session?.user?.userType === 'INSTITUTION' && session?.user?.id;
+        const response = isInstitution
+          ? await fetch(`${API_BASE_URL}/api/users/${session.user.id}`)
+          : await fetch(`${API_BASE_URL}/api/pets`);
         if (!response.ok) {
           throw new Error('获取宠物卡片失败');
         }
-        const data = (await response.json()) as PetCardData[];
+        const data = isInstitution
+          ? ((await response.json()) as UserProfileResponse).pets
+          : ((await response.json()) as PetCardData[]);
         if (active) {
           setPets(Array.isArray(data) ? data : []);
         }
@@ -54,7 +77,7 @@ export default function PetsScreen() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [session?.user?.id, session?.user?.userType]);
 
   const query = search.trim().toLowerCase();
   const filteredPets = query

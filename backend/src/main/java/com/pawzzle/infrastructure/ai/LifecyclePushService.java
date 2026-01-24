@@ -2,7 +2,9 @@ package com.pawzzle.infrastructure.ai;
 
 import com.pawzzle.domain.order.AdoptionProcess;
 import com.pawzzle.domain.order.AdoptionProcessRepository;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
@@ -32,7 +34,7 @@ public class LifecyclePushService {
         LocalDate today = LocalDate.now();
 
         for (AdoptionProcess process : processes) {
-            LocalDate adoptionDate = process.getAdoptionDate();
+            LocalDate adoptionDate = resolveAdoptionDate(process);
             if (adoptionDate == null) {
                 continue;
             }
@@ -58,6 +60,14 @@ public class LifecyclePushService {
             process.getPet().getSpecies(),
             process.getUser().getName()
         );
+    }
+
+    private LocalDate resolveAdoptionDate(AdoptionProcess process) {
+        Instant adoptedAt = process.getAdoptedAt();
+        if (adoptedAt != null) {
+            return adoptedAt.atZone(ZoneId.systemDefault()).toLocalDate();
+        }
+        return process.getAdoptionDate();
     }
 
     private String callChat(String userPrompt) {

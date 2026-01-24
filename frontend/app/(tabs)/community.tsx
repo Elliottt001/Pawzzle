@@ -1,5 +1,6 @@
 import * as React from 'react';
 import {
+  ActivityIndicator,
   Platform,
   Pressable,
   SafeAreaView,
@@ -49,6 +50,19 @@ type TabId = (typeof TABS)[number]['id'];
 type UploadType = (typeof uploadTypes)[number]['id'];
 type SpeciesId = (typeof speciesOptions)[number]['id'];
 
+type ContentItem = {
+  id: string;
+  title: string;
+  subtitle: string;
+  tag?: string | null;
+  tone?: string | null;
+};
+
+type CommunityContentResponse = {
+  updates: ContentItem[];
+  guides: ContentItem[];
+};
+
 export default function CommunityScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = React.useState<TabId>('recommend');
@@ -56,6 +70,10 @@ export default function CommunityScreen() {
   const [hasResult, setHasResult] = React.useState(false);
   const [pushStatus, setPushStatus] = React.useState<'idle' | 'sent'>('idle');
   const [session, setSessionState] = React.useState<AuthSession | null>(() => getSession());
+  const [updates, setUpdates] = React.useState<ContentItem[]>([]);
+  const [guides, setGuides] = React.useState<ContentItem[]>([]);
+  const [contentLoading, setContentLoading] = React.useState(false);
+  const [contentError, setContentError] = React.useState<string | null>(null);
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [uploadType, setUploadType] = React.useState<UploadType>('card');
   const [cardName, setCardName] = React.useState('');
@@ -111,6 +129,42 @@ export default function CommunityScreen() {
     setSubmitStatus('idle');
     setSubmitMessage(null);
   }, [uploadType]);
+
+  const loadContent = React.useCallback(async (isActive?: () => boolean) => {
+    const shouldUpdate = () => (isActive ? isActive() : true);
+    if (shouldUpdate()) {
+      setContentLoading(true);
+      setContentError(null);
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/home`);
+      if (!response.ok) {
+        throw new Error('获取社区内容失败');
+      }
+      const data = (await response.json()) as CommunityContentResponse;
+      if (shouldUpdate()) {
+        setUpdates(Array.isArray(data?.updates) ? data.updates : []);
+        setGuides(Array.isArray(data?.guides) ? data.guides : []);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (shouldUpdate()) {
+        setContentError(ensureChinese(message, '获取社区内容失败'));
+      }
+    } finally {
+      if (shouldUpdate()) {
+        setContentLoading(false);
+      }
+    }
+  }, []);
+
+  React.useEffect(() => {
+    let active = true;
+    void loadContent(() => active);
+    return () => {
+      active = false;
+    };
+  }, [loadContent]);
 
   const handleSnap = () => {
     if (isScanning) {
@@ -254,6 +308,7 @@ export default function CommunityScreen() {
       setContentTitle('');
       setContentSubtitle('');
       setContentTag('');
+      void loadContent();
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       setSubmitStatus('error');
@@ -290,20 +345,52 @@ export default function CommunityScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         {activeTab === 'recommend' ? (
-          <View style={styles.placeholderCard}>
-            <Text style={styles.placeholderTitle}>推荐内容</Text>
-            <Text style={styles.placeholderText}>
-              精选内容和本地动态将在这里呈现。
-            </Text>
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>最新动态</Text>
+              <Text style={styles.sectionSubtitle}>领养社区正在发生的事</Text>
+            </View>
+            {contentLoading ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" color={Theme.colors.textSecondary} />
+                <Text style={styles.loadingText}>正在加载动态...</Text>
+              </View>
+            ) : contentError ? (
+              <Text style={styles.errorText}>{contentError}</Text>
+            ) : updates.length ? (
+              <View style={styles.contentList}>
+                {updates.map((item) => (
+                  <ContentCard key={item.id ?? item.title} item={item} fallbackTag="动态" />
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.emptyText}>暂无动态。</Text>
+            )}
           </View>
         ) : null}
 
         {activeTab === 'knowledge' ? (
-          <View style={styles.placeholderCard}>
-            <Text style={styles.placeholderTitle}>知识库</Text>
-            <Text style={styles.placeholderText}>
-              养宠指南与照护技巧将在这里呈现。
-            </Text>
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>科普精选</Text>
+              <Text style={styles.sectionSubtitle}>实用的养宠知识与技巧</Text>
+            </View>
+            {contentLoading ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" color={Theme.colors.textSecondary} />
+                <Text style={styles.loadingText}>正在加载科普...</Text>
+              </View>
+            ) : contentError ? (
+              <Text style={styles.errorText}>{contentError}</Text>
+            ) : guides.length ? (
+              <View style={styles.contentList}>
+                {guides.map((item) => (
+                  <ContentCard key={item.id ?? item.title} item={item} fallbackTag="科普" />
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.emptyText}>暂无科普信息。</Text>
+            )}
           </View>
         ) : null}
 
@@ -610,6 +697,27 @@ function FieldLabel({ text }: { text: string }) {
   return <Text style={styles.formLabel}>{text}</Text>;
 }
 
+function ContentCard({
+  item,
+  fallbackTag,
+}: {
+  item: ContentItem;
+  fallbackTag: string;
+}) {
+  const tone = item.tone || Theme.colors.surfaceNeutral;
+  const tagLabel = item.tag?.trim() ? item.tag : fallbackTag;
+
+  return (
+    <View style={styles.contentCard}>
+      <View style={[styles.contentTag, { backgroundColor: tone }]}>
+        <Text style={styles.contentTagText}>{tagLabel}</Text>
+      </View>
+      <Text style={styles.contentTitle}>{item.title}</Text>
+      <Text style={styles.contentSubtitle}>{item.subtitle}</Text>
+    </View>
+  );
+}
+
 async function postJson<T = unknown>(path: string, payload: Record<string, unknown>, token?: string) {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -705,6 +813,74 @@ const styles = StyleSheet.create({
     paddingTop: Theme.spacing.l,
     paddingBottom: Theme.spacing.l,
     gap: Theme.spacing.l,
+  },
+  sectionCard: {
+    backgroundColor: Theme.colors.cardTranslucentSoft,
+    borderRadius: Theme.layout.radius,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarm,
+    padding: Theme.spacing.m,
+    gap: Theme.spacing.m,
+  },
+  sectionHeader: {
+    gap: Theme.spacing.s2,
+  },
+  sectionTitle: {
+    color: Theme.colors.text,
+    fontSize: Theme.typography.size.s16,
+    fontWeight: Theme.typography.weight.semiBold,
+  },
+  sectionSubtitle: {
+    color: Theme.colors.textSecondary,
+    fontSize: Theme.typography.size.s12,
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.s8,
+  },
+  loadingText: {
+    color: Theme.colors.textSecondary,
+    fontSize: Theme.typography.size.s12,
+  },
+  emptyText: {
+    color: Theme.colors.textSecondary,
+    fontSize: Theme.typography.size.s12,
+  },
+  errorText: {
+    color: Theme.colors.textError,
+    fontSize: Theme.typography.size.s12,
+  },
+  contentList: {
+    gap: Theme.spacing.s10,
+  },
+  contentCard: {
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.r14,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarm,
+    padding: Theme.spacing.s12,
+    gap: Theme.spacing.s6,
+  },
+  contentTag: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: Theme.spacing.s8,
+    paddingVertical: Theme.spacing.s2,
+    borderRadius: Theme.radius.pill,
+  },
+  contentTagText: {
+    fontSize: Theme.typography.size.s11,
+    color: Theme.colors.text,
+    fontWeight: Theme.typography.weight.semiBold,
+  },
+  contentTitle: {
+    fontSize: Theme.typography.size.s15,
+    color: Theme.colors.text,
+    fontWeight: Theme.typography.weight.semiBold,
+  },
+  contentSubtitle: {
+    fontSize: Theme.typography.size.s13,
+    color: Theme.colors.textSecondary,
   },
   placeholderCard: {
     backgroundColor: Theme.colors.cardTranslucentSoft,
