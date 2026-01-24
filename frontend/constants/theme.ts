@@ -76,6 +76,10 @@ const Palette = {
   white94: 'rgba(255, 255, 255, 0.94)',
   white95: 'rgba(255, 255, 255, 0.95)',
   neutralAlpha: 'rgba(150, 150, 150, 0.1)',
+  tabBarBackground: '#FFFEF9',
+  tabBarHighlight: 'rgba(254, 255, 212, 0.95)',
+  tabBarCenterBase: '#FFFEF9',
+  tabBarShadow: '#F4C17F',
   transparent: 'transparent',
 };
 
@@ -118,12 +122,15 @@ const Sizes = {
   s48: 48,
   s50: 50,
   s56: 56,
+  s58_6: 58.63,
   s60: 60,
+  s66: 66,
   s68: 68,
   s70: 70,
   s80: 80,
   s90: 90,
   s96: 96,
+  s98: 98,
   s180: 180,
   s200: 200,
   s110: 110,
@@ -196,6 +203,8 @@ const FontFamilies = {
   heavy: 'PingFang-Heavy',
   light: 'PingFang-Light',
   extraLight: 'PingFang-ExtraLight',
+  brand: 'ZhenyanGB2-Bold',
+  matchScore: 'REEJI-JinGang-ExtraBold',
 };
 
 const Opacity = {
@@ -284,6 +293,13 @@ const Shadows = {
     shadowOffset: { width: 0, height: Spacing.s6 },
     shadowRadius: Radius.r12,
     elevation: 2,
+  },
+  tabBar: {
+    shadowColor: Palette.tabBarShadow,
+    shadowOpacity: 0.27,
+    shadowOffset: { width: 1, height: -7 },
+    shadowRadius: 24.2,
+    elevation: 12,
   },
   button: {
     shadowColor: Palette.shadow,
@@ -381,6 +397,10 @@ export const Theme = {
     transparent: Palette.transparent,
     tabBarActive: Palette.orange500,
     tabBarInactive: Palette.gray500,
+    tabBarBackground: Palette.tabBarBackground,
+    tabBarHighlight: Palette.tabBarHighlight,
+    tabBarCenterBase: Palette.tabBarCenterBase,
+    tabBarShadow: Palette.tabBarShadow,
   },
   spacing: Spacing,
   sizes: Sizes,

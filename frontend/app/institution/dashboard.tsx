@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
   },
   matchScore: {
     fontSize: Theme.typography.size.s16,
-    fontFamily: Theme.fonts.heavy,
+    fontFamily: Theme.fonts.matchScore,
     color: Theme.colors.primary,
   },
   cardBody: {

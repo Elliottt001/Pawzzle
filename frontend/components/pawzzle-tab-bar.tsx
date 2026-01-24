@@ -4,8 +4,14 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/base-text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Theme } from '@/constants/theme';
+import MiddleLogo from '@/assets/images/middle.svg';
 
 const CENTER_ROUTE_NAME = 'agent';
+const TAB_BAR_HEIGHT = Theme.sizes.s98;
+const CENTER_BUMP_SIZE = Theme.sizes.s110;
+const CENTER_BUMP_OFFSET = -Theme.sizes.s48;
+const CENTER_BUTTON_SIZE = Theme.sizes.s80;
+const CENTER_LOGO_SIZE = Theme.sizes.s96;
 
 export function PawzzleTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -45,24 +51,14 @@ export function PawzzleTabBar({ state, descriptors, navigation }: BottomTabBarPr
             if (isCenter) {
               return (
                 <View key={route.key} style={styles.centerSlot}>
-                  <View style={styles.centerNotch} />
-                  <View style={styles.centerGlow} />
+                  <View style={styles.centerBump} />
                   <Pressable
                     onPress={onPress}
                     style={({ pressed }) => [
                       styles.centerButton,
                       pressed && styles.centerButtonPressed,
-                      isFocused && styles.centerButtonActive,
                     ]}>
-                    <View style={styles.centerInner}>
-                      {options.tabBarIcon
-                        ? options.tabBarIcon({
-                            color: Theme.colors.textInverse,
-                            size: Theme.sizes.s30,
-                            focused: isFocused,
-                          })
-                        : null}
-                    </View>
+                    <MiddleLogo width={CENTER_LOGO_SIZE} height={CENTER_LOGO_SIZE} />
                   </Pressable>
                 </View>
               );
@@ -105,31 +101,29 @@ const styles = StyleSheet.create({
   },
   bar: {
     position: 'relative',
-    backgroundColor: Theme.colors.backgroundWarmAlt,
-    borderTopLeftRadius: Theme.radius.r24,
-    borderTopRightRadius: Theme.radius.r24,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmStrong,
-    paddingTop: Theme.spacing.s16,
-    paddingHorizontal: Theme.spacing.s16,
-    paddingBottom: Theme.spacing.s10,
+    height: TAB_BAR_HEIGHT,
+    backgroundColor: Theme.colors.tabBarBackground,
+    borderRadius: Theme.radius.r18,
+    marginHorizontal: -Theme.spacing.s18,
+    paddingVertical: Theme.spacing.s12,
+    paddingHorizontal: Theme.spacing.s20,
     overflow: 'visible',
-    ...Theme.shadows.cardSoftLarge,
+    ...Theme.shadows.tabBar,
   },
   barHighlight: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    height: Theme.spacing.s6,
-    backgroundColor: Theme.colors.card,
-    opacity: Theme.opacity.o85,
-    borderTopLeftRadius: Theme.radius.r24,
-    borderTopRightRadius: Theme.radius.r24,
+    left: -Theme.spacing.s20,
+    right: -Theme.spacing.s20,
+    bottom: 0,
+    height: Theme.spacing.s10,
+    backgroundColor: Theme.colors.tabBarHighlight,
+    borderBottomLeftRadius: Theme.radius.r18,
+    borderBottomRightRadius: Theme.radius.r18,
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    flex: Theme.layout.full,
+    alignItems: 'center',
     justifyContent: 'space-between',
   },
   tabItem: {
@@ -137,7 +131,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Theme.spacing.s4,
-    paddingBottom: Theme.spacing.s10,
   },
   tabItemPressed: {
     transform: [{ scale: Theme.scale.pressedSoft }],
@@ -154,56 +147,28 @@ const styles = StyleSheet.create({
   centerSlot: {
     flex: Theme.layout.full,
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     position: 'relative',
   },
-  centerNotch: {
+  centerBump: {
     position: 'absolute',
-    width: Theme.sizes.s96,
-    height: Theme.sizes.s96,
-    borderRadius: Theme.sizes.s96 / 2,
-    top: -Theme.sizes.s48,
-    backgroundColor: Theme.colors.backgroundWarmAlt,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmStrong,
-    ...Theme.shadows.elevatedSoft,
-  },
-  centerGlow: {
-    position: 'absolute',
-    width: Theme.sizes.s100,
-    height: Theme.sizes.s100,
-    borderRadius: Theme.sizes.s100 / 2,
-    top: -Theme.sizes.s50,
-    backgroundColor: Theme.colors.ctaBackground,
-    opacity: Theme.opacity.o6,
-    ...Theme.shadows.button,
-    shadowColor: Theme.colors.ctaBackground,
+    width: CENTER_BUMP_SIZE,
+    height: CENTER_BUMP_SIZE,
+    borderRadius: CENTER_BUMP_SIZE / 2,
+    top: CENTER_BUMP_OFFSET,
+    backgroundColor: Theme.colors.tabBarCenterBase,
   },
   centerButton: {
-    width: Theme.sizes.s80,
-    height: Theme.sizes.s80,
-    borderRadius: Theme.sizes.s80 / 2,
-    backgroundColor: Theme.colors.ctaBackground,
+    width: CENTER_BUTTON_SIZE,
+    height: CENTER_BUTTON_SIZE,
+    borderRadius: CENTER_BUTTON_SIZE / 2,
+    backgroundColor: Theme.colors.transparent,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -Theme.sizes.s40,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.ctaBorder,
-    ...Theme.shadows.cardLarge,
-  },
-  centerButtonActive: {
-    borderColor: Theme.colors.primary,
+    overflow: 'visible',
+    marginTop: -Theme.spacing.s28,
   },
   centerButtonPressed: {
     transform: [{ scale: Theme.scale.pressedSoft }],
-  },
-  centerInner: {
-    width: Theme.sizes.s68,
-    height: Theme.sizes.s68,
-    borderRadius: Theme.sizes.s68 / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Theme.colors.primary,
-    ...Theme.shadows.button,
   },
 });

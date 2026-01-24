@@ -105,7 +105,9 @@ export function PetCard({ pet, confidence }: PetCardProps) {
               ) : null}
               {confidenceLabel ? (
                 <View style={[styles.tagPill, styles.tagConfidence]}>
-                  <Text style={styles.tagText}>{confidenceLabel}</Text>
+                  <Text style={[styles.tagText, styles.tagTextConfidence]}>
+                    {confidenceLabel}
+                  </Text>
                 </View>
               ) : null}
             </View>
@@ -221,6 +223,9 @@ const styles = StyleSheet.create({
     fontSize: Theme.typography.size.s12,
     color: Theme.colors.textWarm,
     fontFamily: Theme.fonts.medium,
+  },
+  tagTextConfidence: {
+    fontFamily: Theme.fonts.matchScore,
   },
   metaRow: {
     flexDirection: 'row',

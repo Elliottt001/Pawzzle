@@ -1099,7 +1099,7 @@ const styles = StyleSheet.create({
   },
   brandText: {
     fontSize: Theme.typography.size.s24,
-    fontFamily: Theme.fonts.semiBold,
+    fontFamily: Theme.fonts.brand,
     color: Theme.colors.textWarmStrong,
   },
   authStack: {

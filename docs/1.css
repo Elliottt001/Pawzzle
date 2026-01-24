@@ -1,0 +1,50 @@
+/* Union */
+
+position: absolute;
+width: 411px;
+height: 98px;
+left: -18px;
+top: 714px;
+
+background: #FFFEF9;
+box-shadow: 1px -7px 24.2px rgba(244, 193, 127, 0.27);
+border-radius: 18px;
+
+
+/* Vector */
+
+position: absolute;
+left: -4.8%;
+right: -4.8%;
+top: 90.11%;
+bottom: 0%;
+
+background: rgba(254, 255, 212, 0.95);
+
+
+/* Ellipse 4 */
+
+position: absolute;
+height: 66px;
+left: 41.33%;
+right: 41.07%;
+top: calc(50% - 66px/2 + 341px);
+
+background: #D9D9D9;
+
+
+
+/* Ellipse 4 */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 58.63px;
+left: 42.4%;
+right: 41.97%;
+top: calc(50% - 58.63px/2 + 349.31px);
+
+/* logo渐变色 */
+background: linear-gradient(131.39deg, #F4C17F 8.8%, #ED843F 103.45%);
+border: 1px solid rgba(255, 251, 245, 0.56);
+box-shadow: 4px 5px 4.5px rgba(135, 91, 71, 0.11), 0px 1px 8.4px rgba(244, 193, 127, 0.66), inset 0px 8px 8.2px rgba(237, 132, 63, 0.47), inset 0px -6px 10px rgba(255, 228, 202, 0.68);
