@@ -11,7 +11,8 @@ import {
 import { Text } from '@/components/base-text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { Image } from 'expo-image';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Theme } from '../../../constants/theme';
 import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
 
@@ -21,11 +22,36 @@ const API_BASE_URL =
 const ensureChinese = (message: string, fallback: string) =>
   /[\u4e00-\u9fff]/.test(message) ? message : fallback;
 
+const resolveParam = (value: string | string[] | undefined) => {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw || typeof raw !== 'string') {
+    return null;
+  }
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+};
+
+const speciesOptions = [
+  { id: 'CAT', label: '猫' },
+  { id: 'DOG', label: '狗' },
+] as const;
+
+const breedOptions = {
+  CAT: ['英短', '布偶', '暹罗'],
+  DOG: ['柯基', '柴犬', '迷你贵宾'],
+} as const;
+
+const locationOptions = ['杭州', '北京', '上海'] as const;
+
+type SpeciesId = (typeof speciesOptions)[number]['id'];
+
 const RECOGNIZED_INFO = {
   species: 'DOG' as const,
   speciesLabel: '狗狗',
-  breed: 'Corgi' as const,
-  breedLabel: '柯基',
+  breed: '柯基' as const,
   location: '杭州',
   ageGuess: '2',
   medicalProofs: ['疫苗接种记录完整', '驱虫证明已核验', '体检合格报告已上传'],
@@ -46,15 +72,36 @@ const DEFAULT_TAGS = ['适合家庭', '已免疫', '易相处'];
 
 export default function PetRehomeVerifyScreen() {
   const router = useRouter();
+  const { mode, photoUri, photoName, photoType } = useLocalSearchParams();
+  const modeValue = Array.isArray(mode) ? mode[0] : mode;
+  const resolvedPhotoUri = resolveParam(photoUri);
+  const resolvedPhotoName = resolveParam(photoName);
+  const resolvedPhotoType = resolveParam(photoType);
+  const isManual = modeValue === 'manual' && !resolvedPhotoUri;
   const [session, setSessionState] = React.useState<AuthSession | null>(() => getSession());
   const [name, setName] = React.useState('团子');
   const [age, setAge] = React.useState(RECOGNIZED_INFO.ageGuess);
+  const [species, setSpecies] = React.useState<SpeciesId | null>(() =>
+    isManual ? null : RECOGNIZED_INFO.species,
+  );
+  const [breed, setBreed] = React.useState<string | null>(() =>
+    isManual ? null : RECOGNIZED_INFO.breed,
+  );
+  const [location, setLocation] = React.useState<string | null>(() =>
+    isManual ? null : RECOGNIZED_INFO.location,
+  );
   const [noteText, setNoteText] = React.useState('');
   const [tags, setTags] = React.useState<string[]>([]);
   const [tagStatus, setTagStatus] = React.useState<'idle' | 'generating' | 'ready'>('idle');
   const [saving, setSaving] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = React.useState<string | null>(null);
+  const [photoUploadStatus, setPhotoUploadStatus] = React.useState<
+    'idle' | 'uploading' | 'ready' | 'error'
+  >('idle');
+  const [photoUploadError, setPhotoUploadError] = React.useState<string | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = React.useState<string | null>(null);
+  const selectedBreeds = species ? breedOptions[species] : [];
 
   React.useEffect(() => {
     const unsubscribe = subscribeSession((nextSession) => {
@@ -62,6 +109,119 @@ export default function PetRehomeVerifyScreen() {
     });
     return unsubscribe;
   }, []);
+
+  React.useEffect(() => {
+    if (!species) {
+      setBreed(null);
+      return;
+    }
+    const speciesBreeds = breedOptions[species];
+    if (breed && !speciesBreeds.some((option) => option === breed)) {
+      setBreed(null);
+    }
+  }, [breed, species]);
+
+  const resolveExtension = (name: string | null, type: string | null) => {
+    if (name) {
+      const trimmed = name.trim();
+      const dot = trimmed.lastIndexOf('.');
+      if (dot > -1 && dot < trimmed.length - 1) {
+        return trimmed.slice(dot + 1).toLowerCase();
+      }
+    }
+    if (type && type.includes('/')) {
+      return type.split('/')[1].toLowerCase();
+    }
+    return 'jpg';
+  };
+
+  const buildFileName = (name: string | null, extension: string) => {
+    const raw = name?.split('/').pop()?.split('\\').pop()?.trim();
+    if (!raw) {
+      return `pet-photo-${Date.now()}.${extension}`;
+    }
+    if (raw.includes('.')) {
+      return raw;
+    }
+    return `${raw}.${extension}`;
+  };
+
+  const resolveMimeType = (type: string | null, extension: string) => {
+    if (type) {
+      return type;
+    }
+    switch (extension) {
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'heic':
+        return 'image/heic';
+      case 'heif':
+        return 'image/heif';
+      default:
+        return 'image/jpeg';
+    }
+  };
+
+  const uploadPhoto = async () => {
+    if (!resolvedPhotoUri || !session?.token) {
+      return null;
+    }
+    setPhotoUploadStatus('uploading');
+    setPhotoUploadError(null);
+    try {
+      const extension = resolveExtension(resolvedPhotoName, resolvedPhotoType);
+      const fileName = buildFileName(resolvedPhotoName, extension);
+      const mimeType = resolveMimeType(resolvedPhotoType, extension);
+      const formData = new FormData();
+      if (Platform.OS === 'web') {
+        const response = await fetch(resolvedPhotoUri);
+        const blob = await response.blob();
+        const finalType = blob.type || mimeType;
+        const file = new File([blob], fileName, { type: finalType });
+        formData.append('file', file);
+      } else {
+        formData.append('file', {
+          uri: resolvedPhotoUri,
+          name: fileName,
+          type: mimeType,
+        } as unknown as Blob);
+      }
+      const response = await fetch(`${API_BASE_URL}/api/pets/upload`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.token}`,
+        },
+        body: formData,
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        let message = '';
+        try {
+          const data = JSON.parse(text) as { message?: string };
+          message = data?.message ?? '';
+        } catch {
+          message = text;
+        }
+        throw new Error(message || response.statusText);
+      }
+      const data = (await response.json()) as { url?: string };
+      if (!data?.url) {
+        throw new Error('图片上传失败。');
+      }
+      setUploadedImageUrl(data.url);
+      setPhotoUploadStatus('ready');
+      return data.url;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      const friendly = ensureChinese(message, '图片上传失败，请稍后再试。');
+      setPhotoUploadStatus('error');
+      setPhotoUploadError(friendly);
+      setSaveError(friendly);
+      return null;
+    }
+  };
 
   const handleGenerateTags = () => {
     if (!noteText.trim()) {
@@ -94,21 +254,41 @@ export default function PetRehomeVerifyScreen() {
       setSaveError('请填写正确的年龄。');
       return;
     }
+    if (!species) {
+      setSaveError('请选择宠物类型。');
+      return;
+    }
+    if (!breed) {
+      setSaveError('请选择宠物品种。');
+      return;
+    }
+    if (!location) {
+      setSaveError('请选择所在城市。');
+      return;
+    }
 
     setSaving(true);
     setSaveError(null);
     setSaveSuccess(null);
-    const payload = {
-      name: trimmedName,
-      species: RECOGNIZED_INFO.species,
-      breed: RECOGNIZED_INFO.breed,
-      age: Math.round(ageValue),
-      location: RECOGNIZED_INFO.location,
-      personalityTag: tags[0] ?? '亲人',
-      description: noteText.trim() || DEFAULT_DESCRIPTION,
-    };
 
     try {
+      let imageUrl = uploadedImageUrl;
+      if (resolvedPhotoUri && !imageUrl) {
+        imageUrl = await uploadPhoto();
+        if (!imageUrl) {
+          return;
+        }
+      }
+      const payload = {
+        name: trimmedName,
+        species,
+        breed,
+        age: Math.round(ageValue),
+        location,
+        personalityTag: tags[0] ?? '亲人',
+        description: noteText.trim() || DEFAULT_DESCRIPTION,
+        imageUrl: imageUrl ?? undefined,
+      };
       const response = await fetch(`${API_BASE_URL}/api/pets`, {
         method: 'POST',
         headers: {
@@ -146,49 +326,84 @@ export default function PetRehomeVerifyScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={styles.title}>宠物卡片录入</Text>
-          <Text style={styles.subtitle}>拍照识别与文本分析已完成。</Text>
+          <Text style={styles.subtitle}>
+            {isManual ? '照片可选，未上传也能发布。请手动填写信息。' : '拍照识别与文本分析已完成。'}
+          </Text>
         </View>
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>影像识别结果</Text>
           <View style={styles.photoRow}>
             <View style={styles.photoBox}>
-              <FontAwesome5 name="camera" size={Theme.sizes.s24} color={Theme.colors.textSecondary} />
-              <Text style={styles.photoText}>识别完成</Text>
+              {resolvedPhotoUri ? (
+                <Image source={{ uri: resolvedPhotoUri }} style={styles.photoImage} contentFit="cover" />
+              ) : (
+                <>
+                  <FontAwesome5
+                    name="camera"
+                    size={Theme.sizes.s24}
+                    color={Theme.colors.textSecondary}
+                  />
+                  <Text style={styles.photoText}>{isManual ? '未上传照片' : '识别完成'}</Text>
+                </>
+              )}
             </View>
-            <View style={styles.readonlyColumn}>
-              <View style={styles.readonlyItem}>
-                <Text style={styles.label}>类型</Text>
-                <Text style={styles.readonlyValue}>{RECOGNIZED_INFO.speciesLabel}</Text>
+            {isManual ? (
+              <View style={styles.readonlyColumn}>
+                <Text style={styles.photoHint}>已跳过识别，可在下方手动填写。</Text>
               </View>
-              <View style={styles.readonlyItem}>
-                <Text style={styles.label}>品种</Text>
-                <Text style={styles.readonlyValue}>{RECOGNIZED_INFO.breedLabel}</Text>
+            ) : (
+              <View style={styles.readonlyColumn}>
+                <View style={styles.readonlyItem}>
+                  <Text style={styles.label}>类型</Text>
+                  <Text style={styles.readonlyValue}>{RECOGNIZED_INFO.speciesLabel}</Text>
+                </View>
+                <View style={styles.readonlyItem}>
+                  <Text style={styles.label}>品种</Text>
+                  <Text style={styles.readonlyValue}>{RECOGNIZED_INFO.breed}</Text>
+                </View>
+                <View style={styles.readonlyItem}>
+                  <Text style={styles.label}>城市</Text>
+                  <Text style={styles.readonlyValue}>{RECOGNIZED_INFO.location}</Text>
+                </View>
               </View>
-              <View style={styles.readonlyItem}>
-                <Text style={styles.label}>城市</Text>
-                <Text style={styles.readonlyValue}>{RECOGNIZED_INFO.location}</Text>
-              </View>
-            </View>
+            )}
           </View>
+          {!isManual ? <Text style={styles.referenceHint}>识别仅供参考，可在下方调整。</Text> : null}
+          {resolvedPhotoUri ? (
+            <Text style={styles.photoUploadHint}>
+              {photoUploadStatus === 'uploading'
+                ? '照片上传中...'
+                : photoUploadStatus === 'ready'
+                  ? '照片已上传'
+                  : '照片将随发布一起上传。'}
+            </Text>
+          ) : null}
+          {photoUploadError ? <Text style={styles.photoUploadError}>{photoUploadError}</Text> : null}
         </View>
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>医疗证明</Text>
-          <View style={styles.proofList}>
-            {RECOGNIZED_INFO.medicalProofs.map((item) => (
-              <View key={item} style={styles.proofItem}>
-                <Text style={styles.proofText}>{item}</Text>
+          {isManual ? (
+            <Text style={styles.proofEmptyText}>暂无上传，可后续补充。</Text>
+          ) : (
+            <>
+              <View style={styles.proofList}>
+                {RECOGNIZED_INFO.medicalProofs.map((item) => (
+                  <View key={item} style={styles.proofItem}>
+                    <Text style={styles.proofText}>{item}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
-          <View style={styles.proofList}>
-            {RECOGNIZED_INFO.docIds.map((item) => (
-              <View key={item} style={styles.docItem}>
-                <Text style={styles.docText}>{item}</Text>
+              <View style={styles.proofList}>
+                {RECOGNIZED_INFO.docIds.map((item) => (
+                  <View key={item} style={styles.docItem}>
+                    <Text style={styles.docText}>{item}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
+            </>
+          )}
         </View>
 
         <View style={styles.card}>
@@ -213,6 +428,76 @@ export default function PetRehomeVerifyScreen() {
               style={styles.input}
               keyboardType="number-pad"
             />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>类型</Text>
+            <View style={styles.optionRow}>
+              {speciesOptions.map((option) => {
+                const isActive = species === option.id;
+                return (
+                  <Pressable
+                    key={option.id}
+                    onPress={() => setSpecies(option.id)}
+                    style={({ pressed }) => [
+                      styles.optionPill,
+                      isActive && styles.optionPillActive,
+                      pressed && styles.optionPillPressed,
+                    ]}>
+                    <Text style={[styles.optionText, isActive && styles.optionTextActive]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>品种</Text>
+            <View style={styles.optionRow}>
+              {selectedBreeds.length ? (
+                selectedBreeds.map((option) => {
+                  const isActive = breed === option;
+                  return (
+                    <Pressable
+                      key={option}
+                      onPress={() => setBreed(option)}
+                      style={({ pressed }) => [
+                        styles.optionPill,
+                        isActive && styles.optionPillActive,
+                        pressed && styles.optionPillPressed,
+                      ]}>
+                      <Text style={[styles.optionText, isActive && styles.optionTextActive]}>
+                        {option}
+                      </Text>
+                    </Pressable>
+                  );
+                })
+              ) : (
+                <Text style={styles.optionHint}>请先选择类型。</Text>
+              )}
+            </View>
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>城市</Text>
+            <View style={styles.optionRow}>
+              {locationOptions.map((option) => {
+                const isActive = location === option;
+                return (
+                  <Pressable
+                    key={option}
+                    onPress={() => setLocation(option)}
+                    style={({ pressed }) => [
+                      styles.optionPill,
+                      isActive && styles.optionPillActive,
+                      pressed && styles.optionPillPressed,
+                    ]}>
+                    <Text style={[styles.optionText, isActive && styles.optionTextActive]}>
+                      {option}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         </View>
 
@@ -345,10 +630,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Theme.spacing.s,
+    overflow: 'hidden',
+  },
+  photoImage: {
+    width: '100%',
+    height: '100%',
   },
   photoText: {
     color: Theme.colors.textSecondary,
     fontSize: Theme.typography.size.s12,
+  },
+  photoHint: {
+    color: Theme.colors.textSecondary,
+    fontSize: Theme.typography.size.s12,
+  },
+  referenceHint: {
+    color: Theme.colors.textSecondary,
+    fontSize: Theme.typography.size.s12,
+    marginTop: Theme.spacing.s,
+  },
+  photoUploadHint: {
+    color: Theme.colors.textSecondary,
+    fontSize: Theme.typography.size.s12,
+    marginTop: Theme.spacing.s2,
+  },
+  photoUploadError: {
+    color: Theme.colors.textError,
+    fontSize: Theme.typography.size.s12,
+    marginTop: Theme.spacing.s2,
   },
   readonlyColumn: {
     flex: Theme.layout.full,
@@ -384,6 +693,10 @@ const styles = StyleSheet.create({
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s13,
   },
+  proofEmptyText: {
+    color: Theme.colors.textSecondary,
+    fontSize: Theme.typography.size.s12,
+  },
   docItem: {
     paddingVertical: Theme.spacing.s6,
     paddingHorizontal: Theme.spacing.s10,
@@ -406,6 +719,39 @@ const styles = StyleSheet.create({
     borderColor: Theme.colors.borderWarmAlt,
     color: Theme.colors.text,
     fontSize: Theme.typography.size.s14,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Theme.spacing.s8,
+    alignItems: 'center',
+  },
+  optionPill: {
+    paddingVertical: Theme.spacing.s4,
+    paddingHorizontal: Theme.spacing.s12,
+    borderRadius: Theme.radius.pill,
+    backgroundColor: Theme.colors.card,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.borderWarmAlt,
+  },
+  optionPillActive: {
+    backgroundColor: Theme.colors.surfaceWarm,
+    borderColor: Theme.colors.borderWarmSoft,
+  },
+  optionPillPressed: {
+    transform: [{ scale: Theme.scale.pressedSoft }],
+  },
+  optionText: {
+    color: Theme.colors.textSecondary,
+    fontSize: Theme.typography.size.s12,
+  },
+  optionTextActive: {
+    color: Theme.colors.textWarm,
+    fontWeight: Theme.typography.weight.semiBold,
+  },
+  optionHint: {
+    color: Theme.colors.textSecondary,
+    fontSize: Theme.typography.size.s12,
   },
   videoCard: {
     flexDirection: 'row',

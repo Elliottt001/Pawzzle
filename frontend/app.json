@@ -38,6 +38,13 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow access to photos to select pet pictures.",
+          "cameraPermission": "Allow camera access to take pet photos."
+        }
       ]
     ],
     "experiments": {

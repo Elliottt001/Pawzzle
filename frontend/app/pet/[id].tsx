@@ -22,6 +22,17 @@ const API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 
+const resolvePetImageUri = (imageUrl?: string | null) => {
+  if (!imageUrl) {
+    return null;
+  }
+  if (/^(https?:|file:|blob:|data:)/.test(imageUrl)) {
+    return imageUrl;
+  }
+  const normalized = imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`;
+  return `${API_URL}${normalized}`;
+};
+
 type Pet = {
   id: number;
   name: string;
@@ -29,6 +40,7 @@ type Pet = {
   status: 'OPEN' | 'MATCHED' | 'ADOPTED';
   description: string;
   tags: object;
+  imageUrl?: string | null;
   ownerId: number | null;
   ownerName: string | null;
   ownerType: 'INDIVIDUAL' | 'INSTITUTION' | null;
@@ -111,6 +123,8 @@ export default function PetDetailsScreen() {
 
   const isOwner = session?.user?.id === pet.ownerId;
   const canRequestAdoption = pet.status === 'OPEN' && !isOwner;
+  const heroImage =
+    resolvePetImageUri(pet.imageUrl) ?? `https://placedog.net/500/500?id=${pet.id}`;
 
   const handleStartChat = async () => {
     if (!pet.ownerId) {
@@ -181,10 +195,7 @@ export default function PetDetailsScreen() {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.scrollContainer}>
         <ThemedView style={styles.container}>
-          <Image
-            source={{ uri: `https://placedog.net/500/500?id=${pet.id}` }}
-            style={styles.image}
-          />
+          <Image source={{ uri: heroImage }} style={styles.image} />
 
           <ThemedView style={styles.detailsContainer}>
             <ThemedText type="title">{pet.name}</ThemedText>
@@ -192,11 +203,15 @@ export default function PetDetailsScreen() {
               {getSpeciesLabel(pet.species)} • {getStatusLabel(pet.status)}
             </ThemedText>
 
-            <ThemedText type="defaultSemiBold" style={styles.sectionHeader}>简介</ThemedText>
+            <ThemedText type="defaultSemiBold" style={styles.sectionHeader}>
+              简介
+            </ThemedText>
             <ThemedText>{pet.description}</ThemedText>
 
             <ThemedView style={styles.ownerCard}>
-              <ThemedText type="title" style={styles.ownerTitle}>发布者</ThemedText>
+              <ThemedText type="title" style={styles.ownerTitle}>
+                发布者
+              </ThemedText>
               {pet.ownerId ? (
                 <>
                   <Pressable
@@ -255,7 +270,7 @@ export default function PetDetailsScreen() {
                   ) : null}
                 </>
               ) : (
-                  <ThemedText style={styles.noInfo}>暂无送养人信息。</ThemedText>
+                <ThemedText style={styles.noInfo}>暂无送养人信息。</ThemedText>
               )}
             </ThemedView>
           </ThemedView>

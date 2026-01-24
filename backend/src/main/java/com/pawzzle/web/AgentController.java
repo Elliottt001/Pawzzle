@@ -56,6 +56,11 @@ public class AgentController {
         Questions must be in Chinese, open-ended, and not repeated.
         Include more scenario-based questions to uncover deeper emotional needs,
         for example, ask them to imagine a weekend day with a pet.
+        问到喂食习惯或小毛病时：
+        - 避免直接使用“挑食”等负面词，改为“喂食仪式/相处方式”的描述。
+        - 可以用“颜值/性格与额外喂食投入”的权衡场景，让用户表达愿意为喜欢买单的程度。
+        - 也可从日常用餐节奏切入，侧面判断时间与耐心。
+        核心是引导用户表达对照顾过程的享受感，而不是能否忍受麻烦。
         Do NOT ask about adopt vs rehome, and do NOT ask about names or contact info.
         """;
 
