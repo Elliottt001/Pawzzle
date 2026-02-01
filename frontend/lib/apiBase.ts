@@ -1,9 +1,9 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-const FALLBACK_LAN_URL = 'http://172.25.155.42:8080';
-const FALLBACK_ANDROID_EMULATOR_URL = 'http://10.0.2.2:8080';
-const FALLBACK_LOCAL_URL = 'http://localhost:8080';
+const FALLBACK_LAN_URL = 'http://172.25.155.42:7860';
+const FALLBACK_ANDROID_EMULATOR_URL = 'http://10.0.2.2:7860';
+const FALLBACK_LOCAL_URL = 'http://localhost:7860';
 
 const isPhysicalDevice = Constants.isDevice ?? true;
 

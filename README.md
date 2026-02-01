@@ -49,7 +49,7 @@ Physical devices must reach your backend. Set an explicit base URL:
 
 ```bash
 # LAN
-EXPO_PUBLIC_API_BASE_URL=http://192.168.1.23:8080
+EXPO_PUBLIC_API_BASE_URL=http://192.168.1.23:7860
 
 # Cloudflared tunnel
 EXPO_PUBLIC_API_BASE_URL=https://xxxx.trycloudflare.com
@@ -58,12 +58,12 @@ EXPO_PUBLIC_API_BASE_URL=https://xxxx.trycloudflare.com
 Notes:
 - The app reads `EXPO_PUBLIC_API_BASE_URL` first, then `EXPO_PUBLIC_API_URL`.
 - The fallback LAN IP lives in `frontend/lib/apiBase.ts` if you prefer hardcoding.
-- Backend should listen on `0.0.0.0:8080` and port 8080 must be reachable.
+- Backend should listen on `0.0.0.0:7860` and port 7860 must be reachable.
 - Web and simulators still use localhost/10.0.2.2 defaults automatically.
 
 Example cloudflared command:
 ```bash
-./cloudflared tunnel --url http://localhost:8080 --protocol http2 --edge-ip-version 4
+./cloudflared tunnel --url http://localhost:7860 --protocol http2 --edge-ip-version 4
 ```
 
 ## Build APK (EAS)

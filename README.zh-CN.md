@@ -49,7 +49,7 @@ npm run start
 
 ```bash
 # 局域网
-EXPO_PUBLIC_API_BASE_URL=http://192.168.1.23:8080
+EXPO_PUBLIC_API_BASE_URL=http://192.168.1.23:7860
 
 # Cloudflared 隧道
 EXPO_PUBLIC_API_BASE_URL=https://xxxx.trycloudflare.com
@@ -58,12 +58,12 @@ EXPO_PUBLIC_API_BASE_URL=https://xxxx.trycloudflare.com
 说明:
 - 应用优先读取 `EXPO_PUBLIC_API_BASE_URL`，其次读取 `EXPO_PUBLIC_API_URL`。
 - 你也可以在 `frontend/lib/apiBase.ts` 里写死回退 IP。
-- 后端需监听 `0.0.0.0:8080`，并确保 8080 端口可访问。
+- 后端需监听 `0.0.0.0:7860`，并确保 7860 端口可访问。
 - Web 和模拟器会自动使用 localhost/10.0.2.2。
 
 Cloudflared 示例:
 ```bash
-./cloudflared tunnel --url http://localhost:8080 --protocol http2 --edge-ip-version 4
+./cloudflared tunnel --url http://localhost:7860 --protocol http2 --edge-ip-version 4
 ```
 
 ## 打包 APK (EAS)
