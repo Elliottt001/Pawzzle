@@ -13,7 +13,11 @@ RUN pip install -r requirements.txt
 # Ensure mvnw is executable
 RUN chmod +x /home/user/app/backend/mvnw
 
-# Switch back to the default user (Standard for ModelScope)
+# Ensure uid 1000 exists for ModelScope runtime and owns the app dir
+RUN if ! getent passwd 1000 >/dev/null 2>&1; then useradd -m -u 1000 -s /bin/bash user; fi \
+    && chown -R 1000:1000 /home/user/app
+
+# Switch to uid 1000 (standard for ModelScope)
 USER 1000
 
 ENTRYPOINT ["python", "-u", "app.py"]
