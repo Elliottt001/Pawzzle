@@ -1,1 +1,2 @@
-# No additional Python dependencies required for app.py.
+gradio
+python-dotenv
