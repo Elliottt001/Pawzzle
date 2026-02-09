@@ -1,2 +1,2 @@
-gradio
-python-dotenv
+# No extra Python dependencies needed — app.py uses only the standard library.
+# This file is kept so that `pip install -r requirements.txt` succeeds silently.

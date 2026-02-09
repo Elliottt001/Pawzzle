@@ -1,0 +1,9 @@
+.git/
+.github/
+.qoder/
+.vscode/
+docs/
+design/
+frontend/node_modules/
+backend/target/
+*.css
