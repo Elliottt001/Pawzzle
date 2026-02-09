@@ -34,16 +34,21 @@ RUN cd /tmp && \
 WORKDIR /home/user/app
 COPY . /home/user/app
 
-# Ensure mvnw is executable
 RUN chmod +x /home/user/app/backend/mvnw
 
-# ---------- Ensure uid 1000 exists with all required passwd fields ----------
-RUN (id -u 1000 2>/dev/null && userdel -f "$(id -un 1000)") || true && \
-    (getent group 1000 && groupdel "$(getent group 1000 | cut -d: -f1)") || true && \
-    groupadd -g 1000 user && \
-    useradd -u 1000 -g 1000 -m -d /home/user -s /bin/bash user
+# ---------- Guarantee uid 1000 with ALL required passwd/shadow/group fields ----------
+# Direct file manipulation — the only 100 % reliable method.
+RUN cp /etc/passwd /etc/passwd.bak && \
+    awk -F: '$3 != 1000 && $1 != "user"' /etc/passwd.bak > /etc/passwd && \
+    echo 'user:x:1000:1000:user:/home/user:/bin/bash' >> /etc/passwd && \
+    cp /etc/group /etc/group.bak && \
+    awk -F: '$3 != 1000 && $1 != "user"' /etc/group.bak > /etc/group && \
+    echo 'user:x:1000:' >> /etc/group && \
+    (grep -v '^user:' /etc/shadow > /tmp/shadow && mv /tmp/shadow /etc/shadow || true) && \
+    echo 'user:*:19000:0:99999:7:::' >> /etc/shadow && \
+    rm -f /etc/passwd.bak /etc/group.bak
 
-# ---------- PostgreSQL data directory for user 1000 ----------
+# ---------- Directories for PostgreSQL + app, all owned by uid 1000 ----------
 RUN mkdir -p /home/user/pgdata /home/user/pglog /var/run/postgresql && \
     chown -R 1000:1000 /home/user /var/run/postgresql
 
@@ -53,9 +58,6 @@ RUN cd /home/user/app/backend && \
     chown -R 1000:1000 /home/user/app
 
 USER 1000
-
-# ---------- Init PostgreSQL cluster (owned by user 1000) ----------
-RUN /usr/lib/postgresql/16/bin/initdb -D /home/user/pgdata --auth=trust
 
 EXPOSE 7860
 
