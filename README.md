@@ -1,3 +1,9 @@
+---
+sdk: docker
+app_port: 7860
+license: Apache License 2.0
+---
+
 # Pawzzle
 
 Read this in other languages: [Chinese](README.zh-CN.md).
