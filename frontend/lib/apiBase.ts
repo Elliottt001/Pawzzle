@@ -9,7 +9,13 @@ const isPhysicalDevice = Constants.isDevice ?? true;
 
 const inferredBaseUrl = (() => {
   if (Platform.OS === 'web') {
-    return FALLBACK_LOCAL_URL;
+    // For web builds (production), use relative path to avoid CORS/localhost issues.
+    // For development, keep using the fallback local URL.
+    // @ts-ignore
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        return FALLBACK_LOCAL_URL;
+    }
+    return '';
   }
   if (Platform.OS === 'android' && !isPhysicalDevice) {
     return FALLBACK_ANDROID_EMULATOR_URL;
