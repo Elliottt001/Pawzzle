@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pawzzle.domain.pet.Pet;
 import com.pawzzle.domain.pet.PetRepository;
+import java.util.concurrent.CompletableFuture;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -20,6 +21,7 @@ import org.springframework.ai.openai.OpenAiChatClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -80,8 +82,9 @@ public class AgentController {
     @Value("${pawzzle.matching.candidate-limit:50}")
     private int candidateLimit;
 
+    @Async("taskExecutor")
     @PostMapping("/evaluate")
-    public EvaluationResponse evaluate(@RequestBody EvaluationRequest request) {
+    public CompletableFuture<EvaluationResponse> evaluate(@RequestBody EvaluationRequest request) {
         List<AgentMessage> messages = request.messages() == null ? List.of() : request.messages();
         String prompt = buildEvaluationPrompt(messages);
         ChatResponse response = chatClient.call(new Prompt(List.of(
@@ -91,21 +94,22 @@ public class AgentController {
 
         String content = response.getResult().getOutput().getContent();
         EvaluationResult result = parseEvaluation(content);
-        return new EvaluationResponse(
+        return CompletableFuture.completedFuture(new EvaluationResponse(
             result.endverification(),
             result.profile(),
             result.nextQuestions(),
             prompt,
             content == null ? "" : content
-        );
+        ));
     }
 
+    @Async("taskExecutor")
     @PostMapping("/recommend")
-    public RecommendationResponse recommend(@RequestBody RecommendationRequest request) {
+    public CompletableFuture<RecommendationResponse> recommend(@RequestBody RecommendationRequest request) {
         CandidateSelection selection = resolveCandidatePets(request);
         List<PetCard> pets = selection.pets();
         if (pets.isEmpty()) {
-            return new RecommendationResponse(List.of(), "", "", selection.debug());
+            return CompletableFuture.completedFuture(new RecommendationResponse(List.of(), "", "", selection.debug()));
         }
 
         String userPrompt = buildRecommendationPrompt(request, pets);
@@ -116,7 +120,7 @@ public class AgentController {
 
         String content = response.getResult().getOutput().getContent();
         List<RecommendationItem> items = parseItems(content, pets);
-        return new RecommendationResponse(items, content == null ? "" : content, userPrompt, selection.debug());
+        return CompletableFuture.completedFuture(new RecommendationResponse(items, content == null ? "" : content, userPrompt, selection.debug()));
     }
 
     private String buildEvaluationPrompt(List<AgentMessage> messages) {

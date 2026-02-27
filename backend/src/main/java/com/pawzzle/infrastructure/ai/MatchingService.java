@@ -10,9 +10,12 @@ import com.pawzzle.infrastructure.ai.dto.MatchResult;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.ChatResponse;
+import org.springframework.scheduling.annotation.Async;
+
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -54,29 +57,41 @@ public class MatchingService {
     private final PetRepository petRepository;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+    private final java.util.concurrent.Executor taskExecutor;
 
-    public MatchResult recommendPets(Long userId, String userChatMessage) {
+    @Async("taskExecutor")
+    public CompletableFuture<MatchResult> recommendPets(Long userId, String userChatMessage) {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
 
-        String updatedSummary = callChat(PROFILE_SYSTEM_PROMPT,
-            buildProfileUserPrompt(user.getPreferenceSummary(), userChatMessage));
+        CompletableFuture<String> speciesFuture = CompletableFuture.supplyAsync(
+            () -> detectSpecies(userChatMessage).orElse(null), taskExecutor);
 
-        List<Double> newVector = embeddingClient.embed(updatedSummary);
+        CompletableFuture<List<Double>> vectorFuture = CompletableFuture.supplyAsync(() -> {
+            String updatedSummary = callChat(PROFILE_SYSTEM_PROMPT,
+                buildProfileUserPrompt(user.getPreferenceSummary(), userChatMessage));
+            
+            // Update user state (side effect)
+            user.setPreferenceSummary(updatedSummary);
+            List<Double> newVector = embeddingClient.embed(updatedSummary);
+            user.setPreferenceVector(newVector);
+            userRepository.save(user); // transactional?
+            return newVector;
+        }, taskExecutor);
 
-        user.setPreferenceSummary(updatedSummary);
-        user.setPreferenceVector(newVector);
-        userRepository.save(user);
+        CompletableFuture.allOf(speciesFuture, vectorFuture).join();
 
-        String speciesFilter = detectSpecies(userChatMessage).orElse(null);
+        String speciesFilter = speciesFuture.join();
+        List<Double> newVector = vectorFuture.join();
+        
         List<Pet> candidates = petRepository.hybridSearch(speciesFilter, newVector, 5);
 
         if (candidates.isEmpty()) {
-            return MatchResult.builder()
+            return CompletableFuture.completedFuture(MatchResult.builder()
                 .bestPet(null)
                 .explanation("No suitable pets found.")
                 .candidates(List.of())
-                .build();
+                .build());
         }
 
         String rerankDecision = callChat(RERANK_SYSTEM_PROMPT,
@@ -88,13 +103,13 @@ public class MatchingService {
             .findFirst()
             .orElse(candidates.get(0));
 
-        return MatchResult.builder()
+        return CompletableFuture.completedFuture(MatchResult.builder()
             .bestPet(bestPet)
             .explanation(decision.explanation())
             .confidence(decision.confidence())
             .highlights(decision.highlights())
             .candidates(candidates)
-            .build();
+            .build());
     }
 
     private String buildProfileUserPrompt(String currentSummary, String userChatMessage) {
