@@ -15,7 +15,7 @@ import { setSession, setGuestMode, type AuthSession } from '@/lib/session';
 import { request, ApiError } from '@/lib/api-client';
 import { ensureChinese, formatDate } from '@/utils/text';
 import { PetCard } from '@/components/pet-card';
-import { styles } from '@/app/(tabs)/index.styles';
+import { styles } from '@/app/(tabs)/_index.styles';
 import { AdoptionSummary, UserProfile } from '@/types/profile';
 
 interface UserProfileViewProps {

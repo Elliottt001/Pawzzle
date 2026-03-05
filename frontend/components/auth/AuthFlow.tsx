@@ -14,7 +14,7 @@ import { request, ApiError } from '@/lib/api-client';
 import { ensureChinese } from '@/utils/text';
 import { useRouter } from 'expo-router';
 import { AuthStep } from '@/types/profile';
-import { styles } from '@/app/(tabs)/index.styles';
+import { styles } from '@/app/(tabs)/_index.styles'; 
 
 const CODE_LENGTH = 4;
 const CODE_RESEND_SECONDS = 30;
