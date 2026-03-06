@@ -12,8 +12,8 @@ import {
   View,
 } from 'react-native';
 import { Text } from '@/components/base-text';
-import { FontAwesome5 } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
@@ -352,11 +352,22 @@ export default function AgentScreen() {
             <ChatBubble role="debug" text="暂时无法获取宠物卡片。" />
           ) : null} */}
 
-          {visiblePets.length ? (
-            <View style={styles.matchList}>
-              {visiblePets.map(({ pet, confidence }) => (
-                <PetCard key={pet.id} pet={pet} confidence={confidence} />
-              ))}
+          {(status === 'recommending' || visiblePets.length > 0) ? (
+            <View style={styles.matchSection}>
+              {status === 'recommending' && visiblePets.length === 0 ? (
+                <Text style={styles.matchWaitingText}>正在为您匹配伙伴…</Text>
+              ) : null}
+              {visiblePets.length > 0 ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.matchListContent}
+                  style={styles.matchList}>
+                  {visiblePets.map(({ pet, confidence }) => (
+                    <PetCard key={pet.id} pet={pet} confidence={confidence} />
+                  ))}
+                </ScrollView>
+              ) : null}
             </View>
           ) : null}
         </ScrollView>
@@ -367,8 +378,8 @@ export default function AgentScreen() {
               <TextInput
                 value={input}
                 onChangeText={setInput}
-                placeholder="请用自己的话回答问题..."
-                placeholderTextColor={Theme.colors.placeholder}
+                placeholder="输入你的回答"
+                placeholderTextColor="#A1A1A1"
                 style={styles.input}
                 returnKeyType="send"
                 onSubmitEditing={handleSend}
@@ -409,6 +420,7 @@ function ChatBubble({ role, text }: { role: ChatRole; text: string }) {
           <Image
             source={require('@/assets/images/Agent.png')}
             style={styles.avatarImage}
+            resizeMode="contain"
             accessibilityLabel="Pawzy"
           />
         </View>
@@ -434,6 +446,78 @@ function ChatBubble({ role, text }: { role: ChatRole; text: string }) {
   );
 }
 
+/** Small decorative paw shape used as ambient ornaments. */
+function DecoPaw({
+  size = 9.71,
+  color = '#F4C17F',
+  rotation = 0,
+  style,
+}: {
+  size?: number;
+  color?: string;
+  rotation?: number;
+  style?: object;
+}) {
+  const s = size;
+  const small = s * 0.5;
+  return (
+    <View
+      style={[
+        { width: s * 1.4, height: s * 1.6, transform: [{ rotate: `${rotation}deg` }] },
+        style,
+      ]}>
+      {/* pad */}
+      <View
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: (s * 1.4 - s) / 2,
+          width: s,
+          height: s,
+          borderRadius: s / 2,
+          backgroundColor: color,
+        }}
+      />
+      {/* toe 1 */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: small,
+          height: small,
+          borderRadius: small / 2,
+          backgroundColor: color,
+        }}
+      />
+      {/* toe 2 */}
+      <View
+        style={{
+          position: 'absolute',
+          top: -small * 0.35,
+          left: (s * 1.4 - small) / 2,
+          width: small,
+          height: small,
+          borderRadius: small / 2,
+          backgroundColor: color,
+        }}
+      />
+      {/* toe 3 */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          width: small,
+          height: small,
+          borderRadius: small / 2,
+          backgroundColor: color,
+        }}
+      />
+    </View>
+  );
+}
+
 function AgentStartScreen({ onStart }: { onStart: () => void }) {
   const floatAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -441,14 +525,14 @@ function AgentStartScreen({ onStart }: { onStart: () => void }) {
     const animation = Animated.loop(
       Animated.sequence([
         Animated.timing(floatAnim, {
-          toValue: -6,
-          duration: 1600,
+          toValue: -8,
+          duration: 1800,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(floatAnim, {
           toValue: 0,
-          duration: 1600,
+          duration: 1800,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
@@ -460,31 +544,52 @@ function AgentStartScreen({ onStart }: { onStart: () => void }) {
   }, [floatAnim]);
 
   return (
-    <SafeAreaView style={startStyles.safeArea}>
+    <View style={startStyles.safeArea}>
+      {/* Background glows */}
       <View style={startStyles.background}>
-        <View style={[startStyles.glow, startStyles.glowTop]} />
+        <View style={[startStyles.glow, startStyles.glowTopLeft]} />
         <View style={[startStyles.glow, startStyles.glowRight]} />
-        <View style={[startStyles.glow, startStyles.glowBottom]} />
+        <View style={[startStyles.glow, startStyles.glowBottomRight]} />
       </View>
 
-      <ScrollView contentContainerStyle={startStyles.content} bounces={false}>
-        <View style={startStyles.brandRow}>
-          <Text style={startStyles.brandText}>Pawzzle</Text>
-        </View>
+      {/* Top gradient overlay */}
+      <LinearGradient
+        colors={['#FEFFD4', 'rgba(255, 254, 249, 0)']}
+        style={startStyles.topGradient}
+      />
 
-        <View style={startStyles.hero}>
-          <View style={startStyles.mascotWrap}>
-            <View style={startStyles.mascotGlow} />
-            <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
-              <AgentAvatarSvg style={startStyles.agentHero} accessibilityLabel="Pawzy" />
-            </Animated.View>
+      {/* Decorative paw prints */}
+      <DecoPaw size={10} rotation={-18} style={{ position: 'absolute', left: 68, top: '60%' }} />
+      <DecoPaw size={10} rotation={23} style={{ position: 'absolute', right: 50, top: '68%' }} />
+
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={startStyles.content} bounces={false}>
+          {/* Brand header */}
+          <View style={startStyles.brandRow}>
+            <Text style={startStyles.brandText}>Pawzzle</Text>
+            <Text style={startStyles.brandSubText}> 寻爪</Text>
           </View>
 
-          <Text style={startStyles.headline}>你好！我是Pawzy</Text>
-          <Text style={startStyles.subhead}>准备好寻找你的伙伴了吗</Text>
+          {/* Hero section */}
+          <View style={startStyles.hero}>
+            {/* Mascot */}
+            <View style={startStyles.mascotWrap}>
+              <View style={startStyles.mascotGlow} />
+              <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
+                <AgentAvatarSvg
+                  width={150}
+                  height={185}
+                  style={startStyles.agentHero}
+                  accessibilityLabel="Pawzy"
+                />
+              </Animated.View>
+            </View>
 
-          <View style={startStyles.ctaRow}>
-            <FontAwesome5 name="paw" size={Theme.sizes.s18} color={Theme.colors.decorativePeach} />
+            {/* Greeting */}
+            <Text style={startStyles.headline}>你好！我是Pawzy</Text>
+            <Text style={startStyles.subhead}>准备好寻找你的伙伴了吗</Text>
+
+            {/* CTA button */}
             <Pressable
               onPress={onStart}
               style={({ pressed }) => [
@@ -493,15 +598,16 @@ function AgentStartScreen({ onStart }: { onStart: () => void }) {
               ]}>
               <Text style={startStyles.ctaText}>开始测试</Text>
             </Pressable>
-            <FontAwesome5 name="paw" size={Theme.sizes.s18} color={Theme.colors.decorativePeach} />
+
+            {/* Tip */}
+            <Text style={startStyles.tipText}>随时开始，只需几分钟哦</Text>
           </View>
 
-          <Text style={startStyles.tipText}>随时开始，只需几分钟哦</Text>
-        </View>
-
-        <Text style={startStyles.privacyText}>对话仅用于匹配，我们保护你的隐私~</Text>
-      </ScrollView>
-    </SafeAreaView>
+          {/* Privacy note */}
+          <Text style={startStyles.privacyText}>对话仅用于匹配，我们保护你的隐私~</Text>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -641,7 +747,7 @@ const styles = StyleSheet.create({
   messageRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    marginBottom: Theme.spacing.s12,
+    marginBottom: 24,
   },
   messageRowUser: {
     justifyContent: 'flex-end',
@@ -653,213 +759,270 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   avatar: {
-    width: Theme.sizes.s40 ,
-    height: Theme.sizes.s40 ,
+    width: 52,
+    height: 62,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Theme.spacing.s8,
+    justifyContent: 'flex-end',
+    marginRight: 10,
   },
   avatarImage: {
-    width: Theme.sizes.s40,
-    height: Theme.sizes.s40,
+    width: 52,
+    height: 62,
   },
   bubble: {
-    maxWidth: Theme.percent.p80,
-    paddingHorizontal: Theme.spacing.s14,
-    paddingVertical: Theme.spacing.s10,
-    borderRadius: Theme.radius.r18,
+    maxWidth: '75%',
+    paddingHorizontal: 21,
+    paddingVertical: 17,
   },
   userBubble: {
-    backgroundColor: Theme.colors.ctaBackground,
-    borderTopRightRadius: Theme.radius.r6,
+    backgroundColor: '#F4C17F',
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 25,
+    borderBottomLeftRadius: 25,
   },
   aiBubble: {
-    backgroundColor: Theme.colors.surfaceWarm,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmSoft,
-    borderTopLeftRadius: Theme.radius.r6,
-    ...Theme.shadows.elevatedLarge,
+    backgroundColor: '#FDF4E4',
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    borderBottomRightRadius: 25,
+    borderBottomLeftRadius: 0,
   },
   debugBubble: {
     backgroundColor: Theme.colors.surfaceNeutral,
     borderWidth: Theme.borderWidth.hairline,
     borderColor: Theme.colors.borderNeutral,
-    borderTopLeftRadius: Theme.radius.r6,
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    borderBottomRightRadius: 25,
+    borderBottomLeftRadius: 0,
   },
   messageText: {
-    fontSize: Theme.typography.size.s15,
-    lineHeight: Theme.typography.lineHeight.s20,
+    fontSize: 15,
+    lineHeight: 23,
+    fontFamily: Theme.fonts.regular,
   },
   userText: {
-    color: Theme.colors.textInverse,
+    color: '#FFFFFF',
   },
   aiText: {
-    color: Theme.colors.textWarm,
+    color: '#875B47',
   },
   debugText: {
     color: Theme.colors.textMuted,
     fontSize: Theme.typography.size.s12,
     lineHeight: Theme.typography.lineHeight.s16,
   },
+  matchSection: {
+    marginTop: 12,
+  },
+  matchWaitingText: {
+    textAlign: 'center',
+    color: 'rgba(237, 132, 63, 0.40)',
+    fontSize: 12,
+    fontFamily: Theme.fonts.regular,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
   matchList: {
-    marginTop: Theme.spacing.s6,
-    gap: Theme.spacing.s14,
+    overflow: 'visible',
+  },
+  matchListContent: {
+    paddingTop: 24,
+    paddingBottom: 16,
+    paddingHorizontal: 4,
+    gap: 24,
   },
   inputDock: {
-    borderTopWidth: Theme.borderWidth.hairline,
-    borderTopColor: Theme.colors.borderWarmStrong,
-    backgroundColor: Theme.colors.overlaySoft,
-    paddingHorizontal: Theme.spacing.s16,
-    paddingTop: Theme.spacing.s10,
-    paddingBottom: Theme.spacing.s12,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 12,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 30,
+    paddingLeft: 22,
+    paddingRight: 8,
+    height: 56,
+    shadowColor: 'rgba(244, 193, 127, 0.25)',
+    shadowOffset: { width: 9, height: 12 },
+    shadowOpacity: 1,
+    shadowRadius: 20,
+    elevation: 6,
   },
   input: {
-    flex: Theme.layout.full,
-    minHeight: Theme.sizes.s44,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmAlt,
-    backgroundColor: Theme.colors.card,
-    borderRadius: Theme.radius.r22,
-    paddingHorizontal: Theme.spacing.s16,
-    fontSize: Theme.typography.size.s15,
+    flex: 1,
+    fontSize: 12,
     color: Theme.colors.text,
+    fontFamily: Theme.fonts.regular,
+    lineHeight: 20,
+    letterSpacing: 0.72,
   },
   sendButton: {
-    width: Theme.sizes.s44,
-    height: Theme.sizes.s44,
-    borderRadius: Theme.radius.r22,
-    backgroundColor: Theme.colors.card,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmAlt,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: Theme.spacing.s10,
+    marginLeft: 8,
   },
   sendButtonDisabled: {
-    opacity: Theme.opacity.o5,
+    opacity: 0.4,
   },
   sendButtonPressed: {
-    transform: [{ scale: Theme.scale.pressed }],
+    transform: [{ scale: 0.95 }],
   },
   helperText: {
-    marginTop: Theme.spacing.s8,
-    fontSize: Theme.typography.size.s12,
+    marginTop: 8,
+    fontSize: 12,
     color: Theme.colors.textSecondary,
   },
 });
 
 const startStyles = StyleSheet.create({
   safeArea: {
-    flex: Theme.layout.full,
-    backgroundColor: Theme.colors.backgroundWarmAlt,
+    flex: 1,
+    backgroundColor: '#FFFEF9',
   },
   background: {
     ...StyleSheet.absoluteFillObject,
   },
+  topGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 315,
+  },
   glow: {
     position: 'absolute',
-    width: Theme.sizes.s220,
-    height: Theme.sizes.s220,
-    borderRadius: Theme.radius.r110,
-    opacity: Theme.opacity.o65,
+    borderRadius: 112,
+    opacity: 0.6,
   },
-  glowTop: {
-    top: -Theme.sizes.s80,
-    left: -Theme.sizes.s40,
-    backgroundColor: Theme.colors.decorativePeachAlt,
+  glowTopLeft: {
+    top: -23,
+    left: -34,
+    width: 142,
+    height: 137,
+    backgroundColor: 'rgba(244, 193, 127, 0.27)',
   },
   glowRight: {
-    top: Theme.spacing.s24,
-    right: -Theme.sizes.s50,
-    backgroundColor: Theme.colors.decorativeMint,
+    top: 424,
+    right: -38,
+    width: 224,
+    height: 224,
+    backgroundColor: 'rgba(244, 193, 127, 0.08)',
   },
-  glowBottom: {
-    bottom: -Theme.sizes.s70,
-    left: Theme.percent.p35,
-    backgroundColor: Theme.colors.decorativeSkyAlt,
+  glowBottomRight: {
+    top: 478,
+    left: 203,
+    width: 224,
+    height: 224,
+    backgroundColor: 'rgba(254, 255, 233, 0.31)',
   },
   content: {
-    flexGrow: Theme.layout.full,
-    paddingHorizontal: Theme.spacing.s24,
-    paddingTop: Theme.spacing.s16,
-    paddingBottom: Theme.sizes.s80,
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 80,
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   brandRow: {
     alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   brandText: {
-    fontSize: Theme.typography.size.s20,
-    fontFamily: Theme.fonts.semiBold,
-    color: Theme.colors.textWarning,
-    letterSpacing: Theme.typography.letterSpacing.s1_6,
+    fontSize: 18,
+    fontFamily: Theme.fonts.brand,
+    color: '#743800',
+    letterSpacing: 1.08,
+  },
+  brandSubText: {
+    fontSize: 18,
+    fontFamily: Theme.fonts.brand,
+    fontWeight: '700' as const,
+    color: '#743800',
+    letterSpacing: 1.08,
   },
   hero: {
     alignItems: 'center',
-    gap: Theme.spacing.s16,
+    gap: 12,
   },
   mascotWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Theme.spacing.s12,
+    marginBottom: 8,
   },
   mascotGlow: {
     position: 'absolute',
-    width: Theme.sizes.s220,
-    height: Theme.sizes.s220,
-    borderRadius: Theme.radius.r110,
-    backgroundColor: Theme.colors.decorativePeachSoft,
-    opacity: Theme.opacity.o6,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(244, 193, 127, 0.08)',
   },
   agentHero: {
-    width: Theme.sizes.s220,
-    height: Theme.sizes.s220,
+    width: 150,
+    height: 185,
   },
   headline: {
-    fontSize: Theme.typography.size.s20,
-    fontFamily: Theme.fonts.semiBold,
-    color: Theme.colors.textWarning,
+    fontSize: 18,
+    fontFamily: Theme.fonts.regular,
+    color: '#ED843F',
+    letterSpacing: 1.08,
+    lineHeight: 26,
+    textAlign: 'center',
   },
   subhead: {
-    fontSize: Theme.typography.size.s14,
-    color: Theme.colors.textSecondary,
-  },
-  ctaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Theme.spacing.s14,
-    marginTop: Theme.spacing.s4,
+    fontSize: 15,
+    fontFamily: Theme.fonts.regular,
+    color: 'rgba(237, 132, 63, 0.80)',
+    letterSpacing: 0.9,
+    lineHeight: 23,
+    textAlign: 'center',
   },
   ctaButton: {
-    minWidth: Theme.sizes.s220,
-    paddingVertical: Theme.spacing.s12,
-    paddingHorizontal: Theme.spacing.s32,
-    borderRadius: Theme.radius.pill,
-    backgroundColor: Theme.colors.primary,
+    width: 180,
+    height: 48,
+    borderRadius: 4,
+    backgroundColor: '#F4C17F',
     alignItems: 'center',
     justifyContent: 'center',
-    ...Theme.shadows.button,
+    marginTop: 8,
+    shadowColor: '#F4C17F',
+    shadowOffset: { width: 3, height: 4 },
+    shadowOpacity: 0.76,
+    shadowRadius: 10.6,
+    elevation: 6,
   },
   ctaButtonPressed: {
-    transform: [{ scale: Theme.scale.pressed }],
+    transform: [{ scale: 0.97 }],
   },
   ctaText: {
-    fontSize: Theme.typography.size.s16,
-    fontFamily: Theme.fonts.semiBold,
-    color: Theme.colors.textInverse,
+    fontSize: 18,
+    fontFamily: Theme.fonts.regular,
+    color: '#FEFFD4',
+    letterSpacing: 1.08,
+    lineHeight: 26,
+    textAlign: 'center',
   },
   tipText: {
-    fontSize: Theme.typography.size.s12,
-    color: Theme.colors.textSecondary,
+    fontSize: 12,
+    fontFamily: Theme.fonts.regular,
+    color: 'rgba(237, 132, 63, 0.80)',
+    lineHeight: 20,
+    textAlign: 'center',
+    marginTop: 4,
   },
   privacyText: {
-    fontSize: Theme.typography.size.s11,
-    color: Theme.colors.textSecondary,
-    opacity: Theme.opacity.o7,
+    fontSize: 12,
+    fontFamily: Theme.fonts.regular,
+    color: 'rgba(237, 132, 63, 0.40)',
+    lineHeight: 20,
+    textAlign: 'center',
   },
 });

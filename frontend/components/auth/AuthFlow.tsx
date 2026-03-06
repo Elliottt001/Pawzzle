@@ -14,7 +14,7 @@ import { request, ApiError } from '@/lib/api-client';
 import { ensureChinese } from '@/utils/text';
 import { useRouter } from 'expo-router';
 import { AuthStep } from '@/types/profile';
-import { styles } from '@/app/(tabs)/_index.styles'; 
+import { styles } from '@/styles/index.styles'; 
 
 const CODE_LENGTH = 4;
 const CODE_RESEND_SECONDS = 30;
@@ -298,12 +298,7 @@ export function AuthFlow() {
     if (authStep === 'nickname') {
       return (
         <View style={styles.nicknameHeader}>
-          <Text style={styles.nicknameTitle}>起一个昵称吧!</Text>
-          <FontAwesome5
-            name="paw"
-            size={Theme.sizes.s18}
-            color={Theme.colors.textWarmStrong}
-          />
+          <Text style={styles.nicknameTitle}>起一个昵称吧！</Text>
         </View>
       );
     }
@@ -315,7 +310,10 @@ export function AuthFlow() {
           style={styles.brandLogo}
           contentFit="contain"
         />
-        <Text style={styles.brandText}>Pawzzle 寻爪</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <Text style={styles.brandTextEnglish}>Pawzzle</Text>
+          <Text style={styles.brandText}>寻爪</Text>
+        </View>
       </View>
     );
   };
@@ -340,7 +338,7 @@ export function AuthFlow() {
               styles.authButtonWeChat,
               pressed && styles.authButtonPressed,
             ]}>
-            <Text style={styles.authButtonText}>微信授权登录</Text>
+            <Text style={[styles.authButtonText, styles.authButtonTextWeChat]}>微信授权登录</Text>
           </Pressable>
           <Pressable
             onPress={handleInstitutionStart}
@@ -378,8 +376,8 @@ export function AuthFlow() {
             <TextInput
               value={phoneDigits}
               onChangeText={handlePhoneChange}
-              placeholder="请输入手机号"
-              placeholderTextColor={Theme.colors.textPlaceholder}
+              placeholder="请输入手机号码"
+              placeholderTextColor={Theme.colors.inputBorderLight}
               keyboardType="number-pad"
               maxLength={11}
               style={styles.phoneInputField}
@@ -409,7 +407,10 @@ export function AuthFlow() {
     if (authStep === 'code') {
       return (
         <View style={styles.authStack}>
-          <Text style={styles.codeHint}>验证码已发送至 {formattedPhone}</Text>
+          <View style={styles.codeHintRow}>
+            <Text style={styles.codeHintLabel}>验证码已发送至</Text>
+            <Text style={styles.codeHintPhone}>{formattedPhone}</Text>
+          </View>
           <View style={styles.codeRow}>
             {codeDigits.map((digit, index) => (
               <TextInput
@@ -443,7 +444,7 @@ export function AuthFlow() {
                   resendCountdown > 0 && styles.codeFooterHintDisabled,
                 ]}>
                 {resendCountdown > 0
-                  ? `${resendCountdown}秒后可重新获取`
+                  ? `${resendCountdown}s后可重新获取`
                   : '重新获取验证码'}
               </Text>
             </Pressable>
@@ -476,17 +477,26 @@ export function AuthFlow() {
     if (authStep === 'institution') {
       return (
         <View style={styles.authStack}>
-          <Text style={styles.institutionHint}>请输入机构验证码完成登录。</Text>
-          <TextInput
-            value={institutionCode}
-            onChangeText={(value) => {
-              setStatus(null);
-              setInstitutionCode(value);
-            }}
-            placeholder="例如：A92731"
-            placeholderTextColor={Theme.colors.textPlaceholder}
-            style={styles.institutionInput}
-          />
+          <View style={styles.institutionInputWrap}>
+            <TextInput
+              value={institutionCode}
+              onChangeText={(value) => {
+                setStatus(null);
+                setInstitutionCode(value);
+              }}
+              placeholder="请输入机构认证码"
+              placeholderTextColor={Theme.colors.inputBorderLight}
+              style={styles.institutionInput}
+            />
+            {institutionCode.length > 0 && (
+              <Pressable
+                style={styles.institutionClearBtn}
+                onPress={() => setInstitutionCode('')}
+                hitSlop={8}>
+                <Text style={styles.institutionClearText}>✕</Text>
+              </Pressable>
+            )}
+          </View>
           <Pressable
             onPress={handleInstitutionLogin}
             disabled={!canSubmitInstitutionCode || loading}
@@ -500,10 +510,9 @@ export function AuthFlow() {
                 styles.ctaButtonText,
                 (!canSubmitInstitutionCode || loading) && styles.ctaButtonTextDisabled,
               ]}>
-              机构验证码登录
+              继续
             </Text>
           </Pressable>
-          <Text style={styles.institutionTip}></Text>
           {status ? <Text style={styles.authStatus}>{status}</Text> : null}
         </View>
       );
@@ -515,7 +524,7 @@ export function AuthFlow() {
           value={nickname}
           onChangeText={handleNicknameChange}
           placeholder="请输入昵称，如：白鲤鱼"
-          placeholderTextColor={Theme.colors.textPlaceholder}
+          placeholderTextColor={Theme.colors.inputBorderLight}
           style={styles.nicknameInput}
         />
         <Pressable

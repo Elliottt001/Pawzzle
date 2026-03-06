@@ -45,6 +45,7 @@ export default function ProfileScreen() {
           <>
             <View style={[styles.authGlow, styles.authGlowTop]} />
             <View style={[styles.authGlow, styles.authGlowBottom]} />
+            <View style={[styles.authGlow, styles.authGlowCenter]} />
           </>
         )}
       </View>

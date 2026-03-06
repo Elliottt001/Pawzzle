@@ -30,12 +30,9 @@ type FontAwesome5IconName = ComponentProps<typeof FontAwesome5>['name'];
 
 export function PetCard({ pet, confidence }: PetCardProps) {
   const router = useRouter();
-  const confidenceLabel =
-    typeof confidence === 'number' ? `匹配度 ${Math.round(confidence * 100)}%` : null;
-  const energyLabel = pet.energy?.trim();
-  const showTags = Boolean(energyLabel) || Boolean(confidenceLabel);
-  const avatarTone = pet.tone || Theme.colors.decorativePeachSoft;
-  const imageDimension = Theme.sizes.s200;
+  const confidencePercent =
+    typeof confidence === 'number' ? `${Math.round(confidence * 100)}%` : null;
+  const imageDimension = 200;
   const avatarSeed = Number.parseInt(pet.id, 10);
   const avatarId = Number.isFinite(avatarSeed) ? avatarSeed : 1;
   const fallbackAvatarUri =
@@ -43,46 +40,51 @@ export function PetCard({ pet, confidence }: PetCardProps) {
       ? `https://placekitten.com/${imageDimension}/${imageDimension}`
       : `https://placedog.net/${imageDimension}/${imageDimension}?id=${avatarId}`;
   const avatarUri = resolvePetImageUri(pet.imageUrl) ?? fallbackAvatarUri;
-  const genderTone =
-    pet.icon === 'cat' ? 'female' : pet.icon === 'dog' ? 'male' : 'neutral';
-  const genderIcon: FontAwesome5IconName =
-    genderTone === 'female' ? 'venus' : genderTone === 'male' ? 'mars' : 'paw';
-  const genderIconColor =
-    genderTone === 'female'
-      ? Theme.colors.genderFemaleIcon
-      : genderTone === 'male'
-        ? Theme.colors.genderMaleIcon
-        : Theme.colors.textWarm;
+  const isFemale = pet.icon === 'cat';
+  const genderIcon: FontAwesome5IconName = isFemale ? 'venus' : 'mars';
+  const genderBgColor = isFemale ? '#FFB6C1' : '#8DCEFF';
+  const genderIconColor = '#FFFFFF';
   const breedIcon: FontAwesome5IconName =
     pet.icon === 'cat' ? 'cat' : pet.icon === 'dog' ? 'dog' : 'paw';
+
+  // Split energy/trait into tag pills
+  const tags = React.useMemo(() => {
+    const result: string[] = [];
+    if (pet.energy?.trim()) result.push(pet.energy.trim());
+    // If trait contains comma-separated short labels, use them as tags
+    // Otherwise we show trait as description below
+    return result;
+  }, [pet.energy]);
 
   return (
     <Pressable
       onPress={() => router.push(`/pet/${pet.id}`)}
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
+      {/* Confidence badge - floating top-right */}
+      {confidencePercent ? (
+        <View style={styles.confidenceBadge}>
+          <View style={styles.confidenceBadgeShine} />
+          <Text style={styles.confidenceLabel}>匹配度</Text>
+          <Text style={styles.confidenceValue}>{confidencePercent}</Text>
+        </View>
+      ) : null}
+
+      {/* Top section: avatar + info */}
       <View style={styles.cardTop}>
-        <View style={[styles.avatarRing, { backgroundColor: avatarTone }]}>
+        <View style={styles.avatarRing}>
           <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
         </View>
         <View style={styles.cardBody}>
           {/* Name + Gender */}
           <View style={styles.nameRow}>
             <Text style={styles.petName}>{pet.name}</Text>
-            <View
-              style={[
-                styles.genderBadge,
-                genderTone === 'female'
-                  ? styles.genderBadgeFemale
-                  : genderTone === 'male'
-                    ? styles.genderBadgeMale
-                    : styles.genderBadgeNeutral,
-              ]}>
-              <FontAwesome5 name={genderIcon} size={Theme.typography.size.s12} color={genderIconColor} />
+            <View style={[styles.genderBadge, { backgroundColor: genderBgColor }]}>
+              <FontAwesome5 name={genderIcon} size={12} color={genderIconColor} />
             </View>
           </View>
-          {/* Distance (orange accent) */}
+          {/* Distance */}
           <View style={styles.distanceRow}>
-            <FontAwesome5 name="map-marker-alt" size={Theme.typography.size.s12} color={Theme.colors.distanceAccent} />
+            <FontAwesome5 name="map-marker-alt" size={12} color="#ED843F" />
             <Text style={styles.distanceText}>
               {pet.distance?.trim() ? pet.distance : '距离待定'}
             </Text>
@@ -90,41 +92,40 @@ export function PetCard({ pet, confidence }: PetCardProps) {
           {/* Age + Breed */}
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>
-              <FontAwesome5 name="birthday-cake" size={Theme.typography.size.s14} color={Theme.colors.textWarmStrong} />
+              <FontAwesome5 name="birthday-cake" size={14} color="#5C4033" />
               <Text style={styles.infoText}>{pet.age?.trim() ? pet.age : '年龄待定'}</Text>
             </View>
             <View style={styles.infoItem}>
-              <FontAwesome5 name={breedIcon} size={Theme.typography.size.s14} color={Theme.colors.textWarmStrong} />
+              <FontAwesome5 name={breedIcon} size={14} color="#5C4033" />
               <Text style={styles.infoText}>{pet.breed?.trim() ? pet.breed : '品种待定'}</Text>
             </View>
           </View>
-          {/* Tags */}
-          {showTags ? (
-            <View style={styles.tagRow}>
-              {energyLabel ? (
-                <View style={[styles.tagPill, styles.tagEnergy]}>
-                  <Text style={styles.tagText}>{energyLabel}</Text>
-                </View>
-              ) : null}
-              {confidenceLabel ? (
-                <View style={[styles.tagPill, styles.tagConfidence]}>
-                  <Text style={[styles.tagText, styles.tagTextConfidence]}>
-                    {confidenceLabel}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-          {/* Description */}
-          {pet.trait?.trim() ? (
-            <View style={styles.traitWrap}>
-              <Text style={styles.traitText}>{pet.trait}</Text>
-            </View>
-          ) : null}
         </View>
       </View>
+
+      {/* Tags row */}
+      {tags.length > 0 ? (
+        <View style={styles.tagRow}>
+          {tags.map((tag, index) => (
+            <View key={index} style={styles.tagPill}>
+              <Text style={styles.tagText}>{tag}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {/* Description */}
+      {pet.trait?.trim() ? (
+        <View style={styles.traitWrap}>
+          <Text style={styles.traitText} numberOfLines={3}>
+            {pet.trait}
+          </Text>
+        </View>
+      ) : null}
+
+      {/* CTA button */}
       <View style={styles.cta}>
-        <FontAwesome5 name="chevron-right" size={Theme.typography.size.s11} color={Theme.colors.ctaText} />
+        <FontAwesome5 name="chevron-right" size={11} color="#FFFFFF" />
         <Text style={styles.ctaText}>点击查看详细信息</Text>
       </View>
     </Pressable>
@@ -133,142 +134,180 @@ export function PetCard({ pet, confidence }: PetCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    gap: Theme.spacing.s6,
+    width: 326,
     paddingTop: 21,
-    paddingBottom: Theme.spacing.s18,
+    paddingBottom: 10,
     paddingHorizontal: 21,
-    backgroundColor: Theme.colors.cardTranslucentLight,
-    borderRadius: Theme.radius.r32,
-    ...Theme.shadows.cardWarm,
+    backgroundColor: 'rgba(255, 255, 255, 0.50)',
+    borderRadius: 32,
+    shadowColor: 'rgba(244, 193, 127, 0.44)',
+    shadowOffset: { width: 6, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 7.3,
+    elevation: 6,
+    gap: 6,
   },
   cardPressed: {
-    transform: [{ scale: Theme.scale.pressedSoft }],
+    transform: [{ scale: 0.98 }],
+  },
+  confidenceBadge: {
+    position: 'absolute',
+    top: -20,
+    right: 21,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 3,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 36,
+    backgroundColor: '#FFFBF5',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 193, 127, 0.37)',
+    shadowColor: 'rgba(244, 193, 127, 0.43)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 9.3,
+    elevation: 8,
+    zIndex: 10,
+    overflow: 'hidden',
+  },
+  confidenceBadgeShine: {
+    position: 'absolute',
+    width: 13,
+    height: 30,
+    left: 25,
+    top: -3,
+    backgroundColor: 'white',
+    opacity: 0.6,
+    transform: [{ rotate: '47deg' }],
+  },
+  confidenceLabel: {
+    fontSize: 10,
+    fontFamily: Theme.fonts.regular,
+    color: '#ED843F',
+    lineHeight: 11,
+    letterSpacing: 0.6,
+  },
+  confidenceValue: {
+    fontSize: 32,
+    fontFamily: Theme.fonts.matchScore,
+    color: '#ED843F',
+    lineHeight: 28,
+    letterSpacing: 1.92,
   },
   cardTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Theme.spacing.s14,
+    gap: 14,
   },
   avatarRing: {
-    width: Theme.sizes.s70,
-    height: Theme.sizes.s70,
-    borderRadius: Theme.sizes.s70 / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Theme.spacing.s4,
+    width: 69,
+    height: 69,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: '#F4C17F',
+    overflow: 'hidden',
   },
   avatar: {
-    width: Theme.sizes.s60,
-    height: Theme.sizes.s60,
-    borderRadius: Theme.sizes.s60 / 2,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.card,
-    backgroundColor: Theme.colors.surfaceWarm,
+    width: '100%',
+    height: '100%',
+    borderRadius: 9999,
   },
   cardBody: {
-    flex: Theme.layout.full,
-    gap: Theme.spacing.s4,
+    flex: 1,
+    gap: 2,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Theme.spacing.s4,
+    gap: 4,
   },
   petName: {
-    fontSize: Theme.typography.size.s24,
+    fontSize: 24,
     fontFamily: Theme.fonts.regular,
-    color: Theme.colors.textWarmStrong,
+    color: '#5C4033',
     letterSpacing: 1.44,
+    lineHeight: 28,
   },
   genderBadge: {
-    width: Theme.sizes.s22,
-    height: Theme.sizes.s22,
-    borderRadius: Theme.sizes.s22 / 2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  genderBadgeFemale: {
-    backgroundColor: Theme.colors.genderFemaleBg,
-  },
-  genderBadgeMale: {
-    backgroundColor: Theme.colors.genderMaleBg,
-  },
-  genderBadgeNeutral: {
-    backgroundColor: Theme.colors.decorativePeachSoft,
   },
   distanceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Theme.spacing.s6,
+    gap: 6,
   },
   distanceText: {
-    fontSize: Theme.typography.size.s12,
-    color: Theme.colors.distanceAccent,
+    fontSize: 12,
+    fontFamily: Theme.fonts.regular,
+    color: '#ED843F',
+    lineHeight: 23,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Theme.spacing.s18,
+    gap: 19,
   },
   infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Theme.spacing.s8,
+    gap: 8,
   },
   infoText: {
-    fontSize: Theme.typography.size.s12,
-    color: Theme.colors.textWarmStrong,
+    fontSize: 12,
+    fontFamily: Theme.fonts.regular,
+    color: '#5C4033',
+    lineHeight: 23,
   },
   tagRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: Theme.spacing.s6,
+    gap: 12,
   },
   tagPill: {
-    paddingHorizontal: Theme.spacing.s8,
-    paddingVertical: Theme.spacing.s2,
-    borderRadius: Theme.radius.pill,
-    borderWidth: Theme.borderWidth.hairline,
-  },
-  tagEnergy: {
-    backgroundColor: Theme.colors.decorativePeachSoft,
-    borderColor: Theme.colors.borderWarmSoft,
-  },
-  tagConfidence: {
-    backgroundColor: Theme.colors.decorativeSkySoft,
-    borderColor: Theme.colors.decorativeSkyAlt,
+    paddingHorizontal: 10,
+    backgroundColor: '#D2D1D1',
+    borderRadius: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   tagText: {
-    fontSize: Theme.typography.size.s12,
-    color: Theme.colors.textWarm,
-    fontFamily: Theme.fonts.medium,
-  },
-  tagTextConfidence: {
-    fontFamily: Theme.fonts.matchScore,
+    fontSize: 12,
+    fontFamily: Theme.fonts.regular,
+    color: '#FFFFFF',
+    lineHeight: 23,
+    letterSpacing: 0.72,
   },
   traitWrap: {
-    paddingVertical: Theme.spacing.s6,
-    borderRadius: Theme.radius.r4,
+    paddingVertical: 7,
+    borderRadius: 4,
   },
   traitText: {
-    fontSize: Theme.typography.size.s15,
-    color: Theme.colors.textWarmStrong,
+    fontSize: 15,
+    fontFamily: Theme.fonts.regular,
+    color: '#5C4033',
     lineHeight: 23,
   },
   cta: {
-    paddingVertical: Theme.spacing.s4,
-    borderRadius: Theme.radius.r36,
-    backgroundColor: Theme.colors.ctaBackground,
+    height: 30,
+    borderRadius: 36,
+    backgroundColor: '#F4C17F',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    gap: Theme.spacing.s2,
+    gap: 2,
+    paddingHorizontal: 84,
   },
   ctaText: {
-    fontSize: Theme.typography.size.s12,
-    color: Theme.colors.ctaText,
+    fontSize: 12,
     fontFamily: Theme.fonts.regular,
+    color: '#FFFFFF',
     letterSpacing: 0.72,
+    lineHeight: 20,
   },
 });

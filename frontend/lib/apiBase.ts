@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-const FALLBACK_LAN_URL = 'http://172.25.155.42:7860';
+const FALLBACK_LAN_URL = 'http://10.196.228.171:7860';
 const FALLBACK_ANDROID_EMULATOR_URL = 'http://10.0.2.2:7860';
 const FALLBACK_LOCAL_URL = 'http://localhost:7860';
 
@@ -29,6 +29,6 @@ const inferredBaseUrl = (() => {
 const rawBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL ??
   process.env.EXPO_PUBLIC_API_URL ??
-  inferredBaseUrl;
+  'http://192.168.112.65:7860';
 
 export const API_BASE_URL = rawBaseUrl.replace(/\/$/, '');

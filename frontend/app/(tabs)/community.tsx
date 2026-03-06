@@ -1,6 +1,7 @@
 import * as React from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   Platform,
   Pressable,
   ScrollView,
@@ -14,10 +15,16 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Theme } from '../../constants/theme';
 import { API_BASE_URL } from '@/lib/apiBase';
 import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
+import ShareDailyBanner from '@/assets/images/share-daily.svg';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_WIDTH = SCREEN_WIDTH - 50;
+const BANNER_WIDTH = SCREEN_WIDTH - 60;
+const BANNER_HEIGHT = 143;
 const SCAN_DELAY_MS = 900;
 
 const TABS = [
@@ -25,6 +32,42 @@ const TABS = [
   { id: 'knowledge', label: '知识' },
   { id: 'post', label: '发布' },
 ] as const;
+
+/** Mock data for the community feed posts */
+type CommunityPost = {
+  id: string;
+  username: string;
+  avatarUrl: string;
+  distance: string;
+  images: string[];
+  content: string;
+};
+
+const MOCK_POSTS: CommunityPost[] = [
+  {
+    id: '1',
+    username: '六月寒',
+    avatarUrl: 'https://placekitten.com/68/68',
+    distance: '2.1km',
+    images: [
+      'https://placekitten.com/200/200',
+      'https://placekitten.com/201/201',
+      'https://placekitten.com/202/202',
+    ],
+    content: '老师们我们家孩子就是能当童模',
+  },
+  {
+    id: '2',
+    username: 'SCRAM',
+    avatarUrl: 'https://placekitten.com/69/69',
+    distance: '2.1km',
+    images: [
+      'https://placekitten.com/203/203',
+      'https://placekitten.com/204/204',
+    ],
+    content: '求助爪u，领养的猫猫一直在响怎么回事TT',
+  },
+];
 
 const uploadTypes = [
   { id: 'card', label: '卡片' },
@@ -545,494 +588,96 @@ export default function CommunityScreen() {
     }
   };
 
+  const [searchText, setSearchText] = React.useState('');
+  const feedPosts = MOCK_POSTS;
+
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>社区广场</Text>
-        <Text style={styles.subtitle}>浏览内容，或快速发布动态。</Text>
-      </View>
+    <View style={styles.container}>
+      {/* Top gradient overlay */}
+      <LinearGradient
+        colors={['#FEFFD4', 'rgba(255, 254, 249, 0)']}
+        style={styles.topGradient}
+        pointerEvents="none"
+      />
 
-      <View style={styles.segmented}>
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <Pressable
-              key={tab.id}
-              onPress={() => setActiveTab(tab.id)}
-              style={({ pressed }) => [
-                styles.segmentItem,
-                isActive && styles.segmentItemActive,
-                pressed && styles.segmentItemPressed,
-              ]}>
-              <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>
-                {tab.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Banner */}
+        <View style={styles.bannerContainer}>
+          <ShareDailyBanner width={BANNER_WIDTH} height={BANNER_HEIGHT} />
+        </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {activeTab === 'recommend' ? (
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>最新动态</Text>
-              <Text style={styles.sectionSubtitle}>领养社区正在发生的事</Text>
-            </View>
-            {contentLoading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator size="small" color={Theme.colors.textSecondary} />
-                <Text style={styles.loadingText}>正在加载动态...</Text>
-              </View>
-            ) : contentError ? (
-              <Text style={styles.errorText}>{contentError}</Text>
-            ) : updates.length ? (
-              <View style={styles.contentList}>
-                {updates.map((item) => (
-                  <ContentCard key={item.id ?? item.title} item={item} fallbackTag="动态" />
-                ))}
-              </View>
-            ) : (
-              <Text style={styles.emptyText}>暂无动态。</Text>
-            )}
+        {/* Search bar */}
+        <View style={styles.searchBarContainer}>
+          <View style={styles.searchBar}>
+            <FontAwesome5 name="search" size={14} color="#C4C4C4" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="搜索"
+              placeholderTextColor="#C4C4C4"
+              value={searchText}
+              onChangeText={setSearchText}
+            />
           </View>
-        ) : null}
+        </View>
 
-        {activeTab === 'knowledge' ? (
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>科普精选</Text>
-              <Text style={styles.sectionSubtitle}>实用的养宠知识与技巧</Text>
-            </View>
-            {contentLoading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator size="small" color={Theme.colors.textSecondary} />
-                <Text style={styles.loadingText}>正在加载科普...</Text>
-              </View>
-            ) : contentError ? (
-              <Text style={styles.errorText}>{contentError}</Text>
-            ) : guides.length ? (
-              <View style={styles.contentList}>
-                {guides.map((item) => (
-                  <ContentCard key={item.id ?? item.title} item={item} fallbackTag="科普" />
-                ))}
-              </View>
-            ) : (
-              <Text style={styles.emptyText}>暂无科普信息。</Text>
-            )}
-          </View>
-        ) : null}
+        {/* Feed posts */}
+        {feedPosts.map((post) => (
+          <CommunityPostCard key={post.id} post={post} />
+        ))}
 
-        {activeTab === 'post' ? (
-          <View style={styles.postPanel}>
-            <View style={styles.uploadCard}>
-              <Pressable
-                onPress={handleToggleUpload}
-                style={({ pressed }) => [
-                  styles.uploadHeader,
-                  pressed && styles.uploadHeaderPressed,
-                ]}>
-                <View>
-                  <Text style={styles.uploadTitle}>发布中心</Text>
-                  <Text style={styles.uploadSubtitle}>
-                    {isLoggedIn ? '登录后可发布卡片与动态' : '登录后才可使用发布功能'}
-                  </Text>
-                </View>
-                <Text style={styles.uploadToggle}>{uploadOpen ? '收起' : '展开'}</Text>
-              </Pressable>
-
-              {uploadOpen ? (
-                isLoggedIn ? (
-                  <View style={styles.uploadBody}>
-                    <View style={styles.uploadTypeRow}>
-                      {uploadTypes.map((type) => {
-                        const isActive = uploadType === type.id;
-                        return (
-                          <Pressable
-                            key={type.id}
-                            onPress={() => setUploadType(type.id)}
-                            style={({ pressed }) => [
-                              styles.uploadTypePill,
-                              isActive && styles.uploadTypePillActive,
-                              pressed && styles.uploadTypePillPressed,
-                            ]}>
-                            <Text
-                              style={[
-                                styles.uploadTypeText,
-                                isActive && styles.uploadTypeTextActive,
-                              ]}>
-                              {type.label}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-
-                    {uploadType === 'card' ? (
-                      <View style={styles.cardForm}>
-                        <Pressable
-                          onPress={handlePickCardPhoto}
-                          disabled={isSubmitting}
-                          style={({ pressed }) => [
-                            styles.cardPhotoUpload,
-                            pressed && styles.cardPhotoUploadPressed,
-                          ]}>
-                          {cardPhotoUri ? (
-                            <Image
-                              source={{ uri: cardPhotoUri }}
-                              style={styles.cardPhotoImage}
-                              contentFit="cover"
-                            />
-                          ) : (
-                            <View style={styles.cardPhotoPlaceholder}>
-                              <FontAwesome5
-                                name="camera"
-                                size={Theme.sizes.s24}
-                                color={Theme.colors.textWarm}
-                              />
-                              <Text style={styles.cardPhotoPlaceholderText}>
-                                拍照/上传宠物照片
-                              </Text>
-                            </View>
-                          )}
-                        </Pressable>
-                        <Text style={styles.cardPhotoHint}>支持多图上传，最多6张</Text>
-                        {cardPhotoUploadError ? (
-                          <Text style={styles.cardInlineError}>{cardPhotoUploadError}</Text>
-                        ) : null}
-
-                        <View style={styles.cardField}>
-                          <Text style={styles.cardLabel}>名字</Text>
-                          <TextInput
-                            value={cardName}
-                            onChangeText={setCardName}
-                            placeholder="输入宠物名字"
-                            placeholderTextColor={Theme.colors.placeholder}
-                            style={styles.cardInput}
-                          />
-                        </View>
-
-                        <View style={styles.cardField}>
-                          <Text style={styles.cardLabel}>品种</Text>
-                          <Pressable
-                            onPress={() => setCardBreedOpen((prev) => !prev)}
-                            style={({ pressed }) => [
-                              styles.cardSelect,
-                              pressed && styles.cardSelectPressed,
-                            ]}>
-                            <Text
-                              style={cardBreed ? styles.cardSelectValue : styles.cardSelectPlaceholder}>
-                              {cardBreed ?? '选择或输入品种'}
-                            </Text>
-                            <FontAwesome5
-                              name="chevron-down"
-                              size={Theme.sizes.s12}
-                              color={Theme.colors.textWarm}
-                            />
-                          </Pressable>
-                          {cardBreedOpen ? (
-                            <View style={styles.cardOptionRow}>
-                              {allBreeds.map((breed) => {
-                                const isActive = cardBreed === breed;
-                                return (
-                                  <Pressable
-                                    key={breed}
-                                    onPress={() => {
-                                      setCardBreed(breed);
-                                      setCardBreedOpen(false);
-                                    }}
-                                    style={({ pressed }) => [
-                                      styles.cardOptionPill,
-                                      isActive && styles.cardOptionPillActive,
-                                      pressed && styles.cardOptionPillPressed,
-                                    ]}>
-                                    <Text
-                                      style={[
-                                        styles.cardOptionText,
-                                        isActive && styles.cardOptionTextActive,
-                                      ]}>
-                                      {breed}
-                                    </Text>
-                                  </Pressable>
-                                );
-                              })}
-                            </View>
-                          ) : null}
-                        </View>
-
-                        <View style={styles.cardField}>
-                          <Text style={styles.cardLabel}>年龄</Text>
-                          <TextInput
-                            value={cardAge}
-                            onChangeText={(value) => setCardAge(value.replace(/[^0-9]/g, ''))}
-                            placeholder="输入年龄"
-                            placeholderTextColor={Theme.colors.placeholder}
-                            keyboardType="number-pad"
-                            style={styles.cardInput}
-                          />
-                        </View>
-
-                        <View style={styles.cardField}>
-                          <Text style={styles.cardLabel}>性别与状态</Text>
-                          <View style={styles.cardOptionRow}>
-                            {GENDER_OPTIONS.map((option) => {
-                              const isActive = cardGender === option.id;
-                              return (
-                                <Pressable
-                                  key={option.id}
-                                  onPress={() => setCardGender(option.id)}
-                                  style={({ pressed }) => [
-                                    styles.cardOptionPill,
-                                    isActive && styles.cardOptionPillActive,
-                                    pressed && styles.cardOptionPillPressed,
-                                  ]}>
-                                  <Text
-                                    style={[
-                                      styles.cardOptionText,
-                                      isActive && styles.cardOptionTextActive,
-                                    ]}>
-                                    {option.label}
-                                  </Text>
-                                </Pressable>
-                              );
-                            })}
-                          </View>
-                          <View style={styles.cardOptionRow}>
-                            {STATUS_OPTIONS.map((option) => {
-                              const isActive = cardCareStatus === option;
-                              return (
-                                <Pressable
-                                  key={option}
-                                  onPress={() => setCardCareStatus(option)}
-                                  style={({ pressed }) => [
-                                    styles.cardOptionPill,
-                                    isActive && styles.cardOptionPillActive,
-                                    pressed && styles.cardOptionPillPressed,
-                                  ]}>
-                                  <Text
-                                    style={[
-                                      styles.cardOptionText,
-                                      isActive && styles.cardOptionTextActive,
-                                    ]}>
-                                    {option}
-                                  </Text>
-                                </Pressable>
-                              );
-                            })}
-                          </View>
-                        </View>
-
-                        <View style={styles.cardField}>
-                          <Text style={styles.cardSectionTitle}>AI 性格侧写</Text>
-                          <Text style={styles.cardHelperText}>
-                            请介绍你家宝贝的个性（例如它是否特别粘人？它吃饭护食吗？它怕打雷吗？）
-                          </Text>
-                          <View style={styles.cardTextAreaWrap}>
-                            <TextInput
-                              value={cardPersonalityText}
-                              onChangeText={setCardPersonalityText}
-                              placeholder="描述你家宝贝的性格特点...(可粘贴小红书/朋友圈文案)"
-                              placeholderTextColor={Theme.colors.placeholder}
-                              style={styles.cardTextArea}
-                              multiline
-                            />
-                            <View style={styles.cardMicBadge}>
-                              <FontAwesome5
-                                name="microphone"
-                                size={Theme.sizes.s14}
-                                color={Theme.colors.textWarm}
-                              />
-                            </View>
-                          </View>
-                        </View>
-
-                        <View style={styles.cardField}>
-                          <View style={styles.cardTagHeader}>
-                            <Text style={styles.cardSectionTitle}>tag 生成</Text>
-                            <Pressable
-                              onPress={handleGenerateCardTags}
-                              disabled={!canGenerateCardTags}
-                              style={({ pressed }) => [
-                                styles.cardTagButton,
-                                pressed && styles.cardTagButtonPressed,
-                                !canGenerateCardTags && styles.cardTagButtonDisabled,
-                              ]}>
-                              {cardTagStatus === 'generating' ? (
-                                <ActivityIndicator size="small" color={Theme.colors.textWarmStrong} />
-                              ) : null}
-                              <Text style={styles.cardTagButtonText}>
-                                {cardTagStatus === 'generating' ? '生成中...' : '生成'}
-                              </Text>
-                            </Pressable>
-                          </View>
-                          <View style={styles.cardTagRow}>
-                            {cardTags.length ? (
-                              cardTags.map((tag) => (
-                                <View key={tag} style={styles.cardTagPill}>
-                                  <Text style={styles.cardTagText}># {tag}</Text>
-                                </View>
-                              ))
-                            ) : (
-                              <Text style={styles.cardTagEmpty}>暂未生成标签</Text>
-                            )}
-                          </View>
-                          {cardTagError ? (
-                            <Text style={styles.cardInlineError}>{cardTagError}</Text>
-                          ) : null}
-                        </View>
-
-                        <View style={styles.cardField}>
-                          <Text style={styles.cardSectionTitle}>您觉得什么样的人千万不要养这只宠物?</Text>
-                          <View style={styles.cardTextAreaWrap}>
-                            <TextInput
-                              value={cardAvoidAdopterText}
-                              onChangeText={setCardAvoidAdopterText}
-                              placeholder="比如：禁止宿舍..."
-                              placeholderTextColor={Theme.colors.placeholder}
-                              style={styles.cardTextArea}
-                              multiline
-                            />
-                            <View style={styles.cardMicBadge}>
-                              <FontAwesome5
-                                name="microphone"
-                                size={Theme.sizes.s14}
-                                color={Theme.colors.textWarm}
-                              />
-                            </View>
-                          </View>
-                        </View>
-
-                        <Pressable
-                          onPress={handleCreateCard}
-                          disabled={isSubmitting}
-                          style={({ pressed }) => [
-                            styles.cardSubmitButton,
-                            isSubmitting && styles.cardSubmitButtonDisabled,
-                            pressed && !isSubmitting && styles.cardSubmitButtonPressed,
-                          ]}>
-                          <Text style={styles.cardSubmitButtonText}>
-                            {isSubmitting ? '生成中...' : '生成专属宠物信息卡'}
-                          </Text>
-                        </Pressable>
-                      </View>
-                    ) : (
-                      <View style={styles.formFields}>
-                        <FieldLabel text={`${contentLabel}标题`} />
-                        <TextInput
-                          value={contentTitle}
-                          onChangeText={setContentTitle}
-                          placeholder={`请输入${contentLabel}标题`}
-                          placeholderTextColor={Theme.colors.placeholder}
-                          style={styles.formInput}
-                        />
-
-                        <FieldLabel text={`${contentLabel}副标题`} />
-                        <TextInput
-                          value={contentSubtitle}
-                          onChangeText={setContentSubtitle}
-                          placeholder="简短摘要..."
-                          placeholderTextColor={Theme.colors.placeholder}
-                          style={styles.formInput}
-                        />
-
-                        <FieldLabel text="标签（可选）" />
-                        <TextInput
-                          value={contentTag}
-                          onChangeText={setContentTag}
-                          placeholder="最新、活动、技巧..."
-                          placeholderTextColor={Theme.colors.placeholder}
-                          style={styles.formInput}
-                        />
-
-                        <Pressable
-                          onPress={handleCreateContent}
-                          disabled={isSubmitting}
-                          style={({ pressed }) => [
-                            styles.submitButton,
-                            isSubmitting && styles.submitButtonDisabled,
-                            pressed && !isSubmitting && styles.submitButtonPressed,
-                          ]}>
-                          <Text style={styles.submitButtonText}>
-                            {isSubmitting ? '发布中...' : `发布${contentLabel}`}
-                          </Text>
-                        </Pressable>
-                      </View>
-                    )}
-
-                    {submitMessage ? (
-                      <Text
-                        style={[
-                          styles.submitMessage,
-                          submitStatus === 'error'
-                            ? styles.submitMessageError
-                            : styles.submitMessageSuccess,
-                        ]}>
-                        {submitMessage}
-                      </Text>
-                    ) : null}
-                  </View>
-                ) : (
-                  <View style={styles.loginHint}>
-                    <Text style={styles.loginHintText}>请先登录后再发布内容。</Text>
-                    <Pressable
-                      onPress={() => router.push('/')}
-                      style={({ pressed }) => [
-                        styles.loginButton,
-                        pressed && styles.loginButtonPressed,
-                      ]}>
-                      <Text style={styles.loginButtonText}>去登录</Text>
-                    </Pressable>
-                  </View>
-                )
-              ) : null}
-            </View>
-
-            <Pressable
-              onPress={handleSnap}
-              disabled={isScanning}
-              style={({ pressed }) => [
-                styles.snapButton,
-                pressed && !isScanning && styles.snapButtonPressed,
-              ]}>
-              <Text style={styles.snapButtonText}>拍摄流浪宠物</Text>
-            </Pressable>
-
-            {isScanning ? (
-              <View style={styles.statusPill}>
-                <Text style={styles.statusText}>识别中...</Text>
-              </View>
-            ) : null}
-
-            {hasResult ? (
-              <View style={styles.resultCard}>
-                <Text style={styles.resultTitle}>识别结果</Text>
-                <Text style={styles.resultSubtitle}>标签：#流浪 #猫咪 #受伤</Text>
-                <View style={styles.tagsRow}>
-                  {['#流浪', '#猫咪', '#受伤'].map((tag) => (
-                    <View key={tag} style={styles.tag}>
-                      <Text style={styles.tagText}>{tag}</Text>
-                    </View>
-                  ))}
-                </View>
-                <Pressable
-                  onPress={handlePush}
-                  style={({ pressed }) => [
-                    styles.pushButton,
-                    pressed && styles.pushButtonPressed,
-                  ]}>
-                  <Text style={styles.pushButtonText}>
-                    推送到最近机构（距离优先）
-                  </Text>
-                </Pressable>
-                {pushStatus === 'sent' ? (
-                  <Text style={styles.pushStatusText}>已进入推送队列。</Text>
-                ) : null}
-              </View>
-            ) : null}
-          </View>
-        ) : null}
+        {/* Spacer for tab bar */}
+        <View style={{ height: 100 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
+  );
+}
+
+function CommunityPostCard({ post }: { post: CommunityPost }) {
+  return (
+    <View style={styles.postCard}>
+      <View style={styles.postCardInner}>
+        {/* Header: avatar + name + distance */}
+        <View style={styles.postHeader}>
+          <View style={styles.avatarWrapper}>
+            <Image
+              source={{ uri: post.avatarUrl }}
+              style={styles.postAvatar}
+              contentFit="cover"
+            />
+          </View>
+          <View style={styles.postUserInfo}>
+            <Text style={styles.postUsername}>{post.username}</Text>
+            <View style={styles.postDistanceRow}>
+              <FontAwesome5
+                name="map-marker-alt"
+                size={12}
+                color="#ED843F"
+              />
+              <Text style={styles.postDistance}>{post.distance}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Pet images */}
+        <View style={styles.postImages}>
+          {post.images.map((uri, idx) => (
+            <Image
+              key={`${post.id}-img-${idx}`}
+              source={{ uri }}
+              style={styles.postImage}
+              contentFit="cover"
+            />
+          ))}
+        </View>
+
+        {/* Content text */}
+        <Text style={styles.postContent}>{post.content}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -1134,10 +779,129 @@ function resolveSpeciesFromBreed(breed: string | null) {
 }
 
 const styles = StyleSheet.create({
+  /* ── Layout ────────────────────────────────────── */
   container: {
-    flex: Theme.layout.full,
-    backgroundColor: Theme.colors.background,
+    flex: 1,
+    backgroundColor: '#FFFEF9',
   },
+  topGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 315,
+    zIndex: 1,
+    pointerEvents: 'none',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingTop: 75,
+    alignItems: 'center',
+  },
+
+  /* ── Banner ────────────────────────────────────── */
+  bannerContainer: {
+    width: BANNER_WIDTH,
+    height: BANNER_HEIGHT,
+    borderRadius: 24,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+
+  /* ── Search ────────────────────────────────────── */
+  searchBarContainer: {
+    width: CARD_WIDTH,
+    marginBottom: 20,
+  },
+  searchBar: {
+    height: 45,
+    backgroundColor: Theme.colors.card,
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: '#F4C17F',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    gap: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: Theme.fonts.regular,
+    color: Theme.colors.text,
+    padding: 0,
+  },
+
+  /* ── Post Card ─────────────────────────────────── */
+  postCard: {
+    width: CARD_WIDTH,
+    backgroundColor: 'rgba(255, 255, 255, 0.50)',
+    borderRadius: 32,
+    paddingTop: 21,
+    paddingBottom: 18,
+    paddingHorizontal: 21,
+    marginBottom: 16,
+    ...Theme.shadows.cardWarm,
+  },
+  postCardInner: {
+    gap: 16,
+  },
+  postHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 21,
+  },
+  avatarWrapper: {
+    width: 69,
+    height: 69,
+  },
+  postAvatar: {
+    width: 67.62,
+    height: 67.62,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: '#F4C17F',
+  },
+  postUserInfo: {
+    flex: 1,
+  },
+  postUsername: {
+    color: '#5C4033',
+    fontSize: 24,
+    fontFamily: Theme.fonts.regular,
+    lineHeight: 28,
+    letterSpacing: 1.44,
+  },
+  postDistanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+  },
+  postDistance: {
+    color: '#ED843F',
+    fontSize: 12,
+    fontFamily: Theme.fonts.regular,
+    lineHeight: 23,
+  },
+  postImages: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  postImage: {
+    width: 68,
+    height: 68,
+    borderRadius: 8,
+  },
+  postContent: {
+    color: '#5C4033',
+    fontSize: 12,
+    fontFamily: Theme.fonts.regular,
+    lineHeight: 20,
+  },
+
+  /* ── Preserved styles for existing features ────── */
   header: {
     paddingHorizontal: Theme.spacing.l,
     paddingTop: Theme.spacing.m,
@@ -1258,23 +1022,6 @@ const styles = StyleSheet.create({
   contentSubtitle: {
     fontSize: Theme.typography.size.s13,
     color: Theme.colors.textSecondary,
-  },
-  placeholderCard: {
-    backgroundColor: Theme.colors.cardTranslucentSoft,
-    borderRadius: Theme.layout.radius,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarm,
-    padding: Theme.spacing.m,
-    gap: Theme.spacing.s,
-  },
-  placeholderTitle: {
-    color: Theme.colors.text,
-    fontSize: Theme.typography.size.s16,
-    fontFamily: Theme.fonts.semiBold,
-  },
-  placeholderText: {
-    color: Theme.colors.textSecondary,
-    fontSize: Theme.typography.size.s14,
   },
   uploadCard: {
     backgroundColor: Theme.colors.backgroundWarmAlt,

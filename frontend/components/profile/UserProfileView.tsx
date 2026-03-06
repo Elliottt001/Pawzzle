@@ -6,16 +6,16 @@ import {
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from '@/components/base-text';
 import { FontAwesome5 } from '@expo/vector-icons';
-import { Theme } from '@/constants/theme';
 import { useRouter } from 'expo-router';
 import { API_BASE_URL } from '@/lib/apiBase';
 import { setSession, setGuestMode, type AuthSession } from '@/lib/session';
-import { request, ApiError } from '@/lib/api-client';
+import { request } from '@/lib/api-client';
 import { ensureChinese, formatDate } from '@/utils/text';
 import { PetCard } from '@/components/pet-card';
-import { styles } from '@/app/(tabs)/_index.styles';
+import { styles, homeStyles } from '@/styles/index.styles';
 import { AdoptionSummary, UserProfile } from '@/types/profile';
 
 interface UserProfileViewProps {
@@ -155,61 +155,120 @@ export function UserProfileView({ session }: UserProfileViewProps) {
 
   const displayName = userProfile?.name ?? session?.user.name ?? '游客';
   const resolvedUserType = userProfile?.userType ?? session?.user.userType ?? null;
-  const userTypeLabel = session
-    ? resolvedUserType === 'INSTITUTION'
-      ? '机构用户 (VIP)'
-      : '普通用户'
-    : '未登录';
+  const userTypeLabel = resolvedUserType === 'INSTITUTION' ? '机构用户' : '个人用户';
 
   return (
-    <>
-      <View style={styles.header}>
-        <Text style={styles.overline}>首页</Text>
-        <Text style={styles.title}>我的空间</Text>
+    <ScrollView
+      contentContainerStyle={homeStyles.content}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* ── Profile Header ── */}
+      <View style={homeStyles.profileRow}>
+        <View style={homeStyles.profileInfo}>
+          <View style={homeStyles.nameRow}>
+            <Text style={homeStyles.userName}>{displayName}</Text>
+          </View>
+          <Text style={homeStyles.userId}>ID：{session.user.id ?? '—'}</Text>
+          <Text style={homeStyles.userIp}>IP地址：北京</Text>
+        </View>
+        <Pressable
+          onPress={() => {
+            if (session?.user.id) router.push(`/user/${session.user.id}`);
+          }}
+          style={({ pressed }) => pressed && { opacity: 0.8 }}
+        >
+          <Image
+            source={require('@/assets/images/logo.png')}
+            style={homeStyles.avatar}
+          />
+        </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.profileCard}>
-          <Pressable
-            disabled={!session}
-            onPress={() => {
-              if (session?.user.id) {
-                router.push(`/user/${session.user.id}`);
-              }
-            }}
-            style={({ pressed }) => [
-              styles.avatarWrap,
-              pressed && session && styles.avatarPressed,
-            ]}>
-            <Image source={require('@/assets/images/logo.png')} style={styles.avatar} />
-          </Pressable>
-          <Text style={styles.name}>{displayName}</Text>
-          <Text style={styles.nicknameLabel}>状态</Text>
-          <View style={styles.nicknamePill}>
-            <Text style={styles.nicknameText}>已登录</Text>
-          </View>
-          <Text style={styles.nicknameLabel}>用户类型</Text>
-          <View style={styles.userTypePill}>
-            <Text style={styles.userTypeText}>{userTypeLabel}</Text>
-          </View>
-          {session ? (
-            <Text style={styles.emailText}>{session.user.email}</Text>
-          ) : null}
+      {/* ── User type badge + bio hint ── */}
+      <View style={homeStyles.badgeRow}>
+        <View style={homeStyles.userBadge}>
+          <Text style={homeStyles.userBadgeText}>{userTypeLabel}</Text>
         </View>
+        <Pressable
+          onPress={() => {
+            if (session?.user.id) router.push(`/user/${session.user.id}`);
+          }}
+        >
+          <Text style={homeStyles.bioHint}>点击这里，填写简介</Text>
+        </Pressable>
+      </View>
 
-        {status ? <Text style={styles.statusText}>{status}</Text> : null}
+      {status ? <Text style={styles.statusText}>{status}</Text> : null}
 
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>我的领养</Text>
-            <Text style={styles.sectionSubtitle}>{adoptions.length} 只</Text>
+      {/* ── AI辅养 Section ── */}
+      <Text style={homeStyles.sectionTitle}>AI辅养</Text>
+      <LinearGradient
+        colors={['#F4C17F', 'rgba(244, 193, 127, 0.44)']}
+        start={{ x: 0.22, y: 0.14 }}
+        end={{ x: 1, y: 1 }}
+        style={homeStyles.aiCard}
+      >
+        <View style={homeStyles.aiRow}>
+          <View style={homeStyles.aiIconWrap}>
+            <FontAwesome5 name="paw" size={15} color="#5C4033" />
+          </View>
+          <Text style={homeStyles.aiTitle}>3个月幼猫到家第4天</Text>
+        </View>
+        <View style={homeStyles.aiChecklist}>
+          <View style={homeStyles.aiCheckItem}>
+            <View style={homeStyles.checkboxWrap}>
+              <View style={homeStyles.checkbox} />
+            </View>
+            <Text style={homeStyles.checkText}>原猫粮少量多餐，不喂牛奶/人食</Text>
+          </View>
+          <View style={homeStyles.aiCheckItem}>
+            <View style={homeStyles.checkboxWrap}>
+              <View style={homeStyles.checkbox} />
+            </View>
+            <Text style={homeStyles.checkText}>固定猫砂盆、食碗水碗，给安静小窝</Text>
+          </View>
+        </View>
+      </LinearGradient>
+
+      {/* ── 我的宠物 Section ── */}
+      <View style={homeStyles.petHeader}>
+        <Text style={homeStyles.sectionTitle}>我的宠物</Text>
+        <Pressable
+          style={({ pressed }) => [
+            homeStyles.petAddBtn,
+            pressed && { transform: [{ scale: 0.92 }] },
+          ]}
+          onPress={() => router.push('/pet/add')}
+        >
+          <FontAwesome5 name="plus" size={12} color="#FFFFFF" />
+        </Pressable>
+      </View>
+
+      {profileLoading ? <ActivityIndicator size="small" /> : null}
+      {profileError ? <Text style={styles.errorText}>{profileError}</Text> : null}
+      {!profileLoading && !profileError && userProfile?.pets?.length ? (
+        <View style={homeStyles.petList}>
+          {userProfile.pets.map((pet) => (
+            <PetCard key={pet.id} pet={pet} />
+          ))}
+        </View>
+      ) : null}
+      {!profileLoading && !profileError && !userProfile?.pets?.length ? (
+        <Text style={styles.emptyText}>暂无发布的宠物卡片。</Text>
+      ) : null}
+
+      {/* ── 我的领养 Section ── */}
+      {adoptions.length > 0 || adoptionLoading ? (
+        <>
+          <View style={homeStyles.petHeader}>
+            <Text style={homeStyles.sectionTitle}>我的领养</Text>
           </View>
           {adoptionLoading ? <ActivityIndicator size="small" /> : null}
           {adoptionError ? <Text style={styles.errorText}>{adoptionError}</Text> : null}
-          {!adoptionLoading && !adoptionError && adoptions.length ? (
-            <View style={styles.adoptionList}>
+          {!adoptionLoading && !adoptionError && adoptions.length > 0 ? (
+            <View style={homeStyles.petList}>
               {adoptions.map((adoption) => (
-                <View key={adoption.id} style={styles.adoptionItem}>
+                <View key={adoption.id} style={{ gap: 10 }}>
                   <PetCard pet={adoption.pet} />
                   <View style={styles.adoptionMetaRow}>
                     <Text style={styles.adoptionMetaLabel}>当前阶段</Text>
@@ -223,58 +282,24 @@ export function UserProfileView({ session }: UserProfileViewProps) {
               ))}
             </View>
           ) : null}
-          {!adoptionLoading && !adoptionError && !adoptions.length ? (
-            <Text style={styles.emptyText}>暂无领养记录。</Text>
-          ) : null}
-        </View>
-
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>我的宠物卡片</Text>
-            <Text style={styles.sectionSubtitle}>
-              {userProfile?.pets?.length ?? 0} 张
-            </Text>
-          </View>
-          {profileLoading ? <ActivityIndicator size="small" /> : null}
-          {profileError ? <Text style={styles.errorText}>{profileError}</Text> : null}
-          {!profileLoading && !profileError && userProfile?.pets?.length ? (
-            <View style={styles.petsList}>
-              {userProfile.pets.map((pet) => (
-                <PetCard key={pet.id} pet={pet} />
-              ))}
-            </View>
-          ) : null}
-          {!profileLoading && !profileError && !userProfile?.pets?.length ? (
-            <Text style={styles.emptyText}>暂无发布的宠物卡片。</Text>
-          ) : null}
-        </View>
-
-        <View style={styles.formCard}>
-          <Text style={styles.formTitle}>账户管理</Text>
-          <Text style={styles.formSubtitle}>如需退出登录，可在此设备操作。</Text>
-          <Pressable
-            onPress={handleLogout}
-            disabled={loading}
-            style={({ pressed }) => [
-              styles.actionButton,
-              pressed && styles.actionButtonPressed,
-            ]}>
-            <Text style={styles.actionButtonText}>
-              {loading ? '正在退出...' : '退出登录'}
-            </Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-      {resolvedUserType === 'INSTITUTION' ? (
-        <Pressable
-          onPress={() => router.push('/pet/rehome/upload')}
-          style={({ pressed }) => [
-            styles.institutionFab,
-            pressed && styles.institutionFabPressed,
-          ]}>
-          <FontAwesome5 name="plus" size={Theme.sizes.s24} color={Theme.colors.textInverse} />
-        </Pressable>
+        </>
       ) : null}
-    </>
+
+      {/* ── 账户管理 ── */}
+      <View style={homeStyles.accountCard}>
+        <Pressable
+          onPress={handleLogout}
+          disabled={loading}
+          style={({ pressed }) => [
+            homeStyles.logoutBtn,
+            pressed && { transform: [{ scale: 0.97 }] },
+          ]}
+        >
+          <Text style={homeStyles.logoutText}>
+            {loading ? '正在退出...' : '退出登录'}
+          </Text>
+        </Pressable>
+      </View>
+    </ScrollView>
   );
 }
