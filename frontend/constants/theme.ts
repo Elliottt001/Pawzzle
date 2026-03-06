@@ -80,6 +80,10 @@ const Palette = {
   tabBarHighlight: 'rgba(254, 255, 212, 0.95)',
   tabBarCenterBase: '#FFFEF9',
   tabBarShadow: '#F4C17F',
+  orange600: '#ED843F',
+  pinkSoft: '#FFB6C1',
+  blueSoft: '#8DCEFF',
+  white50: 'rgba(255, 255, 255, 0.50)',
   transparent: 'transparent',
 };
 
@@ -155,6 +159,8 @@ const Radius = {
   r20: 20,
   r22: 22,
   r24: 24,
+  r32: 32,
+  r36: 36,
   r48: 48,
   r110: 110,
   pill: 999,
@@ -315,6 +321,13 @@ const Shadows = {
     shadowRadius: Radius.r4,
     elevation: 2,
   },
+  cardWarm: {
+    shadowColor: Palette.tabBarShadow,
+    shadowOpacity: 0.44,
+    shadowOffset: { width: 6, height: 8 },
+    shadowRadius: 7.3,
+    elevation: 4,
+  },
 };
 
 export const Theme = {
@@ -382,12 +395,15 @@ export const Theme = {
     decorativeSky: Palette.sky60,
     decorativeSkyAlt: Palette.sky50,
     decorativeSkySoft: Palette.sky70,
-    ctaBackground: Palette.orange300,
+    ctaBackground: Palette.tabBarShadow,
     ctaBorder: Palette.orange200,
     ctaText: Palette.white,
-    genderFemaleBg: Palette.rose200,
+    cardTranslucentLight: Palette.white50,
+    distanceAccent: Palette.orange600,
+    searchBorder: Palette.tabBarShadow,
+    genderFemaleBg: Palette.pinkSoft,
     genderFemaleIcon: Palette.rose500,
-    genderMaleBg: Palette.sky200,
+    genderMaleBg: Palette.blueSoft,
     genderMaleIcon: Palette.sky500,
     headerSurface: Palette.neutral300,
     headerSurfaceDark: Palette.darkSurface,

@@ -12,7 +12,7 @@ import {
   subscribeSession,
   type AuthSession,
 } from '@/lib/session';
-import { styles } from './_index.styles';
+import { styles } from '@/styles/index.styles';
 import { AuthFlow } from '@/components/auth/AuthFlow';
 import { UserProfileView } from '@/components/profile/UserProfileView';
 

@@ -55,20 +55,6 @@ export function PetCard({ pet, confidence }: PetCardProps) {
         : Theme.colors.textWarm;
   const breedIcon: FontAwesome5IconName =
     pet.icon === 'cat' ? 'cat' : pet.icon === 'dog' ? 'dog' : 'paw';
-  const metaItems: { icon: FontAwesome5IconName; text: string }[] = [
-    {
-      icon: 'map-marker-alt',
-      text: pet.distance?.trim() ? pet.distance : '距离待定',
-    },
-    {
-      icon: 'birthday-cake',
-      text: pet.age?.trim() ? pet.age : '年龄待定',
-    },
-    {
-      icon: breedIcon,
-      text: pet.breed?.trim() ? pet.breed : '品种待定',
-    },
-  ];
 
   return (
     <Pressable
@@ -79,6 +65,7 @@ export function PetCard({ pet, confidence }: PetCardProps) {
           <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
         </View>
         <View style={styles.cardBody}>
+          {/* Name + Gender */}
           <View style={styles.nameRow}>
             <Text style={styles.petName}>{pet.name}</Text>
             <View
@@ -90,9 +77,28 @@ export function PetCard({ pet, confidence }: PetCardProps) {
                     ? styles.genderBadgeMale
                     : styles.genderBadgeNeutral,
               ]}>
-              <FontAwesome5 name={genderIcon} size={Theme.sizes.s16} color={genderIconColor} />
+              <FontAwesome5 name={genderIcon} size={Theme.typography.size.s12} color={genderIconColor} />
             </View>
           </View>
+          {/* Distance (orange accent) */}
+          <View style={styles.distanceRow}>
+            <FontAwesome5 name="map-marker-alt" size={Theme.typography.size.s12} color={Theme.colors.distanceAccent} />
+            <Text style={styles.distanceText}>
+              {pet.distance?.trim() ? pet.distance : '距离待定'}
+            </Text>
+          </View>
+          {/* Age + Breed */}
+          <View style={styles.infoRow}>
+            <View style={styles.infoItem}>
+              <FontAwesome5 name="birthday-cake" size={Theme.typography.size.s14} color={Theme.colors.textWarmStrong} />
+              <Text style={styles.infoText}>{pet.age?.trim() ? pet.age : '年龄待定'}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <FontAwesome5 name={breedIcon} size={Theme.typography.size.s14} color={Theme.colors.textWarmStrong} />
+              <Text style={styles.infoText}>{pet.breed?.trim() ? pet.breed : '品种待定'}</Text>
+            </View>
+          </View>
+          {/* Tags */}
           {showTags ? (
             <View style={styles.tagRow}>
               {energyLabel ? (
@@ -109,23 +115,16 @@ export function PetCard({ pet, confidence }: PetCardProps) {
               ) : null}
             </View>
           ) : null}
-          <View style={styles.metaRow}>
-            {metaItems.map((item) => (
-              <View key={`${pet.id}-${item.icon}`} style={styles.metaItem}>
-                <FontAwesome5
-                  name={item.icon}
-                  size={Theme.sizes.s16}
-                  color={Theme.colors.textWarm}
-                />
-                <Text style={styles.metaText}>{item.text}</Text>
-              </View>
-            ))}
-          </View>
-          {pet.trait?.trim() ? <Text style={styles.traitText}>{pet.trait}</Text> : null}
+          {/* Description */}
+          {pet.trait?.trim() ? (
+            <View style={styles.traitWrap}>
+              <Text style={styles.traitText}>{pet.trait}</Text>
+            </View>
+          ) : null}
         </View>
       </View>
       <View style={styles.cta}>
-        <FontAwesome5 name="arrow-right" size={Theme.sizes.s16} color={Theme.colors.ctaText} />
+        <FontAwesome5 name="chevron-right" size={Theme.typography.size.s11} color={Theme.colors.ctaText} />
         <Text style={styles.ctaText}>点击查看详细信息</Text>
       </View>
     </Pressable>
@@ -134,21 +133,21 @@ export function PetCard({ pet, confidence }: PetCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    gap: Theme.spacing.s12,
-    padding: Theme.spacing.s18,
-    backgroundColor: Theme.colors.cardTranslucentStrong,
-    borderRadius: Theme.radius.r24,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmStrong,
-    ...Theme.shadows.cardSoftLarge,
+    gap: Theme.spacing.s6,
+    paddingTop: 21,
+    paddingBottom: Theme.spacing.s18,
+    paddingHorizontal: 21,
+    backgroundColor: Theme.colors.cardTranslucentLight,
+    borderRadius: Theme.radius.r32,
+    ...Theme.shadows.cardWarm,
   },
   cardPressed: {
     transform: [{ scale: Theme.scale.pressedSoft }],
   },
   cardTop: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Theme.spacing.s16,
+    alignItems: 'flex-start',
+    gap: Theme.spacing.s14,
   },
   avatarRing: {
     width: Theme.sizes.s70,
@@ -168,22 +167,23 @@ const styles = StyleSheet.create({
   },
   cardBody: {
     flex: Theme.layout.full,
-    gap: Theme.spacing.s6,
+    gap: Theme.spacing.s4,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Theme.spacing.s8,
+    gap: Theme.spacing.s4,
   },
   petName: {
-    fontSize: Theme.typography.size.s20,
-    fontFamily: Theme.fonts.bold,
+    fontSize: Theme.typography.size.s24,
+    fontFamily: Theme.fonts.regular,
     color: Theme.colors.textWarmStrong,
+    letterSpacing: 1.44,
   },
   genderBadge: {
-    width: Theme.sizes.s30,
-    height: Theme.sizes.s30,
-    borderRadius: Theme.sizes.s30 / 2,
+    width: Theme.sizes.s22,
+    height: Theme.sizes.s22,
+    borderRadius: Theme.sizes.s22 / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -195,6 +195,29 @@ const styles = StyleSheet.create({
   },
   genderBadgeNeutral: {
     backgroundColor: Theme.colors.decorativePeachSoft,
+  },
+  distanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.s6,
+  },
+  distanceText: {
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.distanceAccent,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.s18,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.s8,
+  },
+  infoText: {
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.textWarmStrong,
   },
   tagRow: {
     flexDirection: 'row',
@@ -224,39 +247,28 @@ const styles = StyleSheet.create({
   tagTextConfidence: {
     fontFamily: Theme.fonts.matchScore,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: Theme.spacing.s12,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Theme.spacing.s4,
-  },
-  metaText: {
-    fontSize: Theme.typography.size.s12,
-    color: Theme.colors.textWarm,
+  traitWrap: {
+    paddingVertical: Theme.spacing.s6,
+    borderRadius: Theme.radius.r4,
   },
   traitText: {
-    fontSize: Theme.typography.size.s12,
-    color: Theme.colors.textMuted,
+    fontSize: Theme.typography.size.s15,
+    color: Theme.colors.textWarmStrong,
+    lineHeight: 23,
   },
   cta: {
-    height: Theme.sizes.s44,
-    borderRadius: Theme.radius.pill,
+    paddingVertical: Theme.spacing.s4,
+    borderRadius: Theme.radius.r36,
     backgroundColor: Theme.colors.ctaBackground,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.ctaBorder,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    gap: Theme.spacing.s6,
+    gap: Theme.spacing.s2,
   },
   ctaText: {
-    fontSize: Theme.typography.size.s14,
+    fontSize: Theme.typography.size.s12,
     color: Theme.colors.ctaText,
-    fontFamily: Theme.fonts.semiBold,
+    fontFamily: Theme.fonts.regular,
+    letterSpacing: 0.72,
   },
 });

@@ -10,6 +10,7 @@ import {
 import { Text } from '@/components/base-text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
@@ -87,8 +88,17 @@ export default function PetsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.background}>
-        <View style={[styles.blob, styles.blobTop]} />
-        <View style={[styles.blob, styles.blobBottom]} />
+        <View style={styles.gradientBackdrop} pointerEvents="none">
+          <Svg width="100%" height="100%" viewBox="0 0 378 315" preserveAspectRatio="none">
+            <Defs>
+              <LinearGradient id="petsGradient" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0%" stopColor="#FEFFD4" stopOpacity={1} />
+                <Stop offset="100%" stopColor="#FFFEF9" stopOpacity={0} />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="378" height="315" fill="url(#petsGradient)" />
+          </Svg>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -142,22 +152,12 @@ const styles = StyleSheet.create({
   background: {
     ...StyleSheet.absoluteFillObject,
   },
-  blob: {
+  gradientBackdrop: {
     position: 'absolute',
-    width: Theme.sizes.s220,
-    height: Theme.sizes.s220,
-    borderRadius: Theme.radius.r110,
-    opacity: Theme.opacity.o65,
-  },
-  blobTop: {
-    top: -Theme.sizes.s80,
-    right: -Theme.sizes.s40,
-    backgroundColor: Theme.colors.decorativePeachSoft,
-  },
-  blobBottom: {
-    bottom: -Theme.sizes.s70,
-    left: Theme.percent.p30,
-    backgroundColor: Theme.colors.decorativeSkySoft,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 315,
   },
   content: {
     paddingHorizontal: Theme.spacing.s20,
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     gap: Theme.spacing.s16,
   },
   heroCard: {
-    borderRadius: Theme.radius.r24,
+    borderRadius: Theme.radius.r16,
     overflow: 'hidden',
     backgroundColor: Theme.colors.card,
     borderWidth: Theme.borderWidth.hairline,
@@ -175,18 +175,18 @@ const styles = StyleSheet.create({
   },
   heroImage: {
     width: Theme.percent.p100,
-    height: Theme.sizes.s180,
+    height: Theme.sizes.s120,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Theme.spacing.s10,
-    paddingHorizontal: Theme.spacing.s16,
-    minHeight: Theme.sizes.s50,
+    paddingHorizontal: Theme.spacing.s18,
+    minHeight: Theme.sizes.s44,
     backgroundColor: Theme.colors.card,
-    borderRadius: Theme.radius.pill,
+    borderRadius: 30,
     borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarmStrong,
+    borderColor: Theme.colors.searchBorder,
   },
   searchInput: {
     flex: Theme.layout.full,
