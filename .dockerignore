@@ -5,5 +5,9 @@
 docs/
 design/
 frontend/node_modules/
+frontend/.env
+frontend/.env.local
+frontend/.env*.local
 backend/target/
+backend/.env
 *.css
