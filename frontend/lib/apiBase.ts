@@ -7,6 +7,7 @@ const FALLBACK_LOCAL_URL = 'http://localhost:7860';
 
 const isPhysicalDevice = Constants.isDevice ?? true;
 
+
 const inferredBaseUrl = (() => {
   if (Platform.OS === 'web') {
     // For web builds (production), use relative path to avoid CORS/localhost issues.
