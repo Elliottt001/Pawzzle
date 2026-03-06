@@ -30,6 +30,6 @@ const inferredBaseUrl = (() => {
 const rawBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL ??
   process.env.EXPO_PUBLIC_API_URL ??
-  'http://192.168.112.65:7860';
+  inferredBaseUrl;
 
 export const API_BASE_URL = rawBaseUrl.replace(/\/$/, '');
