@@ -87,8 +87,9 @@ public class AgentController {
     public CompletableFuture<EvaluationResponse> evaluate(@RequestBody EvaluationRequest request) {
         List<AgentMessage> messages = request.messages() == null ? List.of() : request.messages();
         String prompt = buildEvaluationPrompt(messages);
+        String systemPrompt = composeSystemPrompt(EVALUATION_SYSTEM_PROMPT, request.attitudePrompt());
         ChatResponse response = chatClient.call(new Prompt(List.of(
-            new SystemMessage(EVALUATION_SYSTEM_PROMPT),
+            new SystemMessage(systemPrompt),
             new UserMessage(prompt)
         )));
 
@@ -113,8 +114,9 @@ public class AgentController {
         }
 
         String userPrompt = buildRecommendationPrompt(request, pets);
+        String systemPrompt = composeSystemPrompt(RECOMMEND_SYSTEM_PROMPT, request.attitudePrompt());
         ChatResponse response = chatClient.call(new Prompt(List.of(
-            new SystemMessage(RECOMMEND_SYSTEM_PROMPT),
+            new SystemMessage(systemPrompt),
             new UserMessage(userPrompt)
         )));
 
@@ -412,6 +414,19 @@ public class AgentController {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    private String composeSystemPrompt(String basePrompt, String attitudePrompt) {
+        String normalizedAttitude = normalizeText(attitudePrompt);
+        if (normalizedAttitude == null) {
+            return basePrompt;
+        }
+        return """
+            %s
+
+            Additional attitude prompt:
+            %s
+            """.formatted(basePrompt, normalizedAttitude);
+    }
+
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -657,7 +672,7 @@ public class AgentController {
         return trimmed.trim();
     }
 
-    public record EvaluationRequest(List<AgentMessage> messages) {
+    public record EvaluationRequest(List<AgentMessage> messages, String attitudePrompt) {
     }
 
     public record EvaluationResponse(
@@ -676,7 +691,8 @@ public class AgentController {
         List<QuestionAnswer> questionAnswers,
         List<AgentMessage> messages,
         EvaluationSummary evaluation,
-        List<PetCard> pets
+        List<PetCard> pets,
+        String attitudePrompt
     ) {
     }
 
