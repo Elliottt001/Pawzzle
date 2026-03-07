@@ -16,7 +16,7 @@ import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import { API_BASE_URL } from '@/lib/apiBase';
 
 const AI_RESPONSE_DELAY_MS = 600;
-const BAIDU_TRANSCRIBE_URL = `${API_BASE_URL}/api/voice/transcribe-baidu`;
+const VOICE_TRANSCRIBE_URL = `${API_BASE_URL}/api/voice/transcribe`;
 
 const MOCK_PET = {
   name: '麻糬',
@@ -103,17 +103,9 @@ export default function AgentChatScreen() {
         return;
       }
 
-      const formData = new FormData();
-      formData.append(
-        'file',
-        {
-          uri,
-          type: 'audio/m4a',
-          name: 'voice.m4a',
-        } as unknown as Blob
-      );
+      const formData = await buildVoiceFormData(uri);
 
-      const response = await fetch(BAIDU_TRANSCRIBE_URL, {
+      const response = await fetch(VOICE_TRANSCRIBE_URL, {
         method: 'POST',
         body: formData,
       });
@@ -255,6 +247,44 @@ function PetRecommendationCard({ onPress }: { onPress: () => void }) {
       </View>
     </Pressable>
   );
+}
+
+async function buildVoiceFormData(uri: string) {
+  const formData = new FormData();
+  if (Platform.OS === 'web') {
+    const response = await fetch(uri);
+    if (!response.ok) {
+      throw new Error('Failed to read recording');
+    }
+    const blob = await response.blob();
+    const mimeType = blob.type || 'audio/webm';
+    const filename = mimeType.includes('wav')
+      ? 'voice.wav'
+      : mimeType.includes('mpeg')
+        ? 'voice.mp3'
+        : mimeType.includes('aac')
+          ? 'voice.aac'
+          : mimeType.includes('m4a') || mimeType.includes('mp4')
+            ? 'voice.m4a'
+            : 'voice.webm';
+
+    if (typeof File !== 'undefined') {
+      formData.append('file', new File([blob], filename, { type: mimeType }));
+    } else {
+      formData.append('file', blob, filename);
+    }
+    return formData;
+  }
+
+  formData.append(
+    'file',
+    {
+      uri,
+      type: 'audio/m4a',
+      name: 'voice.m4a',
+    } as unknown as Blob
+  );
+  return formData;
 }
 
 const styles = StyleSheet.create({

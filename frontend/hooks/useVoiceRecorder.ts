@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import { Audio } from 'expo-av';
+import { useCallback, useRef, useState } from 'react';
 
 type VoiceRecorderHook = {
   startRecording: () => Promise<void>;
@@ -8,18 +9,47 @@ type VoiceRecorderHook = {
 
 export function useVoiceRecorder(): VoiceRecorderHook {
   const [isRecording, setIsRecording] = useState(false);
+  const recordingRef = useRef<Audio.Recording | null>(null);
 
   const startRecording = useCallback(async () => {
+    if (recordingRef.current) {
+      return;
+    }
+    const permission = await Audio.requestPermissionsAsync();
+    if (!permission.granted) {
+      throw new Error('未授予麦克风权限');
+    }
+
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+    });
+
+    const recording = new Audio.Recording();
+    await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+    await recording.startAsync();
+    recordingRef.current = recording;
     setIsRecording(true);
   }, []);
 
   const stopRecording = useCallback(async () => {
-    if (!isRecording) {
+    const recording = recordingRef.current;
+    if (!recording) {
       return null;
     }
-    setIsRecording(false);
-    return null;
-  }, [isRecording]);
+
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      return uri ?? null;
+    } finally {
+      recordingRef.current = null;
+      setIsRecording(false);
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+      });
+    }
+  }, []);
 
   return { startRecording, stopRecording, isRecording };
 }

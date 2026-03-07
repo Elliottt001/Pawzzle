@@ -19,6 +19,7 @@ import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
 import { Theme } from '@/constants/theme';
 import { API_BASE_URL } from '@/lib/apiBase';
+import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
 import AgentAvatarSvg from '@/assets/images/Agent.svg';
 import SendIcon from '@/assets/images/send.svg';
 
@@ -61,6 +62,9 @@ const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 const ensureChinese = (message: string, fallback: string) =>
   /[\u4e00-\u9fff]/.test(message) ? message : fallback;
 const WAITING_TEXT_INTERVAL_MS = 2600;
+const RECOMMEND_MAX_RETRIES = 3;
+const RECOMMEND_RETRY_BASE_DELAY_MS = 1200;
+const RECOMMEND_RETRY_MAX_DELAY_MS = 5000;
 const EVALUATING_WAITING_TEXTS = [
   '正在整理你的回答...',
   '正在生成下一组问题...',
@@ -72,23 +76,8 @@ const RECOMMENDING_WAITING_TEXTS = [
   '正在匹配性格与生活节奏...',
   '正在生成推荐结果...',
 ];
-
-const ACKNOWLEDGEMENTS = [
-  '好的，了解您的情况了！',
-  '收到，这很有趣～',
-  '明白啦，我们会帮您留意的。',
-  '原来是这样呀，很有意思！',
-  '好的，这对我很有帮助。',
-  '收到您的反馈啦。',
-  '好的，这一点很重要。',
-  '确实是这样呢。',
-  '了解了，我们会仔细考虑的。',
-  '收到，谢谢您的分享！',
-];
-
-const getRandomAcknowledgement = () => {
-  return ACKNOWLEDGEMENTS[Math.floor(Math.random() * ACKNOWLEDGEMENTS.length)];
-};
+const VOICE_TRANSCRIBE_URL = `${API_BASE_URL}/api/voice/transcribe`;
+const TEST_TRANSCRIBE_URL = `${API_BASE_URL}/api/voice/transcribe-test-file`;
 
 export default function AgentScreen() {
   const [hasStarted, setHasStarted] = React.useState(false);
@@ -102,15 +91,18 @@ export default function AgentScreen() {
     'loading'
   );
   const [evaluation, setEvaluation] = React.useState<EvaluationSummary | null>(null);
-  const [pendingQuestions, setPendingQuestions] = React.useState<string[]>([]);
   const [recommendedItems, setRecommendedItems] = React.useState<AgentDecisionItem[]>([]);
+  const [isTranscribing, setIsTranscribing] = React.useState(false);
+  const [isTestingSample, setIsTestingSample] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [waitingIndex, setWaitingIndex] = React.useState(0);
   const scrollRef = React.useRef<ScrollView | null>(null);
   const hasStartedRef = React.useRef(false);
+  const { startRecording, stopRecording, isRecording } = useVoiceRecorder();
 
   const isBusy = status === 'evaluating' || status === 'recommending';
-  const canSend = input.trim().length > 0 && !isBusy && !evaluation;
+  const isInputLocked = isBusy || isTranscribing || isTestingSample;
+  const canSend = input.trim().length > 0 && !isInputLocked && !evaluation;
   const waitingMessages =
     status === 'recommending' ? RECOMMENDING_WAITING_TEXTS : EVALUATING_WAITING_TEXTS;
   const waitingText = waitingMessages[waitingIndex % waitingMessages.length];
@@ -195,7 +187,6 @@ export default function AgentScreen() {
         if (data?.endverification) {
           const summary = buildEvaluationSummary(data);
           setEvaluation(summary);
-          setPendingQuestions([]);
           appendMessage('ai', formatEvaluationSummary(summary));
           setStatus('recommending');
           return loadPetCards().then(() => requestRecommendation(summary, [])).then((decision) => {
@@ -208,9 +199,7 @@ export default function AgentScreen() {
 
         const questions = normalizeQuestions(data);
         if (questions.length) {
-          const [first, ...rest] = questions;
-          setPendingQuestions(rest);
-          appendMessage('ai', first);
+          appendMessage('ai', questions[0]);
         } else {
           // appendDebug('调试：评估缺少下一问', data?.rawResponse ?? '');
         }
@@ -227,7 +216,6 @@ export default function AgentScreen() {
   }, [
     appendDebug,
     appendMessage,
-    buildEvaluationSummary,
     formatEvaluationSummary,
     hasStarted,
     loadPetCards,
@@ -240,9 +228,101 @@ export default function AgentScreen() {
     return () => clearTimeout(timeout);
   }, [messages, recommendedItems]);
 
+  const handleVoicePressIn = React.useCallback(async () => {
+    if (isInputLocked || evaluation) {
+      return;
+    }
+    try {
+      setErrorMessage(null);
+      await startRecording();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      setErrorMessage(ensureChinese(message, '录音启动失败'));
+    }
+  }, [evaluation, isInputLocked, setErrorMessage, startRecording]);
+
+  const handleVoicePressOut = React.useCallback(async () => {
+    if (evaluation) {
+      return;
+    }
+    try {
+      const uri = await stopRecording();
+      if (!uri) {
+        return;
+      }
+
+      setIsTranscribing(true);
+      const formData = await buildVoiceFormData(uri);
+
+      const response = await fetch(VOICE_TRANSCRIBE_URL, {
+        method: 'POST',
+        body: formData,
+      });
+
+      let payload: { text?: string; error?: string } | null = null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+
+      if (!response.ok) {
+        const message = payload?.error ?? `HTTP ${response.status}`;
+        throw new Error(String(message));
+      }
+
+      const text = typeof payload?.text === 'string' ? payload.text.trim() : '';
+      if (text.length > 0) {
+        setInput(text);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      setErrorMessage(message || '语音识别失败');
+    } finally {
+      setIsTranscribing(false);
+    }
+  }, [evaluation, setErrorMessage, stopRecording]);
+
+  const handleTestAudioClick = React.useCallback(async () => {
+    if (isInputLocked || evaluation) {
+      return;
+    }
+    try {
+      setErrorMessage(null);
+      setIsTestingSample(true);
+
+      const response = await fetch(TEST_TRANSCRIBE_URL, {
+        method: 'POST',
+      });
+
+      let payload: { text?: string; error?: string } | null = null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+
+      if (!response.ok) {
+        const message = payload?.error ?? `HTTP ${response.status}`;
+        throw new Error(String(message));
+      }
+
+      const text = typeof payload?.text === 'string' ? payload.text.trim() : '';
+      if (text.length === 0) {
+        throw new Error('测试音频识别结果为空');
+      }
+      setInput(text);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      setErrorMessage(message || '测试音频识别失败');
+    } finally {
+      setIsTestingSample(false);
+    }
+  }, [evaluation, isInputLocked, setErrorMessage]);
+
   const handleSend = async () => {
     const trimmed = input.trim();
-    if (!trimmed || isBusy || evaluation) {
+    if (!trimmed || isInputLocked || evaluation) {
       return;
     }
 
@@ -256,13 +336,6 @@ export default function AgentScreen() {
     setInput('');
     setErrorMessage(null);
 
-    if (pendingQuestions.length) {
-      const [nextQuestion, ...rest] = pendingQuestions;
-      setPendingQuestions(rest);
-      appendMessage('ai', `${getRandomAcknowledgement()}\n\n${nextQuestion}`);
-      return;
-    }
-
     setStatus('evaluating');
     const nextMessages = [...messages, userMessage];
 
@@ -274,8 +347,7 @@ export default function AgentScreen() {
       if (data?.endverification) {
         const summary = buildEvaluationSummary(data);
         setEvaluation(summary);
-        setPendingQuestions([]);
-        appendMessage('ai', `${getRandomAcknowledgement()}\n\n${formatEvaluationSummary(summary)}`);
+        appendMessage('ai', formatEvaluationSummary(summary));
 
         setStatus('recommending');
         await loadPetCards();
@@ -287,9 +359,7 @@ export default function AgentScreen() {
       } else {
         const questions = normalizeQuestions(data);
         if (questions.length) {
-          const [first, ...rest] = questions;
-          setPendingQuestions(rest);
-          appendMessage('ai', `${getRandomAcknowledgement()}\n\n${first}`);
+          appendMessage('ai', questions[0]);
         } else {
           // appendDebug('调试：评估缺少下一问', data?.rawResponse ?? '');
         }
@@ -383,8 +453,34 @@ export default function AgentScreen() {
                 style={styles.input}
                 returnKeyType="send"
                 onSubmitEditing={handleSend}
-                editable={!isBusy}
+                editable={!isInputLocked}
               />
+              <Pressable
+                onPressIn={handleVoicePressIn}
+                onPressOut={handleVoicePressOut}
+                disabled={isInputLocked || evaluation !== null}
+                style={({ pressed }) => [
+                  styles.voiceButton,
+                  isRecording && styles.voiceButtonRecording,
+                  (isInputLocked || evaluation !== null) && styles.voiceButtonDisabled,
+                  pressed && !(isInputLocked || evaluation !== null) && styles.sendButtonPressed,
+                ]}>
+                <Text style={styles.voiceButtonText}>
+                  {isRecording ? '录音中' : isTranscribing ? '识别中' : '语音'}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={handleTestAudioClick}
+                disabled={isInputLocked || evaluation !== null}
+                style={({ pressed }) => [
+                  styles.testButton,
+                  (isInputLocked || evaluation !== null) && styles.voiceButtonDisabled,
+                  pressed && !(isInputLocked || evaluation !== null) && styles.sendButtonPressed,
+                ]}>
+                <Text style={styles.testButtonText}>
+                  {isTestingSample ? '测试中' : '测试音频'}
+                </Text>
+              </Pressable>
               <Pressable
                 onPress={handleSend}
                 disabled={!canSend}
@@ -396,7 +492,15 @@ export default function AgentScreen() {
                 <SendIcon width={Theme.sizes.s18} height={Theme.sizes.s18} />
               </Pressable>
             </View>
-            <Text style={styles.helperText}></Text>
+            <Text style={styles.helperText}>
+              {isTestingSample
+                ? '正在请求根目录 test.m4a...'
+                : isRecording
+                  ? '松开后将语音转成文字'
+                  : isTranscribing
+                    ? '正在识别语音...'
+                    : errorMessage ?? ''}
+            </Text>
           </View>
         ) : null}
       </KeyboardAvoidingView>
@@ -616,10 +720,65 @@ async function requestEvaluation(messages: AgentMessage[]) {
 }
 
 async function requestRecommendation(summary: EvaluationSummary, messages: AgentMessage[]) {
-  return postJson<AgentDecisionResponse>('/api/agent/recommend', {
+  const payload = {
     messages,
     evaluation: summary,
-  });
+  };
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= RECOMMEND_MAX_RETRIES; attempt += 1) {
+    try {
+      return await postJson<AgentDecisionResponse>('/api/agent/recommend', payload);
+    } catch (error) {
+      lastError = error;
+      if (attempt === RECOMMEND_MAX_RETRIES) {
+        break;
+      }
+      const delay = Math.min(
+        RECOMMEND_RETRY_BASE_DELAY_MS * (2 ** attempt),
+        RECOMMEND_RETRY_MAX_DELAY_MS
+      );
+      await wait(delay);
+    }
+  }
+  throw (lastError instanceof Error ? lastError : new Error('请求失败'));
+}
+
+async function buildVoiceFormData(uri: string) {
+  const formData = new FormData();
+  if (Platform.OS === 'web') {
+    const response = await fetch(uri);
+    if (!response.ok) {
+      throw new Error('无法读取录音文件');
+    }
+    const blob = await response.blob();
+    const mimeType = blob.type || 'audio/webm';
+    const filename = mimeType.includes('wav')
+      ? 'voice.wav'
+      : mimeType.includes('mpeg')
+        ? 'voice.mp3'
+        : mimeType.includes('aac')
+          ? 'voice.aac'
+          : mimeType.includes('m4a') || mimeType.includes('mp4')
+            ? 'voice.m4a'
+            : 'voice.webm';
+
+    if (typeof File !== 'undefined') {
+      formData.append('file', new File([blob], filename, { type: mimeType }));
+    } else {
+      formData.append('file', blob, filename);
+    }
+    return formData;
+  }
+
+  formData.append(
+    'file',
+    {
+      uri,
+      type: 'audio/m4a',
+      name: 'voice.m4a',
+    } as unknown as Blob
+  );
+  return formData;
 }
 
 async function getJson<T = unknown>(path: string) {
@@ -662,6 +821,12 @@ async function postJson<T = unknown>(path: string, payload: Record<string, unkno
   }
 
   return data;
+}
+
+function wait(durationMs: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, durationMs);
+  });
 }
 
 function buildEvaluationSummary(data: EvaluationResponse): EvaluationSummary {
@@ -867,6 +1032,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
+  },
+  voiceButton: {
+    minWidth: 54,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FDF4E4',
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: 'rgba(237, 132, 63, 0.35)',
+    marginLeft: 8,
+    paddingHorizontal: 10,
+  },
+  voiceButtonRecording: {
+    backgroundColor: '#F4C17F',
+    borderColor: '#F4C17F',
+  },
+  voiceButtonDisabled: {
+    opacity: 0.4,
+  },
+  voiceButtonText: {
+    fontSize: 11,
+    color: '#875B47',
+    fontFamily: Theme.fonts.regular,
+  },
+  testButton: {
+    minWidth: 66,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF6EA',
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: 'rgba(237, 132, 63, 0.35)',
+    marginLeft: 8,
+    paddingHorizontal: 10,
+  },
+  testButtonText: {
+    fontSize: 11,
+    color: '#875B47',
+    fontFamily: Theme.fonts.regular,
   },
   sendButtonDisabled: {
     opacity: 0.4,
