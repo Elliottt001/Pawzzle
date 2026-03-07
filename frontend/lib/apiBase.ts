@@ -16,6 +16,12 @@ const inferredBaseUrl = (() => {
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
         return FALLBACK_LOCAL_URL;
     }
+    if (typeof window !== 'undefined') {
+      const match = window.location.pathname.match(/^(\/api\/v1\/studio\/[^/]+\/[^/]+\/(?:invoke|view))/);
+      if (match) {
+        return match[1];
+      }
+    }
     return '';
   }
   if (Platform.OS === 'android' && !isPhysicalDevice) {
