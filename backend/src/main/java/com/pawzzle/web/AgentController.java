@@ -49,12 +49,12 @@ public class AgentController {
         questions have already been asked and answered based on the conversation.
 
         If fewer than 15 answers are collected, return ONLY valid JSON:
-        {"endverification":false,"nextQuestions":["Q1","Q2","Q3","Q4","Q5"]}
+        {"endverification":false,"nextQuestion":"Q1"}
 
         If all 15 answers are collected, return ONLY valid JSON:
         {"endverification":true,"profile":"~200 Chinese chars"}
 
-        Always return exactly 5 new questions at a time until complete.
+        Always return exactly 1 new question at a time until complete.
         Questions must be in Chinese, open-ended, and not repeated.
         Include more scenario-based questions to uncover deeper emotional needs,
         for example, ask them to imagine a weekend day with a pet.
@@ -585,7 +585,7 @@ public class AgentController {
         if (cleaned.isEmpty()) {
             return List.of();
         }
-        int limit = Math.min(5, cleaned.size());
+        int limit = Math.min(1, cleaned.size());
         return new ArrayList<>(cleaned.subList(0, limit));
     }
 
