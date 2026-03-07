@@ -160,10 +160,11 @@ const styles = StyleSheet.create({
     height: 315,
   },
   content: {
-    paddingHorizontal: Theme.spacing.s20,
+    paddingHorizontal: 0, // 移除这里的 padding，因为子元素已经固定宽度并居中了
     paddingTop: Theme.spacing.s10,
     paddingBottom: Theme.sizes.s140,
     gap: Theme.spacing.s16,
+    alignItems: 'center', // 确保内容容器内的所有项目居中
   },
   heroCard: {
     borderRadius: Theme.radius.r16,
@@ -171,10 +172,12 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.card,
     borderWidth: Theme.borderWidth.hairline,
     borderColor: Theme.colors.borderWarm,
+    alignSelf: 'center', // 确保这个也居中，防万一
+    width: 326, // 统一宽度以便居中效果更明显
     ...Theme.shadows.cardSoftLarge,
   },
   heroImage: {
-    width: Theme.percent.p100,
+    width: '100%',
     height: Theme.sizes.s120,
   },
   searchBar: {
@@ -187,6 +190,8 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     borderWidth: Theme.borderWidth.hairline,
     borderColor: Theme.colors.searchBorder,
+    alignSelf: 'center', // 确保搜索栏也居中对齐
+    width: 326,
   },
   searchInput: {
     flex: Theme.layout.full,
@@ -196,6 +201,7 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: Theme.spacing.s16,
+    alignItems: 'center', // 确保卡片在列表中居中
   },
   statusWrap: {
     alignItems: 'center',

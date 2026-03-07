@@ -135,6 +135,7 @@ export function PetCard({ pet, confidence }: PetCardProps) {
 const styles = StyleSheet.create({
   card: {
     width: 326,
+    alignSelf: 'center', // 确保卡片在父容器中居中，尤其是宽度固定时
     paddingTop: 21,
     paddingBottom: 10,
     paddingHorizontal: 21,
