@@ -6,8 +6,8 @@ import {
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from '@/components/base-text';
+import IndexHelperSvg from '@/assets/images/index-helper.svg';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { API_BASE_URL } from '@/lib/apiBase';
@@ -202,33 +202,12 @@ export function UserProfileView({ session }: UserProfileViewProps) {
 
       {/* ── AI辅养 Section ── */}
       <Text style={homeStyles.sectionTitle}>AI辅养</Text>
-      <LinearGradient
-        colors={['#F4C17F', 'rgba(244, 193, 127, 0.44)']}
-        start={{ x: 0.22, y: 0.14 }}
-        end={{ x: 1, y: 1 }}
+      <IndexHelperSvg
+        width="100%"
+        height="100%"
         style={homeStyles.aiCard}
-      >
-        <View style={homeStyles.aiRow}>
-          <View style={homeStyles.aiIconWrap}>
-            <FontAwesome5 name="paw" size={15} color="#5C4033" />
-          </View>
-          <Text style={homeStyles.aiTitle}>3个月幼猫到家第4天</Text>
-        </View>
-        <View style={homeStyles.aiChecklist}>
-          <View style={homeStyles.aiCheckItem}>
-            <View style={homeStyles.checkboxWrap}>
-              <View style={homeStyles.checkbox} />
-            </View>
-            <Text style={homeStyles.checkText}>原猫粮少量多餐，不喂牛奶/人食</Text>
-          </View>
-          <View style={homeStyles.aiCheckItem}>
-            <View style={homeStyles.checkboxWrap}>
-              <View style={homeStyles.checkbox} />
-            </View>
-            <Text style={homeStyles.checkText}>固定猫砂盆、食碗水碗，给安静小窝</Text>
-          </View>
-        </View>
-      </LinearGradient>
+        preserveAspectRatio="xMidYMid meet"
+      />
 
       {/* ── 我的宠物 Section ── */}
       <View style={homeStyles.petHeader}>

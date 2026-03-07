@@ -22,13 +22,16 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.ChatResponse;
+import org.springframework.ai.chat.messages.Media;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatClient;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.util.MimeTypeUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -52,22 +55,6 @@ public class PetController {
     @Value("${pawzzle.upload.dir:uploads}")
     private String uploadDir;
     private static final Set<String> LOCATIONS = Set.of("杭州", "北京", "上海");
-    private static final Set<String> CAT_BREEDS = Set.of(
-        "British Shorthair",
-        "Ragdoll",
-        "Siamese",
-        "英短",
-        "布偶",
-        "暹罗"
-    );
-    private static final Set<String> DOG_BREEDS = Set.of(
-        "Corgi",
-        "Shiba Inu",
-        "Mini Poodle",
-        "柯基",
-        "柴犬",
-        "迷你贵宾"
-    );
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of(
         "image/jpeg",
         "image/png",
@@ -106,6 +93,29 @@ public class PetController {
         Examples: 干饭王, 小粘人, 高冷, 温顺, 小太阳.
         Avoid emojis, punctuation, or duplicates. Do NOT include extra text.
         Return ONLY a JSON array of strings.
+        """;
+    private static final String AI_PET_RECOGNITION_PROMPT = """
+        You are an expert veterinarian and animal breed identifier for a Chinese pet adoption app.
+        Analyze the provided image and identify the pet.
+
+        Return ONLY valid JSON with a single object containing these fields:
+        - species: "CAT" or "DOG" (if the animal is clearly neither, use "UNKNOWN")
+        - breed: the breed name in English (use EXACT values from this list when possible:
+          CAT breeds: "British Shorthair", "Ragdoll", "Siamese"
+          DOG breeds: "Corgi", "Shiba Inu", "Mini Poodle"
+          If the breed is not in the list, provide your best guess in English)
+        - breedCn: the breed name in Chinese (use EXACT values when possible:
+          CAT: "英短", "布偶", "暹罗"
+          DOG: "柯基", "柴犬", "迷你贵宾"
+          If the breed is not in the list, provide your best Chinese translation)
+        - ageGuess: estimated age in years as a string (e.g. "2"), provide your best guess
+        - description: a 15-30 character Chinese description of the pet's appearance and likely temperament
+        - confidence: "high", "medium", or "low" based on image clarity and recognition certainty
+
+        If the image does not contain a recognizable pet, return:
+        {"species":"UNKNOWN","breed":"","breedCn":"","ageGuess":"1","description":"未能从照片中识别到宠物，请重新拍照或手动填写。","confidence":"low"}
+
+        Do NOT wrap in markdown. Return ONLY the JSON object.
         """;
 
     @GetMapping
@@ -185,6 +195,67 @@ public class PetController {
         return new UploadResponse("/uploads/" + filename);
     }
 
+    @PostMapping(value = "/recognize", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public RecognizeResponse recognizePet(
+        @RequestParam("file") MultipartFile file,
+        @RequestHeader(value = "Authorization", required = false) String authorization
+    ) {
+        sessionService.requireUser(authorization, null);
+        if (file == null || file.isEmpty()) {
+            throw badRequest("File is required");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
+            throw badRequest("Only image files are allowed");
+        }
+
+        try {
+            byte[] imageBytes = file.getBytes();
+            org.springframework.util.MimeType mimeType = MimeTypeUtils.parseMimeType(contentType);
+            Media imageMedia = new Media(mimeType, new ByteArrayResource(imageBytes));
+            UserMessage userMessage = new UserMessage(
+                "请识别这张照片中的宠物品种、年龄等信息。",
+                List.of(imageMedia)
+            );
+            Prompt prompt = new Prompt(List.of(
+                new SystemMessage(AI_PET_RECOGNITION_PROMPT),
+                userMessage
+            ));
+            ChatResponse response = chatClient.call(prompt);
+            String aiContent = response.getResult().getOutput().getContent();
+            return parseRecognizeResponse(aiContent);
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to read image file");
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI recognition failed: " + ex.getMessage());
+        }
+    }
+
+    private RecognizeResponse parseRecognizeResponse(String aiContent) {
+        String cleaned = stripCodeFences(aiContent);
+        try {
+            JsonNode root = objectMapper.readTree(cleaned);
+            String species = readText(root.get("species"));
+            String breed = readText(root.get("breed"));
+            String breedCn = readText(root.get("breedCn"));
+            String ageGuess = readText(root.get("ageGuess"));
+            String description = readText(root.get("description"));
+            String confidence = readText(root.get("confidence"));
+            return new RecognizeResponse(
+                species != null ? species : "UNKNOWN",
+                breed != null ? breed : "",
+                breedCn != null ? breedCn : "",
+                ageGuess != null ? ageGuess : "1",
+                description != null ? description : "未能识别",
+                confidence != null ? confidence : "low"
+            );
+        } catch (JsonProcessingException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI response parse failed");
+        }
+    }
+
     @GetMapping("/{id}")
     public PetDTO getPetById(@PathVariable Long id) {
         Pet pet = petRepository.findById(id)
@@ -218,9 +289,7 @@ public class PetController {
         if (breed == null) {
             throw badRequest("Breed is required");
         }
-        if (!isAllowedBreed(species, breed)) {
-            throw badRequest("Breed is not in the allowed list");
-        }
+        // Allow any breed string — AI recognition may return breeds outside the predefined list
         Integer age = request.age();
         if (age == null || age <= 0) {
             throw badRequest("Age must be a positive number");
@@ -257,11 +326,6 @@ public class PetController {
             rawDescription,
             imageUrl
         );
-    }
-
-    private boolean isAllowedBreed(Pet.Species species, String breed) {
-        return (species == Pet.Species.CAT && CAT_BREEDS.contains(breed))
-            || (species == Pet.Species.DOG && DOG_BREEDS.contains(breed));
     }
 
     private Pet.Species parseSpecies(String value) {
@@ -588,6 +652,16 @@ public class PetController {
     }
 
     public record UploadResponse(String url) {
+    }
+
+    public record RecognizeResponse(
+        String species,
+        String breed,
+        String breedCn,
+        String ageGuess,
+        String description,
+        String confidence
+    ) {
     }
 
     private record CreatePetPayload(

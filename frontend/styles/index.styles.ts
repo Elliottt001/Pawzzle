@@ -602,12 +602,8 @@ const homeViewStyles = StyleSheet.create({
   },
   aiCard: {
     width: '100%' as unknown as number,
+    aspectRatio: 316 / 143,
     borderRadius: 24,
-    paddingLeft: 5,
-    paddingVertical: 10,
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    gap: 1,
     overflow: 'hidden',
   },
   aiRow: {

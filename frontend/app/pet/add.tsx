@@ -102,7 +102,10 @@ export default function AddPetCardScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled">
         {/* Photo upload */}
-        <Pressable style={s.photoCard}>
+        <Pressable 
+          style={s.photoCard}
+          onPress={() => router.push('/pet/rehome/upload')}
+        >
           <Ionicons name="camera-outline" size={36} color="#ED843F" />
           <Text style={s.photoText}>拍照/上传宠物照片</Text>
         </Pressable>

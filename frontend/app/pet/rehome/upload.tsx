@@ -5,8 +5,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Theme } from '../../../constants/theme';
+import { API_BASE_URL } from '@/lib/apiBase';
+import { getSession } from '@/lib/session';
 
-const ANALYZE_DELAY_MS = 900;
+type RecognizeResult = {
+  species: string;
+  breed: string;
+  breedCn: string;
+  ageGuess: string;
+  description: string;
+  confidence: string;
+};
 
 export default function PetRehomeUploadScreen() {
   const router = useRouter();
@@ -16,23 +25,74 @@ export default function PetRehomeUploadScreen() {
   const [photoType, setPhotoType] = React.useState<string | null>(null);
   const [uploadError, setUploadError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    if (!isAnalyzing || !photoUri) {
-      return;
-    }
-    const timeout = setTimeout(() => {
-      setIsAnalyzing(false);
-      const params: Record<string, string> = { photoUri };
-      if (photoName) {
-        params.photoName = photoName;
+  const callRecognizeApi = React.useCallback(
+    async (uri: string, fileName: string, mimeType: string) => {
+      const session = getSession();
+      if (!session?.token) {
+        setUploadError('请先登录后再使用识别功能。');
+        setIsAnalyzing(false);
+        return;
       }
-      if (photoType) {
-        params.photoType = photoType;
+
+      try {
+        const formData = new FormData();
+        if (Platform.OS === 'web') {
+          const response = await fetch(uri);
+          const blob = await response.blob();
+          const file = new File([blob], fileName, { type: mimeType });
+          formData.append('file', file);
+        } else {
+          formData.append('file', {
+            uri,
+            name: fileName,
+            type: mimeType,
+          } as unknown as Blob);
+        }
+
+        const response = await fetch(`${API_BASE_URL}/api/pets/recognize`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.token}`,
+          },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          let message = '';
+          try {
+            const data = JSON.parse(text) as { message?: string };
+            message = data?.message ?? '';
+          } catch {
+            message = text;
+          }
+          throw new Error(message || response.statusText);
+        }
+
+        const result = (await response.json()) as RecognizeResult;
+        const params: Record<string, string> = {
+          photoUri: uri,
+        };
+        if (fileName) params.photoName = fileName;
+        if (mimeType) params.photoType = mimeType;
+        if (result.species) params.recognizedSpecies = result.species;
+        if (result.breed) params.recognizedBreed = result.breed;
+        if (result.breedCn) params.recognizedBreedCn = result.breedCn;
+        if (result.ageGuess) params.recognizedAge = result.ageGuess;
+        if (result.description) params.recognizedDesc = result.description;
+        if (result.confidence) params.recognizedConfidence = result.confidence;
+
+        router.push({ pathname: '/pet/rehome/verify', params });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '';
+        const friendly = /[\u4e00-\u9fff]/.test(message) ? message : '识别失败，请重试或手动填写。';
+        setUploadError(friendly);
+      } finally {
+        setIsAnalyzing(false);
       }
-      router.push({ pathname: '/pet/rehome/verify', params });
-    }, ANALYZE_DELAY_MS);
-    return () => clearTimeout(timeout);
-  }, [isAnalyzing, photoName, photoType, photoUri, router]);
+    },
+    [router],
+  );
 
   const handlePick = async (source: 'camera' | 'library') => {
     if (isAnalyzing) {
@@ -75,6 +135,7 @@ export default function PetRehomeUploadScreen() {
       setPhotoName(resolvedName);
       setPhotoType(resolvedType);
       setIsAnalyzing(true);
+      void callRecognizeApi(asset.uri, resolvedName, resolvedType);
     } catch {
       setUploadError('上传失败，请稍后再试。');
     }
