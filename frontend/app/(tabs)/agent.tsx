@@ -988,7 +988,7 @@ const startStyles = StyleSheet.create({
   ctaButton: {
     width: 180,
     height: 48,
-    borderRadius: 4,
+    borderRadius: 24, // Half of height (48 / 2) to make it fully rounded
     backgroundColor: '#F4C17F',
     alignItems: 'center',
     justifyContent: 'center',

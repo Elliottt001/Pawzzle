@@ -34,38 +34,98 @@ const TABS = [
 ] as const;
 
 /** Mock data for the community feed posts */
+type ImageSource = ReturnType<typeof require>;
 type CommunityPost = {
   id: string;
   username: string;
-  avatarUrl: string;
+  avatar: ImageSource;
   distance: string;
-  images: string[];
+  images: ImageSource[];
   content: string;
 };
 
 const MOCK_POSTS: CommunityPost[] = [
   {
     id: '1',
-    username: '六月寒',
-    avatarUrl: 'https://placekitten.com/68/68',
+    username: '桂花拿铁',
+    avatar: require('@/assets/images/square-avatar1.jpg'),
     distance: '2.1km',
     images: [
-      'https://placekitten.com/200/200',
-      'https://placekitten.com/201/201',
-      'https://placekitten.com/202/202',
+      require('@/assets/images/square-pet1-1.jpg'),
+      require('@/assets/images/square-pet1-2.jpg'),
+      require('@/assets/images/square-pet1-3.jpg'),
     ],
     content: '老师们我们家孩子就是能当童模',
   },
   {
     id: '2',
-    username: 'SCRAM',
-    avatarUrl: 'https://placekitten.com/69/69',
+    username: 'Elliottt',
+    avatar: require('@/assets/images/square-avatar2.jpg'),
     distance: '2.1km',
     images: [
-      'https://placekitten.com/203/203',
-      'https://placekitten.com/204/204',
+      require('@/assets/images/square-pet2-1.jpg'),
+      require('@/assets/images/square-pet2-2.jpg'),
+      require('@/assets/images/square-pet2-3.jpg'),
     ],
     content: '求助爪u，领养的猫猫一直在响怎么回事TT',
+  },
+  {
+    id: '3',
+    username: '. SCRAM',
+    avatar: require('@/assets/images/square-avatar3.jpg'),
+    distance: '0.8km',
+    images: [
+      require('@/assets/images/square-pet3-1.jpg'),
+      require('@/assets/images/square-pet3-2.jpg'),
+    ],
+    content: '刚带回家的小橘，已经学会翻肚皮求摸了~',
+  },
+  {
+    id: '4',
+    username: '白鲤鱼',
+    avatar: require('@/assets/images/square-avatar4.jpg'),
+    distance: '3.5km',
+    images: [
+      require('@/assets/images/square-pet4-1.jpg'),
+      require('@/assets/images/square-pet4-2.jpg'),
+    ],
+    content: '有没有人知道这个品种叫什么？朋友送的好可爱',
+  },
+  {
+    id: '5',
+    username: 'YuuRay',
+    avatar: require('@/assets/images/square-avatar5.jpg'),
+    distance: '1.2km',
+    images: [
+      require('@/assets/images/square-pet5-1.jpg'),
+      require('@/assets/images/square-pet5-2.jpg'),
+      require('@/assets/images/square-pet5-3.jpg'),
+    ],
+    content: '周末带毛孩子去公园遛弯，开心到飞起！',
+  },
+  {
+    id: '6',
+    username: '六月寒🎋',
+    avatar: require('@/assets/images/square-avatar7.jpg'),
+    distance: '4.0km',
+    images: [
+      require('@/assets/images/square-pet6-1.jpg'),
+      require('@/assets/images/square-pet6-2.jpg'),
+      require('@/assets/images/square-pet6-3.jpg'),
+    ],
+    content: '今天的夕阳和我家崽崽更配哦，绝了！',
+  },
+  {
+    id: '7',
+    username: 'Oasis',
+    avatar: require('@/assets/images/square-avatar6.jpg'),
+    distance: '5.7km',
+    images: [
+      require('@/assets/images/square-pet7-1.jpg'),
+      require('@/assets/images/square-pet7-2.jpg'),
+      require('@/assets/images/square-pet7-3.jpg'),
+    ],
+    content: '救命！这个表情也太好笑了吧哈哈哈哈',
   },
 ];
 
@@ -644,7 +704,7 @@ function CommunityPostCard({ post }: { post: CommunityPost }) {
         <View style={styles.postHeader}>
           <View style={styles.avatarWrapper}>
             <Image
-              source={{ uri: post.avatarUrl }}
+              source={post.avatar}
               style={styles.postAvatar}
               contentFit="cover"
             />
@@ -664,10 +724,10 @@ function CommunityPostCard({ post }: { post: CommunityPost }) {
 
         {/* Pet images */}
         <View style={styles.postImages}>
-          {post.images.map((uri, idx) => (
+          {post.images.map((src, idx) => (
             <Image
               key={`${post.id}-img-${idx}`}
-              source={{ uri }}
+              source={src}
               style={styles.postImage}
               contentFit="cover"
             />

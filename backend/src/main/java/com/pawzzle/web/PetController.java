@@ -75,12 +75,12 @@ public class PetController {
         You generate pet adoption card data for a mobile app.
         Return ONLY valid JSON with an array of exactly 20 objects.
         Each object MUST contain these fields:
-        - name: short, unique pet name (Chinese or English is OK)
+        - name: short, unique pet name in Chinese (2-3 characters)
         - species: "CAT" or "DOG"
-        - breed: use EXACT values from ["British Shorthair","Ragdoll","Siamese","Corgi","Shiba Inu","Mini Poodle"]
+        - breed: use EXACT values from ["英国短毛猫","布偶猫","暹罗猫","柯基","柴犬","迷你贵宾"]
         - age: integer, 1 to 10
         - location: use EXACT values from ["杭州","北京","上海"]
-        - personalityTag: one word, no spaces
+        - personalityTag: one Chinese word, no spaces (e.g. 活泼, 安静, 聪明)
         - description: 12-30 Chinese characters describing temperament
 
         Do NOT include id fields, and do NOT wrap in markdown.
@@ -100,14 +100,11 @@ public class PetController {
 
         Return ONLY valid JSON with a single object containing these fields:
         - species: "CAT" or "DOG" (if the animal is clearly neither, use "UNKNOWN")
-        - breed: the breed name in English (use EXACT values from this list when possible:
-          CAT breeds: "British Shorthair", "Ragdoll", "Siamese"
-          DOG breeds: "Corgi", "Shiba Inu", "Mini Poodle"
-          If the breed is not in the list, provide your best guess in English)
-        - breedCn: the breed name in Chinese (use EXACT values when possible:
-          CAT: "英短", "布偶", "暹罗"
-          DOG: "柯基", "柴犬", "迷你贵宾"
+        - breed: the breed name in Chinese (use EXACT values from this list when possible:
+          CAT breeds: "英国短毛猫", "布偶猫", "暹罗猫"
+          DOG breeds: "柯基", "柴犬", "迷你贵宾"
           If the breed is not in the list, provide your best Chinese translation)
+        - breedCn: same as breed (Chinese breed name)
         - ageGuess: estimated age in years as a string (e.g. "2"), provide your best guess
         - description: a 15-30 character Chinese description of the pet's appearance and likely temperament
         - confidence: "high", "medium", or "low" based on image clarity and recognition certainty
@@ -307,8 +304,8 @@ public class PetController {
         }
         String description = normalize(request.description());
         String imageUrl = normalize(request.imageUrl());
-        String rawDescription = description != null ? description : name + " is ready to meet you.";
-        String trait = description != null ? description : "Personality: " + personalityTag + ".";
+        String rawDescription = description != null ? description : name + "正在等你带它回家。";
+        String trait = description != null ? description : "性格：" + personalityTag;
         String ageLabel = formatAge(age);
         String icon = species == Pet.Species.CAT ? "cat" : "dog";
         String tone = species == Pet.Species.CAT ? "#DCEBFF" : "#FDE2B3";
@@ -358,7 +355,7 @@ public class PetController {
     }
 
     private String formatAge(int age) {
-        return age == 1 ? "1 yr" : age + " yrs";
+        return age + "岁";
     }
 
     private Path resolveUploadRoot() {

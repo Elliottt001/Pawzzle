@@ -26,56 +26,56 @@ public class DataSeeder implements ApplicationRunner {
     private void seedPets() {
         List<Pet> seeds = List.of(
             Pet.builder()
-                .name("Mochi")
+                .name("糯米")
                 .species(Pet.Species.DOG)
                 .status(Pet.Status.OPEN)
-                .breed("Corgi")
-                .age("2 yrs")
-                .energy("Playful")
-                .trait("Loves sunrise walks and snack puzzles.")
-                .distance("杭州")
+                .breed("柯基")
+                .age("2岁")
+                .energy("活泼")
+                .trait("喜欢清晨散步和解谜零食玩具。")
+                .distance("1.2km")
                 .icon("dog")
                 .tone("#FDE2B3")
-                .rawDescription("Loves sunrise walks and snack puzzles.")
+                .rawDescription("喜欢清晨散步和解谜零食玩具。")
                 .build(),
             Pet.builder()
-                .name("Luna")
+                .name("露娜")
                 .species(Pet.Species.CAT)
                 .status(Pet.Status.OPEN)
-                .breed("British Shorthair")
-                .age("3 yrs")
-                .energy("Calm")
-                .trait("Apartment-friendly and gentle with guests.")
-                .distance("北京")
+                .breed("英国短毛猫")
+                .age("3岁")
+                .energy("安静")
+                .trait("适合公寓饲养，对客人很温柔。")
+                .distance("2.0km")
                 .icon("cat")
                 .tone("#DCEBFF")
-                .rawDescription("Apartment-friendly and gentle with guests.")
+                .rawDescription("适合公寓饲养，对客人很温柔。")
                 .build(),
             Pet.builder()
-                .name("Rio")
+                .name("小瑞")
                 .species(Pet.Species.DOG)
                 .status(Pet.Status.OPEN)
-                .breed("Mini Poodle")
-                .age("1 yr")
-                .energy("Smart")
-                .trait("Quick learner, loves puzzle toys.")
-                .distance("上海")
+                .breed("迷你贵宾")
+                .age("1岁")
+                .energy("聪明")
+                .trait("学习能力强，喜欢益智玩具。")
+                .distance("5.3km")
                 .icon("paw")
                 .tone("#E5F5DE")
-                .rawDescription("Quick learner, loves puzzle toys.")
+                .rawDescription("学习能力强，喜欢益智玩具。")
                 .build(),
             Pet.builder()
-                .name("Hazel")
+                .name("榛子")
                 .species(Pet.Species.DOG)
                 .status(Pet.Status.OPEN)
-                .breed("Shiba Inu")
-                .age("4 yrs")
-                .energy("Independent")
-                .trait("Enjoys calm mornings and steady routines.")
-                .distance("杭州")
+                .breed("柴犬")
+                .age("4岁")
+                .energy("独立")
+                .trait("喜欢安静的早晨和规律的生活。")
+                .distance("10.0km")
                 .icon("dog")
                 .tone("#FFE1E1")
-                .rawDescription("Enjoys calm mornings and steady routines.")
+                .rawDescription("喜欢安静的早晨和规律的生活。")
                 .build()
         );
 
@@ -95,49 +95,49 @@ public class DataSeeder implements ApplicationRunner {
             buildContent(
                 HomeContentItem.Category.UPDATE,
                 1,
-                "Meet Maple",
-                "A gentle beagle just arrived and loves couch naps.",
-                "New",
+                "新朋友：枫枫",
+                "一只温柔的比格犬刚到来，最爱在沙发上打盹。",
+                "新到",
                 "#FCE7CF"
             ),
             buildContent(
                 HomeContentItem.Category.UPDATE,
                 2,
-                "Weekend adoption fair",
-                "Saturday 10am to 4pm at Riverside Park.",
-                "Event",
+                "周末领养集市",
+                "周六上午10点至下午4点，滨江公园见。",
+                "活动",
                 "#DCEBFF"
             ),
             buildContent(
                 HomeContentItem.Category.UPDATE,
                 3,
-                "Trainer Q and A",
-                "Short answers on house training and leash manners.",
-                "Live",
+                "训犬师问答",
+                "关于室内训练和牵绳礼仪的简短解答。",
+                "直播",
                 "#E7F5DE"
             ),
             buildContent(
                 HomeContentItem.Category.GUIDE,
                 1,
-                "Apartment ready pets",
-                "Low shed coats and calm energy tips.",
-                "Guide",
+                "适合公寓的宠物",
+                "低掉毛品种和安静性格小贴士。",
+                "指南",
                 "#EAF2FF"
             ),
             buildContent(
                 HomeContentItem.Category.GUIDE,
                 2,
-                "First week checklist",
-                "Supplies, routines, and settling in safely.",
-                "Checklist",
+                "第一周清单",
+                "用品准备、日常规律和安全适应。",
+                "清单",
                 "#FCE9E0"
             ),
             buildContent(
                 HomeContentItem.Category.GUIDE,
                 3,
-                "Cat and dog intros",
-                "Slow steps for gentle introductions.",
-                "Tips",
+                "猫狗初次见面",
+                "循序渐进，温柔引导。",
+                "技巧",
                 "#E8F5EE"
             )
         );
