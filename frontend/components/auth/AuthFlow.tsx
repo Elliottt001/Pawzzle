@@ -25,6 +25,7 @@ export function AuthFlow() {
   const [authStep, setAuthStep] = React.useState<AuthStep>('landing');
   const [status, setStatus] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [isAgreed, setIsAgreed] = React.useState(false);
   
   // Phone & Code State
   const [phone, setPhone] = React.useState('');
@@ -364,7 +365,11 @@ export function AuthFlow() {
           ) : null}
           <Text style={styles.registerHint}>点击后输入昵称即可快速登录</Text>
           <View style={styles.agreementRow}>
-            <View style={styles.agreementDot} />
+            <Pressable onPress={() => setIsAgreed(!isAgreed)}>
+              <View style={[styles.agreementDot, isAgreed && styles.agreementDotActive]}>
+                {isAgreed && <FontAwesome5 name="check" size={10} color={Theme.colors.primary} />}
+              </View>
+            </Pressable>
             <Text style={styles.agreementText}>
               登录即代表你已阅读并同意
               <Text style={styles.agreementLink}>《隐私政策》</Text>和

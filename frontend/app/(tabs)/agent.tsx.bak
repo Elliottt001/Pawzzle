@@ -79,82 +79,10 @@ const RECOMMENDING_WAITING_TEXTS = [
 const VOICE_TRANSCRIBE_URL = `${API_BASE_URL}/api/voice/transcribe`;
 const TEST_TRANSCRIBE_URL = `${API_BASE_URL}/api/voice/transcribe-test-file`;
 
-type FlowPhase = 'quiz' | 'chat' | 'survey' | 'result';
-
-type QuizOption = { label: string; text: string };
-type QuizQuestion = { id: number; title: string; options: QuizOption[] };
-
-const QUIZ_QUESTIONS: QuizQuestion[] = [
-  {
-    id: 0,
-    title: '你更倾向什么类型的宠物？',
-    options: [
-      { label: 'A', text: '猫咪' },
-      { label: 'B', text: '狗狗' },
-      { label: 'C', text: '都可以，看眼缘' },
-    ],
-  },
-  {
-    id: 1,
-    title: '你更喜欢的宠物年龄？',
-    options: [
-      { label: 'A', text: '幼崽（可爱但费心）' },
-      { label: 'B', text: '青年（活泼好养）' },
-      { label: 'C', text: '成年（稳定懂事）' },
-      { label: 'D', text: '老年（温柔安静）' },
-    ],
-  },
-  {
-    id: 2,
-    title: '你对毛发有偏好吗？',
-    options: [
-      { label: 'A', text: '长毛' },
-      { label: 'B', text: '短毛' },
-      { label: 'C', text: '无毛' },
-      { label: 'D', text: '都可以' },
-    ],
-  },
-];
-
-const SURVEY_FIELDS = [
-  { key: 'age', label: '年龄', placeholder: '例如：25' },
-  { key: 'location', label: '省市县', placeholder: '例如：浙江省杭州市' },
-  { key: 'workStatus', label: '工作情况', placeholder: '例如：全职上班族' },
-  { key: 'salary', label: '薪资情况', placeholder: '例如：8k-12k' },
-  { key: 'livingStatus', label: '居住情况', placeholder: '例如：独居/合租/和家人住' },
-  { key: 'familyAcceptance', label: '家人接受情况', placeholder: '例如：家人支持' },
-  { key: 'petExperience', label: '养宠经验', placeholder: '例如：养过一只猫两年' },
-];
-
-function buildSystemPromptFromQuiz(answers: Record<number, string>): string {
-  const petType = answers[0] ?? '未选择';
-  const agePreference = answers[1] ?? '未选择';
-  const furPreference = answers[2] ?? '未选择';
-  return [
-    '你是 Pawzy，一只温暖友好的宠物匹配助理。请用轻松自然、像朋友聊天一样的语气和用户对话。',
-    '',
-    '用户已经在初始问卷中告诉了我们以下偏好：',
-    `- 宠物类型偏好：${petType}`,
-    `- 年龄偏好：${agePreference}`,
-    `- 毛发偏好：${furPreference}`,
-    '',
-    '现在请通过对话进一步了解用户，帮助我们判断他们适不适合养宠物，以及适合什么样的宠物。',
-    '每次只问一个问题，用你自己自然的方式提问（绝对不要照搬下面的原文！要用你的风格重新表达）：',
-    '1. 请用户描述一下自己（性格、生活习惯、喜好等），以及他们心目中理想宠物的性格',
-    '2. 假设周末的一天，他们希望和宠物怎样一起度过',
-    '3. 问问他们能不能接受宠物的一些行为，比如掉毛、叫闹、偶尔调皮拆家、晚上活动等',
-    '4. 如果未来生活中出现突发变故（比如搬家、出差），他们会怎样对待自己的宠物',
-    '',
-    '重要提醒：绝对不要直接使用上面的问题原文！要用你自己的方式来问，让对话感觉自然轻松。根据用户的回答灵活调整语气和追问。',
-  ].join('\n');
-}
-
 export default function AgentScreen() {
   const [hasStarted, setHasStarted] = React.useState(false);
-  const [phase, setPhase] = React.useState<FlowPhase>('quiz');
-  const [quizAnswers, setQuizAnswers] = React.useState<Record<number, string>>({});
-  const [surveyData, setSurveyData] = React.useState<Record<string, string>>({});
-  const [activeSystemPrompt, setActiveSystemPrompt] = React.useState<string | null>(null);
+  const [attitudePromptInput, setAttitudePromptInput] = React.useState('');
+  const [activeAttitudePrompt, setActiveAttitudePrompt] = React.useState<string | null>(null);
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [input, setInput] = React.useState('');
   const [status, setStatus] = React.useState<'idle' | 'evaluating' | 'recommending' | 'error'>(
@@ -176,7 +104,8 @@ export default function AgentScreen() {
 
   const isBusy = status === 'evaluating' || status === 'recommending';
   const isInputLocked = isBusy || isTranscribing || isTestingSample;
-  const canSend = input.trim().length > 0 && !isInputLocked && phase === 'chat' && !evaluation;
+  const canSend = input.trim().length > 0 && !isInputLocked && !evaluation;
+  const canApplyAttitudePrompt = attitudePromptInput.trim().length > 0;
   const waitingMessages =
     status === 'recommending' ? RECOMMENDING_WAITING_TEXTS : EVALUATING_WAITING_TEXTS;
   const waitingText = waitingMessages[waitingIndex % waitingMessages.length];
@@ -257,84 +186,54 @@ export default function AgentScreen() {
     setIsTestingSample(false);
   }, []);
 
-  const handleQuizComplete = React.useCallback((answers: Record<number, string>) => {
-    setQuizAnswers(answers);
-    const systemPrompt = buildSystemPromptFromQuiz(answers);
-    setActiveSystemPrompt(systemPrompt);
+  const handleApplyAttitudePrompt = React.useCallback(() => {
+    const trimmed = attitudePromptInput.trim();
+    if (!trimmed) {
+      return;
+    }
     hasStartedRef.current = false;
     resetConversationState();
-    setPhase('chat');
-  }, [resetConversationState]);
+    setActiveAttitudePrompt(trimmed);
+  }, [attitudePromptInput, resetConversationState]);
 
-  const handleSurveyComplete = React.useCallback(async (data: Record<string, string>) => {
-    setSurveyData(data);
-    setPhase('result');
-    if (!evaluation) return;
-    setStatus('recommending');
-    try {
-      const surveyContext = SURVEY_FIELDS
-        .filter((f) => data[f.key]?.trim())
-        .map((f) => `${f.label}：${data[f.key]}`)
-        .join('\n');
-      const enhancedPrompt = (activeSystemPrompt ?? '') +
-        (surveyContext ? `\n\n用户的基本信息：\n${surveyContext}` : '');
-      await loadPetCards();
-      const decision = await requestRecommendation(
-        evaluation,
-        buildAgentMessages(messages),
-        enhancedPrompt
-      );
-      setRecommendedItems(decision?.items ?? []);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '';
-      setErrorMessage(ensureChinese(message, '推荐生成失败'));
-    } finally {
-      setStatus('idle');
-    }
-  }, [evaluation, messages, activeSystemPrompt, buildAgentMessages, loadPetCards]);
+  const handleChangeAttitudePrompt = React.useCallback(() => {
+    hasStartedRef.current = false;
+    resetConversationState();
+    setAttitudePromptInput(activeAttitudePrompt ?? '');
+    setActiveAttitudePrompt(null);
+  }, [activeAttitudePrompt, resetConversationState]);
 
-  const handleSurveySkip = React.useCallback(async () => {
-    setPhase('result');
-    if (!evaluation) return;
-    setStatus('recommending');
-    try {
-      await loadPetCards();
-      const decision = await requestRecommendation(
-        evaluation,
-        buildAgentMessages(messages),
-        activeSystemPrompt ?? ''
-      );
-      setRecommendedItems(decision?.items ?? []);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '';
-      setErrorMessage(ensureChinese(message, '推荐生成失败'));
-    } finally {
-      setStatus('idle');
-    }
-  }, [evaluation, messages, activeSystemPrompt, buildAgentMessages, loadPetCards]);
-
-  // Effect: when entering chat phase, send initial evaluation request
   React.useEffect(() => {
-    if (phase !== 'chat' || !activeSystemPrompt || hasStartedRef.current) {
+    if (!hasStarted || !activeAttitudePrompt || hasStartedRef.current) {
       return;
     }
     hasStartedRef.current = true;
     setStatus('evaluating');
     setErrorMessage(null);
 
-    requestEvaluation([], activeSystemPrompt)
+    requestEvaluation([], activeAttitudePrompt)
       .then((data) => {
+        // appendDebug('调试：评估提示', data?.prompt ?? '');
+        // appendDebug('调试：评估响应', data?.rawResponse ?? '');
+
         if (data?.endverification) {
           const summary = buildEvaluationSummary(data);
           setEvaluation(summary);
           appendMessage('ai', formatEvaluationSummary(summary));
-          setPhase('survey');
-          return undefined;
+          setStatus('recommending');
+          return loadPetCards().then(() => requestRecommendation(summary, [], activeAttitudePrompt)).then((decision) => {
+            // appendDebug('调试：推荐提示', decision?.prompt ?? '');
+            // appendDebug('调试：候选筛选', decision?.debug ?? '');
+            // appendDebug('调试：推荐响应', decision?.rawResponse ?? '');
+            setRecommendedItems(decision?.items ?? []);
+          });
         }
 
         const questions = normalizeQuestions(data);
         if (questions.length) {
           appendMessage('ai', questions[0]);
+        } else {
+          // appendDebug('调试：评估缺少下一问', data?.rawResponse ?? '');
         }
         return undefined;
       })
@@ -349,9 +248,9 @@ export default function AgentScreen() {
   }, [
     appendDebug,
     appendMessage,
-    activeSystemPrompt,
+    activeAttitudePrompt,
     formatEvaluationSummary,
-    phase,
+    hasStarted,
     loadPetCards,
   ]);
 
@@ -455,7 +354,8 @@ export default function AgentScreen() {
   }, [evaluation, isInputLocked, setErrorMessage]);
 
   const handleSend = async () => {
-    if (!activeSystemPrompt || phase !== 'chat') {
+    if (!activeAttitudePrompt) {
+      setErrorMessage('请先输入态度 prompt');
       return;
     }
     const trimmed = input.trim();
@@ -477,17 +377,32 @@ export default function AgentScreen() {
     const nextMessages = [...messages, userMessage];
 
     try {
-      const data = await requestEvaluation(buildAgentMessages(nextMessages), activeSystemPrompt);
+      const data = await requestEvaluation(buildAgentMessages(nextMessages), activeAttitudePrompt);
+      // appendDebug('调试：评估提示', data?.prompt ?? '');
+      // appendDebug('调试：评估响应', data?.rawResponse ?? '');
 
       if (data?.endverification) {
         const summary = buildEvaluationSummary(data);
         setEvaluation(summary);
         appendMessage('ai', formatEvaluationSummary(summary));
-        setPhase('survey');
+
+        setStatus('recommending');
+        await loadPetCards();
+        const decision = await requestRecommendation(
+          summary,
+          buildAgentMessages(nextMessages),
+          activeAttitudePrompt
+        );
+        // appendDebug('调试：推荐提示', decision?.prompt ?? '');
+        // appendDebug('调试：候选筛选', decision?.debug ?? '');
+        // appendDebug('调试：推荐响应', decision?.rawResponse ?? '');
+        setRecommendedItems(decision?.items ?? []);
       } else {
         const questions = normalizeQuestions(data);
         if (questions.length) {
           appendMessage('ai', questions[0]);
+        } else {
+          // appendDebug('调试：评估缺少下一问', data?.rawResponse ?? '');
         }
       }
     } catch (error) {
@@ -509,96 +424,28 @@ export default function AgentScreen() {
         const pet = petById.get(item.id);
         return pet ? { pet, confidence: item.confidence } : null;
       })
-      .filter(Boolean) as { pet: PetCardData; confidence?: number }[];
+      .filter((item): item is { pet: PetCardData; confidence?: number } => Boolean(item));
   }, [petCards, recommendedItems]);
 
   if (!hasStarted) {
     return <AgentStartScreen onStart={() => {
       hasStartedRef.current = false;
       setHasStarted(true);
-      setPhase('quiz');
-      setQuizAnswers({});
-      setSurveyData({});
-      setActiveSystemPrompt(null);
-      resetConversationState();
+      setActiveAttitudePrompt(null);
     }} />;
   }
 
-  if (phase === 'quiz') {
+  if (!activeAttitudePrompt) {
     return (
-      <QuizScreen
-        onComplete={handleQuizComplete}
+      <AttitudePromptSetupScreen
+        value={attitudePromptInput}
+        onChange={setAttitudePromptInput}
+        onApply={handleApplyAttitudePrompt}
         onBack={() => setHasStarted(false)}
+        canApply={canApplyAttitudePrompt}
       />
     );
   }
-
-  if (phase === 'survey') {
-    return (
-      <SurveyScreen
-        onComplete={handleSurveyComplete}
-        onSkip={handleSurveySkip}
-        onBack={() => setPhase('chat')}
-      />
-    );
-  }
-
-  if (phase === 'result') {
-    return (
-      <SafeAreaView style={styles.safeArea as object}>
-        <View style={styles.background as object}>
-          <View style={[styles.blob, styles.blobLeft]} />
-          <View style={[styles.blob, styles.blobRight]} />
-          <View style={[styles.blob, styles.blobBottom]} />
-        </View>
-        <ScrollView contentContainerStyle={quizStyles.resultContent} bounces={false}>
-          
-          <Text style={quizStyles.resultTitle}>你的专属宠物匹配结果</Text>
-          {evaluation ? (
-            <View style={quizStyles.resultProfileCard}>
-              <Text style={quizStyles.resultProfileText}>{evaluation.profile}</Text>
-            </View>
-          ) : null}
-
-          {status === 'recommending' && visiblePets.length === 0 ? (
-            <Text style={styles.matchWaitingText}>正在为您匹配伙伴…</Text>
-          ) : null}
-
-          {visiblePets.length > 0 ? (
-            <>
-              <Text style={quizStyles.resultSubTitle}>
-                我们为你匹配到了最适合一起生活的小伙伴
-              </Text>
-              <Text style={quizStyles.resultSwipeHint}>见下方，右滑查看更多……</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.matchListContent}
-                style={styles.matchList}>
-                {visiblePets.map(({ pet, confidence }) => (
-                  <PetCard key={pet.id} pet={pet} confidence={confidence} />
-                ))}
-              </ScrollView>
-            </>
-          ) : null}
-
-          <Pressable
-            style={({ pressed }) => [
-              quizStyles.resultRestartButton,
-              pressed && styles.sendButtonPressed,
-            ]}
-            onPress={() => {
-              hasStartedRef.current = false;
-              setHasStarted(false);
-            }}>
-            <Text style={quizStyles.resultRestartText}>重新测试</Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  // phase === 'chat'
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -612,8 +459,20 @@ export default function AgentScreen() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.header}>
-          <Text style={styles.overline}>Pawzy</Text>
-          <Text style={styles.title}>和你聊聊</Text>
+          <View style={styles.headerRow}>
+            <Text style={styles.overline}>测试模式</Text>
+            <Pressable
+              onPress={handleChangeAttitudePrompt}
+              disabled={isBusy}
+              style={({ pressed }) => [
+                styles.changeAttitudeButton,
+                isBusy && styles.sendButtonDisabled,
+                pressed && styles.sendButtonPressed,
+              ]}>
+              <Text style={styles.changeAttitudeText}>更换态度</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.title}>态度 Prompt 已生效</Text>
         </View>
 
         <ScrollView
@@ -625,6 +484,31 @@ export default function AgentScreen() {
           ))}
 
           {isBusy ? <ChatBubble role="ai" text={waitingText} /> : null}
+
+          {/* {errorMessage ? <ChatBubble role="debug" text={`错误：${errorMessage}`} /> : null} */}
+
+          {/* {evaluation && petCardsStatus === 'error' ? (
+            <ChatBubble role="debug" text="暂时无法获取宠物卡片。" />
+          ) : null} */}
+
+          {(status === 'recommending' || visiblePets.length > 0) ? (
+            <View style={styles.matchSection}>
+              {status === 'recommending' && visiblePets.length === 0 ? (
+                <Text style={styles.matchWaitingText}>正在为您匹配伙伴…</Text>
+              ) : null}
+              {visiblePets.length > 0 ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.matchListContent}
+                  style={styles.matchList}>
+                  {visiblePets.map(({ pet, confidence }) => (
+                    <PetCard key={pet.id} pet={pet} confidence={confidence} />
+                  ))}
+                </ScrollView>
+              ) : null}
+            </View>
+          ) : null}
         </ScrollView>
 
         {!evaluation ? (
@@ -889,144 +773,52 @@ function AgentStartScreen({ onStart }: { onStart: () => void }) {
   );
 }
 
-function QuizScreen({
-  onComplete,
+function AttitudePromptSetupScreen({
+  value,
+  onChange,
+  onApply,
   onBack,
+  canApply,
 }: {
-  onComplete: (answers: Record<number, string>) => void;
+  value: string;
+  onChange: (value: string) => void;
+  onApply: () => void;
   onBack: () => void;
+  canApply: boolean;
 }) {
-  const [step, setStep] = React.useState(0);
-  const [answers, setAnswers] = React.useState<Record<number, string>>({});
-  const current = QUIZ_QUESTIONS[step];
-  const isLast = step === QUIZ_QUESTIONS.length - 1;
-  const progress = (step + 1) / QUIZ_QUESTIONS.length;
-
-  const handleSelect = (optionText: string) => {
-    const next = { ...answers, [current.id]: optionText };
-    setAnswers(next);
-    if (isLast) {
-      onComplete(next);
-    } else {
-      setStep(step + 1);
-    }
-  };
-
-  return (
-    <View style={quizStyles.safeArea}>
-      <View style={quizStyles.bgGlow} />
-      <SafeAreaView style={{ flex: 1 }}>
-        <View style={quizStyles.topBar}>
-          <Pressable onPress={onBack} hitSlop={12}>
-            <Text style={quizStyles.backText}>← 返回</Text>
-          </Pressable>
-          <Text style={quizStyles.stepText}>{step + 1} / {QUIZ_QUESTIONS.length}</Text>
-        </View>
-
-        <View style={quizStyles.progressBarTrack}>
-          <View style={[quizStyles.progressBarFill, { width: `${progress * 100}%` }]} />
-        </View>
-
-        <ScrollView contentContainerStyle={quizStyles.content} bounces={false}>
-          <Text style={quizStyles.questionTitle}>{current.title}</Text>
-
-          {current.options.map((opt) => {
-            const selected = answers[current.id] === opt.text;
-            return (
-              <Pressable
-                key={opt.label}
-                onPress={() => handleSelect(opt.text)}
-                style={({ pressed }) => [
-                  quizStyles.optionCard,
-                  selected && quizStyles.optionCardSelected,
-                  pressed && { transform: [{ scale: 0.97 }] },
-                ]}>
-                <View style={[quizStyles.optionLabel, selected && quizStyles.optionLabelSelected]}>
-                  <Text
-                    style={[
-                      quizStyles.optionLabelText,
-                      selected && quizStyles.optionLabelTextSelected,
-                    ]}>
-                    {opt.label}
-                  </Text>
-                </View>
-                <Text style={[quizStyles.optionText, selected && quizStyles.optionTextSelected]}>
-                  {opt.text}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </SafeAreaView>
-    </View>
-  );
-}
-
-function SurveyScreen({
-  onComplete,
-  onSkip,
-  onBack,
-}: {
-  onComplete: (data: Record<string, string>) => void;
-  onSkip: () => void;
-  onBack: () => void;
-}) {
-  const [formData, setFormData] = React.useState<Record<string, string>>({});
-
-  const updateField = (key: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const hasAnyData = SURVEY_FIELDS.some((f) => formData[f.key]?.trim());
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <View style={quizStyles.topBar}>
-          <Pressable onPress={onBack} hitSlop={12}>
-            <Text style={quizStyles.backText}>← 返回</Text>
+        <View style={styles.attitudeCard}>
+          <Text style={styles.attitudeTitle}>请输入态度 prompt</Text>
+          <Text style={styles.attitudeDesc}>
+            会与基础身份/任务提示词拼接后，再发起对话请求。
+          </Text>
+          <TextInput
+            value={value}
+            onChangeText={onChange}
+            placeholder="例如：像朋友聊天，幽默一点，但问题要聚焦领养画像"
+            placeholderTextColor="#A1A1A1"
+            multiline
+            textAlignVertical="top"
+            style={styles.attitudeInput}
+          />
+          <Pressable
+            onPress={onApply}
+            disabled={!canApply}
+            style={({ pressed }) => [
+              styles.attitudeApplyButton,
+              !canApply && styles.sendButtonDisabled,
+              pressed && canApply && styles.sendButtonPressed,
+            ]}>
+            <Text style={styles.attitudeApplyText}>应用并开始对话</Text>
+          </Pressable>
+          <Pressable onPress={onBack} style={styles.attitudeBackButton}>
+            <Text style={styles.attitudeBackText}>返回</Text>
           </Pressable>
         </View>
-
-        <ScrollView
-          contentContainerStyle={quizStyles.surveyContent}
-          keyboardShouldPersistTaps="handled"
-          bounces={false}>
-          <Text style={quizStyles.surveyTitle}>填写以下问卷</Text>
-          <Text style={quizStyles.surveyDesc}>
-            帮助我们更准确地为你匹配，所有信息仅用于匹配~
-          </Text>
-
-          {SURVEY_FIELDS.map((field) => (
-            <View key={field.key} style={quizStyles.surveyFieldWrap}>
-              <Text style={quizStyles.surveyLabel}>{field.label}</Text>
-              <TextInput
-                value={formData[field.key] ?? ''}
-                onChangeText={(v) => updateField(field.key, v)}
-                placeholder={field.placeholder}
-                placeholderTextColor="#A1A1A1"
-                style={quizStyles.surveyInput}
-              />
-            </View>
-          ))}
-
-          <Pressable
-            onPress={() => onComplete(formData)}
-            disabled={!hasAnyData}
-            style={({ pressed }) => [
-              quizStyles.surveySubmitButton,
-              !hasAnyData && styles.sendButtonDisabled,
-              pressed && hasAnyData && styles.sendButtonPressed,
-            ]}>
-            <Text style={quizStyles.surveySubmitText}>提交并查看结果</Text>
-          </Pressable>
-
-          <Pressable onPress={onSkip} style={quizStyles.surveySkipWrap}>
-            <Text style={quizStyles.surveySkipText}>此处可跳过</Text>
-          </Pressable>
-        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -1724,242 +1516,5 @@ const startStyles = StyleSheet.create({
     color: 'rgba(237, 132, 63, 0.40)',
     lineHeight: 20,
     textAlign: 'center',
-  },
-});
-
-const quizStyles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#FFFEF9',
-  },
-  bgGlow: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(244, 193, 127, 0.05)',
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  backText: {
-    fontSize: 14,
-    color: '#875B47',
-    fontFamily: Theme.fonts.regular,
-  },
-  stepText: {
-    fontSize: 13,
-    color: 'rgba(237, 132, 63, 0.6)',
-    fontFamily: Theme.fonts.regular,
-  },
-  progressBarTrack: {
-    marginHorizontal: 20,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(244, 193, 127, 0.2)',
-    marginTop: 4,
-    marginBottom: 12,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 2,
-    backgroundColor: '#F4C17F',
-  },
-  content: {
-    paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 60,
-  },
-  questionTitle: {
-    fontSize: 20,
-    fontFamily: Theme.fonts.semiBold,
-    color: '#5C3B2E',
-    lineHeight: 30,
-    marginBottom: 28,
-    textAlign: 'center',
-  },
-  optionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    marginBottom: 14,
-    borderWidth: 1.5,
-    borderColor: 'rgba(244, 193, 127, 0.25)',
-    shadowColor: 'rgba(244, 193, 127, 0.15)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  optionCardSelected: {
-    backgroundColor: '#FFF6EA',
-    borderColor: '#F4C17F',
-  },
-  optionLabel: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(244, 193, 127, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  optionLabelSelected: {
-    backgroundColor: '#F4C17F',
-  },
-  optionLabelText: {
-    fontSize: 14,
-    fontFamily: Theme.fonts.semiBold,
-    color: '#875B47',
-  },
-  optionLabelTextSelected: {
-    color: '#FFFFFF',
-  },
-  optionText: {
-    fontSize: 15,
-    fontFamily: Theme.fonts.regular,
-    color: '#5C3B2E',
-    lineHeight: 22,
-    flex: 1,
-  },
-  optionTextSelected: {
-    color: '#5C3B2E',
-    fontFamily: Theme.fonts.semiBold,
-  },
-  surveyContent: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 60,
-  },
-  surveyTitle: {
-    fontSize: 20,
-    fontFamily: Theme.fonts.semiBold,
-    color: '#5C3B2E',
-    lineHeight: 30,
-    marginBottom: 6,
-  },
-  surveyDesc: {
-    fontSize: 13,
-    color: 'rgba(237, 132, 63, 0.7)',
-    fontFamily: Theme.fonts.regular,
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  surveyFieldWrap: {
-    marginBottom: 14,
-  },
-  surveyLabel: {
-    fontSize: 13,
-    fontFamily: Theme.fonts.semiBold,
-    color: '#875B47',
-    marginBottom: 6,
-  },
-  surveyInput: {
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(244, 193, 127, 0.3)',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
-    fontSize: 14,
-    color: '#5C3B2E',
-    fontFamily: Theme.fonts.regular,
-    ...Platform.select({
-      web: {
-        outlineStyle: 'none' as const,
-      },
-    }),
-  },
-  surveySubmitButton: {
-    marginTop: 20,
-    borderRadius: 14,
-    height: 48,
-    backgroundColor: '#F4C17F',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  surveySubmitText: {
-    color: '#FFFFFF',
-    fontFamily: Theme.fonts.semiBold,
-    fontSize: 15,
-  },
-  surveySkipWrap: {
-    marginTop: 14,
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  surveySkipText: {
-    fontSize: 12,
-    color: 'rgba(150, 150, 150, 0.8)',
-    fontFamily: Theme.fonts.regular,
-  },
-  resultContent: {
-    paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 60,
-    alignItems: 'center',
-  },
-  resultStarEmoji: {
-    fontSize: 36,
-    marginBottom: 8,
-  },
-  resultTitle: {
-    fontSize: 20,
-    fontFamily: Theme.fonts.semiBold,
-    color: '#5C3B2E',
-    lineHeight: 30,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  resultProfileCard: {
-    backgroundColor: '#FFF6EA',
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(244, 193, 127, 0.3)',
-    marginBottom: 20,
-    width: '100%',
-  },
-  resultProfileText: {
-    fontSize: 14,
-    fontFamily: Theme.fonts.regular,
-    color: '#875B47',
-    lineHeight: 22,
-  },
-  resultSubTitle: {
-    fontSize: 15,
-    fontFamily: Theme.fonts.regular,
-    color: '#ED843F',
-    lineHeight: 24,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  resultSwipeHint: {
-    fontSize: 12,
-    color: 'rgba(237, 132, 63, 0.5)',
-    fontFamily: Theme.fonts.regular,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  resultRestartButton: {
-    marginTop: 32,
-    width: 160,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F4C17F',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  resultRestartText: {
-    color: '#FFFFFF',
-    fontFamily: Theme.fonts.semiBold,
-    fontSize: 14,
   },
 });

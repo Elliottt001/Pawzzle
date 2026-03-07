@@ -158,12 +158,17 @@ export const styles = StyleSheet.create({
     gap: Theme.spacing.s6,
   },
   agreementDot: {
-    width: 13,
-    height: 13,
-    borderRadius: Theme.radius.pill,
-    borderWidth: Theme.borderWidth.hairline,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1,
     borderColor: Theme.colors.authHint,
     marginTop: Theme.spacing.s2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  agreementDotActive: {
+    borderColor: Theme.colors.primary,
   },
   agreementText: {
     flex: Theme.layout.full,
@@ -173,7 +178,7 @@ export const styles = StyleSheet.create({
     letterSpacing: 0.72,
   },
   agreementLink: {
-    color: Theme.colors.authHint,
+    color: Theme.colors.codeLinkBlue,
   },
   authStatus: {
     marginTop: Theme.spacing.s6,

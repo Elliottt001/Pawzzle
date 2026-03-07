@@ -7,9 +7,9 @@ import {
   View,
 } from 'react-native';
 import { Text } from '@/components/base-text';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { Theme } from '@/constants/theme';
@@ -81,13 +81,23 @@ export default function ChatsScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>私聊</Text>
-        <Text style={styles.subtitle}>与送养人保持联系，随时沟通。</Text>
-      </View>
+    <View style={styles.container}>
+      {/* Top gradient overlay */}
+      <LinearGradient
+        colors={['#FEFFD4', 'rgba(255, 254, 249, 0)']}
+        style={styles.topGradient}
+        pointerEvents="none"
+      />
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>私聊</Text>
+          <Text style={styles.subtitle}>与送养人保持联系，随时沟通。</Text>
+        </View>
         {!canBrowse ? (
           <View style={styles.emptyCard}>
             <FontAwesome5
@@ -165,18 +175,30 @@ export default function ChatsScreen() {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: Theme.layout.full,
-    backgroundColor: Theme.colors.backgroundWarmAlt,
+    backgroundColor: '#FFFEF9',
+  },
+  topGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 315,
+    zIndex: 1,
+    pointerEvents: 'none',
+  },
+  scrollView: {
+    flex: Theme.layout.full,
   },
   header: {
     paddingHorizontal: Theme.spacing.s20,
-    paddingTop: Theme.spacing.s12,
+    paddingTop: 75,
     paddingBottom: Theme.spacing.s8,
     gap: Theme.spacing.s6,
   },

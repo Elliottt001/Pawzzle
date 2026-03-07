@@ -171,7 +171,7 @@ export function UserProfileView({ session }: UserProfileViewProps) {
             <Text style={homeStyles.userName}>{displayName}</Text>
           </View>
           <Text style={homeStyles.userId}>ID：{session.user.id ?? '—'}</Text>
-          <Text style={homeStyles.userIp}>IP地址：北京</Text>
+          <Text style={homeStyles.userIp}>IP地址：浙江杭州</Text>
         </View>
         <Pressable
           onPress={() => {
