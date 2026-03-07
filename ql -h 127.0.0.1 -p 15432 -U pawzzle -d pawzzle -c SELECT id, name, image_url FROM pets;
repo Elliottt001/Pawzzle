@@ -1,0 +1,101 @@
+ id |   name   |                   image_url                   
+----+----------+-----------------------------------------------
+  1 | Mochi    | 
+  2 | Luna     | 
+  3 | Rio      | 
+  4 | Hazel    | 
+  6 | 蓝蓝     | 
+  7 | Doge     | 
+  8 | Coffee   | 
+  9 | Teddy    | 
+ 10 | 团团     | 
+ 11 | Bread    | 
+ 12 | 雪球     | 
+ 13 | Hachi    | 
+ 14 | Coco     | 
+ 16 | 大灰     | 
+ 17 | Sapphire | 
+ 18 | Keji     | 
+ 19 | 柴柴     | 
+ 20 | 球球     | 
+ 21 | Boss     | 
+ 22 | Cookie   | 
+ 23 | Oreo     | 
+ 24 | Pudding  | 
+ 25 | Snow     | 
+ 26 | Mocha    | 
+ 27 | TuanTuan | 
+ 28 | Lele     | 
+ 29 | Pearl    | 
+ 30 | Qiuqiu   | 
+ 31 | Dahuang  | 
+ 32 | DouDou   | 
+ 33 | Milky    | 
+ 34 | Coal     | 
+ 35 | ChaiChai | 
+ 36 | Grey     | 
+ 37 | Fairy    | 
+ 43 | 汤圆     | 
+ 44 | Leo      | 
+ 45 | 豆豆     | 
+ 46 | 馒头     | 
+ 47 | 可乐     | 
+ 48 | 咖啡     | 
+ 38 | 11111    | 
+ 39 | 旺财     | 
+ 40 | 多多     | 
+ 41 | 煤球     | 
+ 42 | 皮皮     | 
+ 49 | 短腿     | 
+ 50 | 花卷     | 
+ 51 | Mimi     | 
+ 52 | 阿黄     | 
+ 53 | 包子     | 
+ 54 | 胖胖     | 
+ 55 | 布丁     | 
+ 56 | Bella    | 
+ 57 | Lucky    | 
+ 58 | 摩卡     | 
+ 59 | 乐乐     | 
+ 60 | Tofu     | 
+ 61 | Cocoa    | 
+ 62 | Snowy    | 
+ 63 | Max      | 
+ 64 | Simba    | 
+ 65 | Rocky    | 
+ 66 | Wangcai  | 
+ 67 | Tuanzi   | 
+ 68 | QiuQiu   | 
+ 69 | DaHuang  | 
+ 70 | LanLan   | 
+ 71 | PiPi     | 
+ 72 | Tangyuan | 
+ 73 | Doudou   | 
+ 74 | Lanlan   | 
+ 75 | Cola     | 
+ 76 | Huahua   | 
+ 77 | Simi     | 
+ 78 | Fatty    | 
+ 79 | 露娜     | 
+ 80 | 卷卷     | 
+ 81 | 胖虎     | 
+ 82 | 黑脸     | 
+ 83 | 泰迪     | 
+ 84 | 闪电     | 
+ 85 | 巧克力   | 
+ 86 | 大叔     | 
+ 15 | Princess | 
+ 96 | 团子     | /uploads/f8e8f8b5a883478abdc10396fe7927f5.jpg
+ 97 | 团子     | /uploads/992a7b410f3d42608c8a6652e583d987.jpg
+  5 | Potato   | 
+ 87 | 团子     | /uploads/3d7a9f0c20284b1081cabe736a3f0fa2.jpg
+ 88 | 团子     | /uploads/1ab1315f908041299a21539fa4fe648c.jpg
+ 89 | 团子     | /uploads/4147d0ef90c646a78b49efcfcfa87943.jpg
+ 90 | 团子     | /uploads/b9d41cc96ea642919bae9bb537ce5cbf.jpg
+ 91 | 团子     | /uploads/8d081f40b7ac4243bacbfb5766958cf8.png
+ 92 | 宫猫     | /uploads/103baa737e7c4437a433a46e3edce1ee.jpg
+ 93 | 团子     | /uploads/f09bd132ddc64e278c4cd84e7ea06f6a.jpg
+ 94 | 萌萌     | /uploads/61116a86e8d74f388b5f5cd121712e91.jpg
+ 95 | 团子     | /uploads/ad70dbe17d104d01830619c41fdba302.jpg
+(97 rows)
+

@@ -49,6 +49,7 @@ public class DataSeeder implements ApplicationRunner {
                 .distance("2.0km")
                 .icon("cat")
                 .tone("#DCEBFF")
+                .imageUrl("https://placecats.com/300/300")
                 .rawDescription("适合公寓饲养，对客人很温柔。")
                 .build(),
             Pet.builder()

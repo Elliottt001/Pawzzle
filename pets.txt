@@ -1,0 +1,1 @@
+ql -h 127.0.0.1 -p 15432 -U pawzzle -d pawzzle -c SELECT\ id\,\ name\,\ image_url\ FROM\ pets\;

@@ -39,7 +39,7 @@ export function PetCard({ pet, confidence }: PetCardProps) {
   const avatarId = Number.isFinite(avatarSeed) ? avatarSeed : 1;
   const fallbackAvatarUri =
     pet.icon === 'cat'
-      ? `https://placekitten.com/${imageDimension}/${imageDimension}`
+      ? `https://placecats.com/${imageDimension}/${imageDimension}`
       : `https://placedog.net/${imageDimension}/${imageDimension}?id=${avatarId}`;
   const avatarUri = resolvePetImageUri(pet.imageUrl) ?? fallbackAvatarUri;
   const isFemale = pet.icon === 'cat';

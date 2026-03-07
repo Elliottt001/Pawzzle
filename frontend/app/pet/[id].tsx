@@ -119,8 +119,8 @@ export default function PetDetailsScreen() {
 
   const isOwner = session?.user?.id === pet.ownerId;
   const canRequestAdoption = pet.status === 'OPEN' && !isOwner;
-  const heroImage =
-    resolvePetImageUri(pet.imageUrl) ?? `https://placedog.net/500/500?id=${pet.id}`;
+  const fallbackImage = pet.icon === 'cat' ? `https://placecats.com/500/500` : `https://placedog.net/500/500?id=${pet.id}`;
+  const heroImage = resolvePetImageUri(pet.imageUrl) ?? fallbackImage;
 
   const handleStartChat = async () => {
     if (!pet.ownerId) {
