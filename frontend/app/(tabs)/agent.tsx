@@ -81,6 +81,8 @@ const TEST_TRANSCRIBE_URL = `${API_BASE_URL}/api/voice/transcribe-test-file`;
 
 export default function AgentScreen() {
   const [hasStarted, setHasStarted] = React.useState(false);
+  const [attitudePromptInput, setAttitudePromptInput] = React.useState('');
+  const [activeAttitudePrompt, setActiveAttitudePrompt] = React.useState<string | null>(null);
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [input, setInput] = React.useState('');
   const [status, setStatus] = React.useState<'idle' | 'evaluating' | 'recommending' | 'error'>(
@@ -103,6 +105,7 @@ export default function AgentScreen() {
   const isBusy = status === 'evaluating' || status === 'recommending';
   const isInputLocked = isBusy || isTranscribing || isTestingSample;
   const canSend = input.trim().length > 0 && !isInputLocked && !evaluation;
+  const canApplyAttitudePrompt = attitudePromptInput.trim().length > 0;
   const waitingMessages =
     status === 'recommending' ? RECOMMENDING_WAITING_TEXTS : EVALUATING_WAITING_TEXTS;
   const waitingText = waitingMessages[waitingIndex % waitingMessages.length];
@@ -171,15 +174,44 @@ export default function AgentScreen() {
     }
   }, [hasStarted, loadPetCards]);
 
+  const resetConversationState = React.useCallback(() => {
+    setMessages([]);
+    setInput('');
+    setStatus('idle');
+    setEvaluation(null);
+    setRecommendedItems([]);
+    setErrorMessage(null);
+    setWaitingIndex(0);
+    setIsTranscribing(false);
+    setIsTestingSample(false);
+  }, []);
+
+  const handleApplyAttitudePrompt = React.useCallback(() => {
+    const trimmed = attitudePromptInput.trim();
+    if (!trimmed) {
+      return;
+    }
+    hasStartedRef.current = false;
+    resetConversationState();
+    setActiveAttitudePrompt(trimmed);
+  }, [attitudePromptInput, resetConversationState]);
+
+  const handleChangeAttitudePrompt = React.useCallback(() => {
+    hasStartedRef.current = false;
+    resetConversationState();
+    setAttitudePromptInput(activeAttitudePrompt ?? '');
+    setActiveAttitudePrompt(null);
+  }, [activeAttitudePrompt, resetConversationState]);
+
   React.useEffect(() => {
-    if (!hasStarted || hasStartedRef.current) {
+    if (!hasStarted || !activeAttitudePrompt || hasStartedRef.current) {
       return;
     }
     hasStartedRef.current = true;
     setStatus('evaluating');
     setErrorMessage(null);
 
-    requestEvaluation([])
+    requestEvaluation([], activeAttitudePrompt)
       .then((data) => {
         // appendDebug('调试：评估提示', data?.prompt ?? '');
         // appendDebug('调试：评估响应', data?.rawResponse ?? '');
@@ -189,7 +221,7 @@ export default function AgentScreen() {
           setEvaluation(summary);
           appendMessage('ai', formatEvaluationSummary(summary));
           setStatus('recommending');
-          return loadPetCards().then(() => requestRecommendation(summary, [])).then((decision) => {
+          return loadPetCards().then(() => requestRecommendation(summary, [], activeAttitudePrompt)).then((decision) => {
             // appendDebug('调试：推荐提示', decision?.prompt ?? '');
             // appendDebug('调试：候选筛选', decision?.debug ?? '');
             // appendDebug('调试：推荐响应', decision?.rawResponse ?? '');
@@ -216,6 +248,7 @@ export default function AgentScreen() {
   }, [
     appendDebug,
     appendMessage,
+    activeAttitudePrompt,
     formatEvaluationSummary,
     hasStarted,
     loadPetCards,
@@ -321,6 +354,10 @@ export default function AgentScreen() {
   }, [evaluation, isInputLocked, setErrorMessage]);
 
   const handleSend = async () => {
+    if (!activeAttitudePrompt) {
+      setErrorMessage('请先输入态度 prompt');
+      return;
+    }
     const trimmed = input.trim();
     if (!trimmed || isInputLocked || evaluation) {
       return;
@@ -340,7 +377,7 @@ export default function AgentScreen() {
     const nextMessages = [...messages, userMessage];
 
     try {
-      const data = await requestEvaluation(buildAgentMessages(nextMessages));
+      const data = await requestEvaluation(buildAgentMessages(nextMessages), activeAttitudePrompt);
       // appendDebug('调试：评估提示', data?.prompt ?? '');
       // appendDebug('调试：评估响应', data?.rawResponse ?? '');
 
@@ -351,7 +388,11 @@ export default function AgentScreen() {
 
         setStatus('recommending');
         await loadPetCards();
-        const decision = await requestRecommendation(summary, buildAgentMessages(nextMessages));
+        const decision = await requestRecommendation(
+          summary,
+          buildAgentMessages(nextMessages),
+          activeAttitudePrompt
+        );
         // appendDebug('调试：推荐提示', decision?.prompt ?? '');
         // appendDebug('调试：候选筛选', decision?.debug ?? '');
         // appendDebug('调试：推荐响应', decision?.rawResponse ?? '');
@@ -387,7 +428,23 @@ export default function AgentScreen() {
   }, [petCards, recommendedItems]);
 
   if (!hasStarted) {
-    return <AgentStartScreen onStart={() => setHasStarted(true)} />;
+    return <AgentStartScreen onStart={() => {
+      hasStartedRef.current = false;
+      setHasStarted(true);
+      setActiveAttitudePrompt(null);
+    }} />;
+  }
+
+  if (!activeAttitudePrompt) {
+    return (
+      <AttitudePromptSetupScreen
+        value={attitudePromptInput}
+        onChange={setAttitudePromptInput}
+        onApply={handleApplyAttitudePrompt}
+        onBack={() => setHasStarted(false)}
+        canApply={canApplyAttitudePrompt}
+      />
+    );
   }
 
   return (
@@ -402,8 +459,20 @@ export default function AgentScreen() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.header}>
-          <Text style={styles.overline}></Text>
-          <Text style={styles.title}></Text>
+          <View style={styles.headerRow}>
+            <Text style={styles.overline}>测试模式</Text>
+            <Pressable
+              onPress={handleChangeAttitudePrompt}
+              disabled={isBusy}
+              style={({ pressed }) => [
+                styles.changeAttitudeButton,
+                isBusy && styles.sendButtonDisabled,
+                pressed && styles.sendButtonPressed,
+              ]}>
+              <Text style={styles.changeAttitudeText}>更换态度</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.title}>态度 Prompt 已生效</Text>
         </View>
 
         <ScrollView
@@ -715,14 +784,73 @@ function AgentStartScreen({ onStart }: { onStart: () => void }) {
   );
 }
 
-async function requestEvaluation(messages: AgentMessage[]) {
-  return postJson<EvaluationResponse>('/api/agent/evaluate', { messages });
+function AttitudePromptSetupScreen({
+  value,
+  onChange,
+  onApply,
+  onBack,
+  canApply,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onApply: () => void;
+  onBack: () => void;
+  canApply: boolean;
+}) {
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <View style={styles.attitudeCard}>
+          <Text style={styles.attitudeTitle}>先输入态度 Prompt</Text>
+          <Text style={styles.attitudeDesc}>
+            会与基础身份/任务提示词拼接后，再发起对话请求。
+          </Text>
+          <TextInput
+            value={value}
+            onChangeText={onChange}
+            placeholder="例如：像朋友聊天，幽默一点，但问题要聚焦领养画像"
+            placeholderTextColor="#A1A1A1"
+            multiline
+            textAlignVertical="top"
+            style={styles.attitudeInput}
+          />
+          <Pressable
+            onPress={onApply}
+            disabled={!canApply}
+            style={({ pressed }) => [
+              styles.attitudeApplyButton,
+              !canApply && styles.sendButtonDisabled,
+              pressed && canApply && styles.sendButtonPressed,
+            ]}>
+            <Text style={styles.attitudeApplyText}>应用并开始对话</Text>
+          </Pressable>
+          <Pressable onPress={onBack} style={styles.attitudeBackButton}>
+            <Text style={styles.attitudeBackText}>返回</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
 }
 
-async function requestRecommendation(summary: EvaluationSummary, messages: AgentMessage[]) {
+async function requestEvaluation(messages: AgentMessage[], attitudePrompt: string) {
+  return postJson<EvaluationResponse>('/api/agent/evaluate', {
+    messages,
+    attitudePrompt,
+  });
+}
+
+async function requestRecommendation(
+  summary: EvaluationSummary,
+  messages: AgentMessage[],
+  attitudePrompt: string
+) {
   const payload = {
     messages,
     evaluation: summary,
+    attitudePrompt,
   };
   let lastError: unknown;
   for (let attempt = 0; attempt <= RECOMMEND_MAX_RETRIES; attempt += 1) {
@@ -972,6 +1100,11 @@ const styles = StyleSheet.create({
     paddingTop: Theme.spacing.s12,
     paddingBottom: Theme.spacing.s6,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   overline: {
     fontSize: Theme.typography.size.s11,
     letterSpacing: Theme.typography.letterSpacing.s3,
@@ -983,6 +1116,19 @@ const styles = StyleSheet.create({
     fontSize: Theme.typography.size.s22,
     fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
+  },
+  changeAttitudeButton: {
+    backgroundColor: '#FFF6EA',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: 'rgba(237, 132, 63, 0.35)',
+  },
+  changeAttitudeText: {
+    fontSize: 11,
+    color: '#875B47',
+    fontFamily: Theme.fonts.regular,
   },
   chatList: {
     paddingHorizontal: Theme.spacing.s20,
@@ -1164,6 +1310,67 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 12,
     color: Theme.colors.textSecondary,
+  },
+  attitudeCard: {
+    marginHorizontal: Theme.spacing.s20,
+    marginTop: Theme.spacing.s40,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    shadowColor: 'rgba(244, 193, 127, 0.25)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 18,
+    elevation: 5,
+  },
+  attitudeTitle: {
+    fontSize: Theme.typography.size.s18,
+    color: Theme.colors.text,
+    fontFamily: Theme.fonts.semiBold,
+  },
+  attitudeDesc: {
+    marginTop: 8,
+    fontSize: 12,
+    color: Theme.colors.textSecondary,
+    lineHeight: 18,
+  },
+  attitudeInput: {
+    marginTop: 14,
+    minHeight: 130,
+    borderRadius: 12,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: 'rgba(237, 132, 63, 0.35)',
+    backgroundColor: '#FFFEF9',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: Theme.colors.text,
+    fontFamily: Theme.fonts.regular,
+  },
+  attitudeApplyButton: {
+    marginTop: 14,
+    borderRadius: 14,
+    height: 44,
+    backgroundColor: '#F4C17F',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attitudeApplyText: {
+    color: '#FFFFFF',
+    fontFamily: Theme.fonts.semiBold,
+    fontSize: 14,
+  },
+  attitudeBackButton: {
+    marginTop: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 32,
+  },
+  attitudeBackText: {
+    fontSize: 12,
+    color: Theme.colors.textSecondary,
+    fontFamily: Theme.fonts.regular,
   },
 });
 
