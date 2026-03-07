@@ -117,7 +117,7 @@ public class PetController {
 
     @GetMapping
     public List<PetCardDTO> listPetCards() {
-        return petRepository.findByStatus(Pet.Status.OPEN).stream()
+        return petRepository.findByStatusOrderByIdDesc(Pet.Status.OPEN).stream()
             .map(PetCardDTO::from)
             .filter(Objects::nonNull)
             .toList();
@@ -264,9 +264,17 @@ public class PetController {
                 .name(pet.getName())
                 .species(pet.getSpecies())
                 .status(pet.getStatus())
+                .breed(pet.getBreed())
+                .age(pet.getAge())
+                .gender(pet.getGender())
+                .neutered(pet.getNeutered())
+                .healthStatus(pet.getHealthStatus())
+                .energy(pet.getEnergy())
+                .trait(pet.getTrait())
                 .description(pet.getRawDescription())
                 .tags(pet.getStructuredTags())
                 .imageUrl(pet.getImageUrl())
+                .icon(pet.getIcon())
                 .ownerId(owner != null ? owner.getId() : null)
                 .ownerName(owner != null ? owner.getName() : null)
                 .ownerType(owner != null ? owner.getUserType() : null)

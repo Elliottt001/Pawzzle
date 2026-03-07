@@ -803,7 +803,7 @@ function AttitudePromptSetupScreen({
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.attitudeCard}>
-          <Text style={styles.attitudeTitle}>先输入态度 Prompt</Text>
+          <Text style={styles.attitudeTitle}>请输入态度 prompt</Text>
           <Text style={styles.attitudeDesc}>
             会与基础身份/任务提示词拼接后，再发起对话请求。
           </Text>
@@ -1250,6 +1250,11 @@ const styles = StyleSheet.create({
     fontFamily: Theme.fonts.regular,
     lineHeight: 20,
     letterSpacing: 0.72,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+      },
+    }),
   },
   sendButton: {
     width: 40,
@@ -1347,6 +1352,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Theme.colors.text,
     fontFamily: Theme.fonts.regular,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+      },
+    }),
   },
   attitudeApplyButton: {
     marginTop: 14,

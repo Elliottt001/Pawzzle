@@ -12,13 +12,7 @@ type Pet = {
   location: string;
 };
 
-const MOCK_PETS: Pet[] = [
-  { id: '1', name: '团子', breed: '金毛寻回犬', matchScore: 98, location: '朝阳公园' },
-  { id: '2', name: '露娜', breed: '英国短毛猫', matchScore: 95, location: '三里屯' },
-  { id: '3', name: '洛奇', breed: '法国斗牛犬', matchScore: 92, location: '海淀' },
-  { id: '4', name: '米洛', breed: '柯基', matchScore: 89, location: '望京' },
-  { id: '5', name: '贝拉', breed: '布偶猫', matchScore: 88, location: '国贸' },
-];
+const MOCK_PETS: Pet[] = [];
 
 export default function InstitutionDashboardScreen() {
   const router = useRouter();

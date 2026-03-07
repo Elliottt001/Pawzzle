@@ -12,9 +12,17 @@ public class PetDTO {
     private String name;
     private Pet.Species species;
     private Pet.Status status;
+    private String breed;
+    private String age;
+    private String gender;
+    private String neutered;
+    private String healthStatus;
+    private String energy;
+    private String trait;
     private String description;
     private JsonNode tags;
     private String imageUrl;
+    private String icon;
     private Long ownerId;
     private String ownerName;
     private User.UserType ownerType;

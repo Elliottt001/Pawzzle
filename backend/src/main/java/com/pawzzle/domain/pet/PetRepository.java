@@ -9,7 +9,7 @@ import org.springframework.data.repository.query.Param;
 public interface PetRepository extends JpaRepository<Pet, Long> {
 	boolean existsByName(String name);
 
-	List<Pet> findByStatus(Pet.Status status);
+	List<Pet> findByStatusOrderByIdDesc(Pet.Status status);
 
 	List<Pet> findByOwnerIdOrderByIdDesc(Long ownerId);
 

@@ -28,7 +28,7 @@ public class HomeController {
 
     @GetMapping
     public HomeResponse getHomeData() {
-        List<PetCardDTO> petCards = petRepository.findByStatus(Pet.Status.OPEN).stream()
+        List<PetCardDTO> petCards = petRepository.findByStatusOrderByIdDesc(Pet.Status.OPEN).stream()
             .map(PetCardDTO::from)
             .filter(Objects::nonNull)
             .toList();

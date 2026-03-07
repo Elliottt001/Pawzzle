@@ -19,12 +19,12 @@ const AI_RESPONSE_DELAY_MS = 600;
 const VOICE_TRANSCRIBE_URL = `${API_BASE_URL}/api/voice/transcribe`;
 
 const MOCK_PET = {
-  name: '麻糬',
-  breed: '英短',
-  age: '2岁',
-  distance: '3公里',
-  housing: '适合公寓',
-  reason: '基于距离与居住条件匹配',
+  name: '',
+  breed: '',
+  age: '',
+  distance: '',
+  housing: '',
+  reason: '',
 };
 
 type ChatMessage = {

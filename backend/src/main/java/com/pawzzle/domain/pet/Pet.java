@@ -58,6 +58,13 @@ public class Pet {
 
 	private String breed;
 
+	private String gender;
+
+	private String neutered;
+
+	@Column(name = "health_status")
+	private String healthStatus;
+
 	private String age;
 
 	private String energy;

@@ -6,17 +6,17 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome5 } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Theme } from '@/constants/theme';
 import { API_BASE_URL } from '@/lib/apiBase';
-import { createThread, requestAdoption } from '@/lib/chatApi';
-import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
 
 const resolvePetImageUri = (imageUrl?: string | null) => {
   if (!imageUrl) {
@@ -34,9 +34,17 @@ type Pet = {
   name: string;
   species: 'CAT' | 'DOG';
   status: 'OPEN' | 'MATCHED' | 'ADOPTED';
+  breed: string | null;
+  age: string | null;
+  gender: string | null;
+  neutered: string | null;
+  healthStatus: string | null;
+  energy: string | null;
+  trait: string | null;
   description: string;
   tags: object;
   imageUrl?: string | null;
+  icon?: string | null;
   ownerId: number | null;
   ownerName: string | null;
   ownerType: 'INDIVIDUAL' | 'INSTITUTION' | null;
@@ -48,11 +56,6 @@ export default function PetDetailsScreen() {
   const [pet, setPet] = useState<Pet | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [session, setSessionState] = useState<AuthSession | null>(() => getSession());
-  const [chatLoading, setChatLoading] = useState(false);
-  const [chatError, setChatError] = useState<string | null>(null);
-  const [adoptionLoading, setAdoptionLoading] = useState(false);
-  const [adoptionError, setAdoptionError] = useState<string | null>(null);
 
   useEffect(() => {
     const rawId = Array.isArray(id) ? id[0] : id;
@@ -83,20 +86,6 @@ export default function PetDetailsScreen() {
     fetchPet();
   }, [id]);
 
-  useEffect(() => {
-    const unsubscribe = subscribeSession((nextSession) => {
-      setSessionState(nextSession);
-    });
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    if (session?.token) {
-      setChatError(null);
-      setAdoptionError(null);
-    }
-  }, [session?.token]);
-
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -117,162 +106,143 @@ export default function PetDetailsScreen() {
     );
   }
 
-  const isOwner = session?.user?.id === pet.ownerId;
-  const canRequestAdoption = pet.status === 'OPEN' && !isOwner;
-  const fallbackImage = pet.icon === 'cat' ? `https://placecats.com/500/500` : `https://placedog.net/500/500?id=${pet.id}`;
+  const fallbackImage = (pet.icon === 'cat' || pet.species === 'CAT') ? `https://placecats.com/500/500` : `https://placedog.net/500/500?id=${pet.id}`;
   const heroImage = resolvePetImageUri(pet.imageUrl) ?? fallbackImage;
 
-  const handleStartChat = async () => {
-    if (!pet.ownerId) {
-      return;
-    }
-    if (!session?.token) {
-      setChatError('请先登录后再私聊。');
-      router.push('/');
-      return;
-    }
-    if (chatLoading) {
-      return;
-    }
-    setChatLoading(true);
-    setChatError(null);
-    try {
-      const thread = await createThread(
-        { ownerId: pet.ownerId, petId: pet.id },
-        session.token
-      );
-      router.push(`/chat/${thread.id}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '';
-      setChatError(/[\u4e00-\u9fff]/.test(message) ? message : '创建私聊失败');
-    } finally {
-      setChatLoading(false);
-    }
-  };
-
-  const handleRequestAdoption = async () => {
-    if (!pet.ownerId) {
-      return;
-    }
-    if (!session?.token) {
-      setAdoptionError('请先登录后再申请领养。');
-      router.push('/');
-      return;
-    }
-    if (session.user.id === pet.ownerId) {
-      setAdoptionError('不能申请自己发布的宠物。');
-      return;
-    }
-    if (pet.status !== 'OPEN') {
-      setAdoptionError('该宠物已被领养或暂不可领养。');
-      return;
-    }
-    if (adoptionLoading) {
-      return;
-    }
-    setAdoptionLoading(true);
-    setAdoptionError(null);
-    try {
-      const thread = await createThread(
-        { ownerId: pet.ownerId, petId: pet.id },
-        session.token
-      );
-      await requestAdoption(thread.id, session.token);
-      router.push(`/chat/${thread.id}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '';
-      setAdoptionError(/[\u4e00-\u9fff]/.test(message) ? message : '申请领养失败');
-    } finally {
-      setAdoptionLoading(false);
-    }
-  };
+  const isFemale = pet.gender === '女' || pet.gender === '母' || pet.gender === 'Female';
+  const genderBgColor = isFemale ? Theme.colors.genderFemaleBg : Theme.colors.genderMaleBg;
+  const genderIconName = isFemale ? 'venus' : 'mars';
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.scrollContainer}>
-        <ThemedView style={styles.container}>
-          <Image source={{ uri: heroImage }} style={styles.image} />
+    <View style={styles.safeArea}>
+      {/* Background gradient overlay */}
+      <LinearGradient
+        colors={[Theme.colors.authWeChatBg, 'rgba(255, 254, 249, 0)']}
+        style={styles.bgGradient}
+      />
 
-          <ThemedView style={styles.detailsContainer}>
-            <ThemedText type="title">{pet.name}</ThemedText>
-            <ThemedText type="subtitle" style={styles.status}>
-              {getSpeciesLabel(pet.species)} • {getStatusLabel(pet.status)}
-            </ThemedText>
+      {/* Decorative glow blobs */}
+      <View style={styles.glowBlob1} />
+      <View style={styles.glowBlob2} />
+      <View style={styles.glowBlob3} />
 
-            <ThemedText type="defaultSemiBold" style={styles.sectionHeader}>
-              简介
-            </ThemedText>
-            <ThemedText>{pet.description}</ThemedText>
+      <SafeAreaView style={styles.safeInner}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={Theme.spacing.s12}
+            style={styles.backButton}
+          >
+            <FontAwesome5 name="chevron-left" size={Theme.typography.size.s12} color={Theme.colors.placeholder} />
+            <Text style={styles.backText}>返回</Text>
+          </Pressable>
+          <Text style={styles.headerTitle}>详情</Text>
+          <View style={styles.headerRight} />
+        </View>
 
-            <ThemedView style={styles.ownerCard}>
-              <ThemedText type="title" style={styles.ownerTitle}>
-                发布者
-              </ThemedText>
-              {pet.ownerId ? (
-                <>
-                  <Pressable
-                    onPress={() => router.push(`/user/${pet.ownerId}`)}
-                    style={({ pressed }) => [
-                      styles.ownerRow,
-                      pressed && styles.ownerRowPressed,
-                    ]}>
-                    <View style={styles.ownerAvatar}>
-                      <FontAwesome5 name="user" size={Theme.sizes.s24} color={Theme.colors.text} />
+        <ScrollView
+          style={styles.scrollContainer}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Hero image */}
+          <Image source={{ uri: heroImage }} style={styles.heroImage} />
+
+          {/* Pet name + gender */}
+          <View style={styles.nameRow}>
+            <Text style={styles.petName}>{pet.name}</Text>
+            {pet.gender ? (
+              <View style={[styles.genderBadge, { backgroundColor: genderBgColor }]}>
+                <FontAwesome5
+                  name={genderIconName}
+                  size={Theme.typography.size.s12}
+                  color={Theme.colors.textInverse}
+                />
+              </View>
+            ) : null}
+          </View>
+
+          {/* Institution / owner location */}
+          {pet.ownerName ? (
+            <Pressable
+              onPress={pet.ownerId ? () => router.push(`/user/${pet.ownerId}`) : undefined}
+              style={styles.locationRow}
+            >
+              <FontAwesome5 name="map-marker-alt" size={Theme.typography.size.s12} color={Theme.colors.distanceAccent} />
+              <Text style={styles.locationText}>
+                {pet.ownerName}
+                {pet.ownerType === 'INSTITUTION' ? '' : ''}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {/* Three info cards */}
+          <View style={styles.infoCardsRow}>
+            <View style={styles.infoCardSmall}>
+              <Text style={styles.infoCardLabel}>年龄</Text>
+              <Text style={styles.infoCardValue}>{pet.age ?? '--'}</Text>
+            </View>
+            <View style={styles.infoCardWide}>
+              <Text style={styles.infoCardLabel}>健康状况</Text>
+              <Text style={styles.infoCardValueSmall} numberOfLines={2}>
+                {pet.healthStatus ?? '暂无信息'}
+              </Text>
+            </View>
+            <View style={styles.infoCardSmall}>
+              <Text style={styles.infoCardLabel}>是否绝育</Text>
+              <Text style={styles.infoCardValue}>{pet.neutered ?? '--'}</Text>
+            </View>
+          </View>
+
+          {/* Trait / description section */}
+          {(pet.trait || pet.description) ? (
+            <View style={styles.traitSection}>
+              <Text style={styles.sectionTitle}>性格特点</Text>
+              <Text style={styles.traitText}>{pet.trait || pet.description}</Text>
+            </View>
+          ) : null}
+
+          {/* Owner info section */}
+          <View style={styles.ownerSection}>
+            {pet.ownerId ? (
+              <Pressable
+                onPress={() => router.push(`/user/${pet.ownerId}`)}
+                style={({ pressed }) => [
+                  styles.ownerRow,
+                  pressed && styles.ownerRowPressed,
+                ]}
+              >
+                <View style={styles.ownerAvatar}>
+                  <FontAwesome5 name="user" size={Theme.spacing.s24} color={Theme.colors.authDarkBrown} />
+                </View>
+                <View style={styles.ownerInfo}>
+                  <Text style={styles.ownerName}>{pet.ownerName ?? '未命名'}</Text>
+                  <View style={styles.ownerMetaRow}>
+                    {pet.breed ? (
+                      <View style={styles.metaItem}>
+                        <FontAwesome5 name="paw" size={Theme.typography.size.s12} color={Theme.colors.authDarkBrown} />
+                        <Text style={styles.metaText}>{pet.breed}</Text>
+                      </View>
+                    ) : null}
+                    <View style={styles.metaItem}>
+                      <FontAwesome5 name="tag" size={Theme.typography.size.s12} color={Theme.colors.authDarkBrown} />
+                      <Text style={styles.metaText}>
+                        {getSpeciesLabel(pet.species)} · {getStatusLabel(pet.status)}
+                      </Text>
                     </View>
-                    <View>
-                      <ThemedText type="defaultSemiBold">
-                        {pet.ownerName ?? '未命名'}
-                      </ThemedText>
-                      <ThemedText style={styles.ownerMeta}>
-                        {getUserTypeLabel(pet.ownerType)}
-                      </ThemedText>
-                    </View>
-                  </Pressable>
-                  <Pressable
-                    onPress={handleStartChat}
-                    disabled={chatLoading}
-                    style={({ pressed }) => [
-                      styles.chatButton,
-                      pressed && styles.chatButtonPressed,
-                      chatLoading && styles.chatButtonDisabled,
-                    ]}>
-                    <ThemedText style={styles.chatButtonText}>
-                      {chatLoading ? '正在创建...' : '私聊发布者'}
-                    </ThemedText>
-                  </Pressable>
-                  {!isOwner ? (
-                    <Pressable
-                      onPress={handleRequestAdoption}
-                      disabled={adoptionLoading || !canRequestAdoption}
-                      style={({ pressed }) => [
-                        styles.adoptionButton,
-                        pressed && canRequestAdoption && styles.adoptionButtonPressed,
-                        (adoptionLoading || !canRequestAdoption) && styles.adoptionButtonDisabled,
-                      ]}>
-                      <ThemedText style={styles.adoptionButtonText}>
-                        {adoptionLoading
-                          ? '提交中...'
-                          : pet.status === 'OPEN'
-                            ? '申请领养'
-                            : '暂不可领养'}
-                      </ThemedText>
-                    </Pressable>
-                  ) : null}
-                  {chatError ? (
-                    <ThemedText style={styles.chatErrorText}>{chatError}</ThemedText>
-                  ) : null}
-                  {adoptionError ? (
-                    <ThemedText style={styles.adoptionErrorText}>{adoptionError}</ThemedText>
-                  ) : null}
-                </>
-              ) : (
-                <ThemedText style={styles.noInfo}>暂无送养人信息。</ThemedText>
-              )}
-            </ThemedView>
-          </ThemedView>
-        </ThemedView>
-      </ScrollView>
-    </SafeAreaView>
+                  </View>
+                </View>
+              </Pressable>
+            ) : (
+              <Text style={styles.noInfo}>暂无送养人信息</Text>
+            )}
+          </View>
+
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -307,131 +277,254 @@ function getStatusLabel(status: Pet['status']) {
   return labels[status] ?? status;
 }
 
-function getUserTypeLabel(userType: Pet['ownerType']) {
-  if (userType === 'INSTITUTION') {
-    return '机构用户 (VIP)';
-  }
-  if (userType === 'INDIVIDUAL') {
-    return '普通用户';
-  }
-  return '未知类型';
-}
+
+
+const WARM_CARD_BG = 'rgba(244, 193, 127, 0.21)';
+const WARM_BROWN_MUTED = 'rgba(135, 91, 71, 0.58)';
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: Theme.layout.full,
-    backgroundColor: Theme.colors.background,
+    backgroundColor: Theme.colors.backgroundAuth,
   },
-  scrollContainer: {
+  safeInner: {
     flex: Theme.layout.full,
   },
-  container: {
-    flex: Theme.layout.full,
-    minHeight: Theme.percent.p100,
+  bgGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 315,
+  },
+  glowBlob1: {
+    position: 'absolute',
+    width: 224,
+    height: 224,
+    right: -50,
+    top: 478,
+    backgroundColor: Theme.colors.authGlowYellow,
+    borderRadius: Theme.radius.pill,
+  },
+  glowBlob2: {
+    position: 'absolute',
+    width: 224,
+    height: 224,
+    right: -60,
+    top: 424,
+    backgroundColor: Theme.colors.authGlowWarm,
+    borderRadius: Theme.radius.pill,
+  },
+  glowBlob3: {
+    position: 'absolute',
+    width: 224,
+    height: 224,
+    left: -67,
+    top: 146,
+    backgroundColor: Theme.colors.authGlowWarm,
+    borderRadius: Theme.radius.pill,
   },
   center: {
     flex: Theme.layout.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  image: {
-    width: Theme.percent.p100,
-    height: Theme.sizes.s300,
-    resizeMode: 'cover',
+
+  /* Header */
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Theme.spacing.s24,
+    height: Theme.sizes.s44,
   },
-  detailsContainer: {
-    padding: Theme.spacing.s16,
-    gap: Theme.spacing.s12,
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.s4,
+    width: Theme.sizes.s60,
   },
-  status: {
-    opacity: Theme.opacity.o7,
-    marginBottom: Theme.spacing.s8,
+  backText: {
+    fontSize: Theme.typography.size.s14,
+    color: Theme.colors.placeholder,
+    fontFamily: Theme.fonts.regular,
   },
-  sectionHeader: {
+  headerTitle: {
+    fontSize: Theme.typography.size.s20,
+    color: Theme.colors.authDarkBrown,
+    fontFamily: Theme.fonts.regular,
+  },
+  headerRight: {
+    width: Theme.sizes.s60,
+  },
+
+  /* Scroll */
+  scrollContainer: {
+    flex: Theme.layout.full,
+  },
+  scrollContent: {
+    paddingHorizontal: Theme.spacing.s24,
+  },
+
+  /* Hero image */
+  heroImage: {
+    width: '100%' as const,
+    height: 228,
+    borderRadius: Theme.radius.r32,
     marginTop: Theme.spacing.s12,
   },
-  ownerCard: {
-    marginTop: Theme.spacing.s24,
-    padding: Theme.spacing.s16,
-    borderRadius: Theme.radius.r12,
-    backgroundColor: Theme.colors.neutralAlpha,
-    gap: Theme.spacing.s12,
+
+  /* Name + gender */
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.s6,
+    marginTop: Theme.spacing.s20,
   },
-  ownerTitle: {
-    fontSize: Theme.typography.size.s18,
-    marginBottom: Theme.spacing.s8,
+  petName: {
+    fontSize: Theme.typography.size.s24,
+    color: Theme.colors.authDarkBrown,
+    fontFamily: Theme.fonts.regular,
+    letterSpacing: 1.44,
+  },
+  genderBadge: {
+    width: Theme.sizes.s22,
+    height: Theme.sizes.s22,
+    borderRadius: Theme.radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* Location */
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.s8,
+    marginTop: Theme.spacing.s4,
+  },
+  locationText: {
+    fontSize: Theme.typography.size.s12,
+    color: Theme.colors.distanceAccent,
+    fontFamily: Theme.fonts.regular,
+  },
+
+  /* Info cards row */
+  infoCardsRow: {
+    flexDirection: 'row',
+    gap: Theme.spacing.s10,
+    marginTop: Theme.spacing.s18,
+  },
+  infoCardSmall: {
+    width: 74,
+    height: 64,
+    backgroundColor: WARM_CARD_BG,
+    borderRadius: Theme.radius.r16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Theme.spacing.s6,
+  },
+  infoCardWide: {
+    flex: Theme.layout.full,
+    height: 64,
+    backgroundColor: WARM_CARD_BG,
+    borderRadius: Theme.radius.r16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Theme.spacing.s8,
+    paddingVertical: Theme.spacing.s6,
+  },
+  infoCardLabel: {
+    fontSize: Theme.typography.size.s11,
+    color: WARM_BROWN_MUTED,
+    fontFamily: Theme.fonts.regular,
+    marginBottom: Theme.spacing.s2,
+  },
+  infoCardValue: {
+    fontSize: Theme.typography.size.s14,
+    color: Theme.colors.authDarkBrown,
+    fontFamily: Theme.fonts.regular,
+  },
+  infoCardValueSmall: {
+    fontSize: Theme.typography.size.s11,
+    color: Theme.colors.authDarkBrown,
+    fontFamily: Theme.fonts.regular,
+    textAlign: 'center',
+    lineHeight: Theme.typography.lineHeight.s16,
+  },
+
+  /* Trait section */
+  traitSection: {
+    marginTop: Theme.spacing.s22,
+    gap: Theme.spacing.s8,
+  },
+  sectionTitle: {
+    fontSize: Theme.typography.size.s16,
+    color: Theme.colors.authDarkBrown,
+    fontFamily: Theme.fonts.semiBold,
+  },
+  traitText: {
+    fontSize: Theme.typography.size.s13,
+    color: Theme.colors.authDarkBrown,
+    fontFamily: Theme.fonts.regular,
+    lineHeight: Theme.typography.lineHeight.s20,
+    opacity: Theme.opacity.o7,
+  },
+
+  /* Owner section */
+  ownerSection: {
+    marginTop: Theme.spacing.s22,
   },
   ownerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Theme.spacing.s12,
+    gap: Theme.spacing.s14,
   },
   ownerRowPressed: {
     transform: [{ scale: Theme.scale.pressedSoft }],
   },
   ownerAvatar: {
-    width: Theme.sizes.s48,
-    height: Theme.sizes.s48,
-    borderRadius: Theme.radius.r24,
-    backgroundColor: Theme.colors.card,
+    width: Theme.sizes.s66,
+    height: Theme.sizes.s66,
+    borderRadius: Theme.radius.pill,
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: Theme.colors.ctaBackground,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: Theme.colors.borderWarm,
+    backgroundColor: Theme.colors.backgroundAuth,
   },
-  ownerMeta: {
-    marginTop: Theme.spacing.s2,
+  ownerInfo: {
+    flex: Theme.layout.full,
+    gap: Theme.spacing.s4,
+  },
+  ownerName: {
+    fontSize: Theme.typography.size.s24,
+    color: Theme.colors.authDarkBrown,
+    fontFamily: Theme.fonts.regular,
+    letterSpacing: 1.44,
+  },
+  ownerMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.s16,
+    flexWrap: 'wrap',
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.s6,
+  },
+  metaText: {
     fontSize: Theme.typography.size.s12,
-    color: Theme.colors.textSecondary,
-  },
-  chatButton: {
-    alignSelf: 'flex-start',
-    marginTop: Theme.spacing.s8,
-    paddingVertical: Theme.spacing.s8,
-    paddingHorizontal: Theme.spacing.s16,
-    borderRadius: Theme.radius.r20,
-    backgroundColor: Theme.colors.successDeep,
-  },
-  chatButtonPressed: {
-    transform: [{ scale: Theme.scale.pressedSoft }],
-  },
-  chatButtonDisabled: {
-    opacity: Theme.opacity.o6,
-  },
-  chatButtonText: {
-    color: Theme.colors.textInverse,
-    fontSize: Theme.typography.size.s13,
-    fontFamily: Theme.fonts.semiBold,
-  },
-  adoptionButton: {
-    alignSelf: 'flex-start',
-    marginTop: Theme.spacing.s8,
-    paddingVertical: Theme.spacing.s8,
-    paddingHorizontal: Theme.spacing.s16,
-    borderRadius: Theme.radius.r20,
-    backgroundColor: Theme.colors.primary,
-  },
-  adoptionButtonPressed: {
-    transform: [{ scale: Theme.scale.pressedSoft }],
-  },
-  adoptionButtonDisabled: {
-    opacity: Theme.opacity.o6,
-  },
-  adoptionButtonText: {
-    color: Theme.colors.textInverse,
-    fontSize: Theme.typography.size.s13,
-    fontFamily: Theme.fonts.semiBold,
-  },
-  chatErrorText: {
-    fontSize: Theme.typography.size.s12,
-    color: Theme.colors.textError,
-  },
-  adoptionErrorText: {
-    fontSize: Theme.typography.size.s12,
-    color: Theme.colors.textError,
+    color: Theme.colors.authDarkBrown,
+    fontFamily: Theme.fonts.regular,
   },
   noInfo: {
+    fontSize: Theme.typography.size.s14,
+    color: Theme.colors.textSecondary,
     fontStyle: 'italic',
-    opacity: Theme.opacity.o7,
+  },
+
+  bottomSpacer: {
+    height: Theme.spacing.s40,
   },
 });

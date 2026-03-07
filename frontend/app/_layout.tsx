@@ -34,9 +34,9 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: '弹窗' }} />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true, title: '弹窗' }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>
