@@ -134,7 +134,8 @@ export function AuthFlow() {
   const handleStartAuth = () => {
     setStatus(null);
     setGuestMode(false);
-    setAuthStep('phone');
+    setNickname('');
+    setAuthStep('nickname');
   };
 
   const handleWeChatLogin = () => {
@@ -230,7 +231,7 @@ export function AuthFlow() {
       return;
     }
     if (authStep === 'nickname') {
-      setAuthStep('code');
+      setAuthStep('landing');
       setFocusedCodeIndex(null);
     }
   };
@@ -283,14 +284,11 @@ export function AuthFlow() {
   const handleNicknameRegister = () =>
     runAuthAction(async () => {
       const trimmedName = nickname.trim();
-      const data = await request<AuthSession>('/api/auth/register', {
+      const data = await request<AuthSession>('/api/auth/demo-login', {
         name: trimmedName,
-        email: phoneDigits,
-        password: codeValue,
-        userType: 'INDIVIDUAL',
       });
       setSession(data);
-      setStatus('注册并已登录。');
+      setStatus('已登录。');
     });
 
   // Render Helpers
@@ -329,32 +327,42 @@ export function AuthFlow() {
               styles.authButtonPrimary,
               pressed && styles.authButtonPressed,
             ]}>
-            <Text style={styles.authButtonText}>验证码登录</Text>
+            <Text style={styles.authButtonText}>一键登录</Text>
           </Pressable>
-          <Pressable
-            onPress={handleWeChatLogin}
-            style={({ pressed }) => [
-              styles.authButton,
-              styles.authButtonWeChat,
-              pressed && styles.authButtonPressed,
-            ]}>
-            <Text style={[styles.authButtonText, styles.authButtonTextWeChat]}>微信授权登录</Text>
-          </Pressable>
-          <Pressable
-            onPress={handleInstitutionStart}
-            style={({ pressed }) => [
-              styles.authButton,
-              styles.authButtonInstitution,
-              pressed && styles.authButtonPressed,
-            ]}>
-            <Text style={[styles.authButtonText, styles.authButtonTextInverse]}>
-              机构授权登录
-            </Text>
-          </Pressable>
-          <Pressable onPress={handleGuestMode} style={styles.guestLink}>
-            <Text style={styles.guestText}>游客模式</Text>
-          </Pressable>
-          <Text style={styles.registerHint}>未注册用户登陆后自动注册</Text>
+          {/*
+            路演阶段暂时隐藏其他按钮，后续可恢复：
+            微信授权登录 / 机构授权登录 / 游客模式
+          */}
+          {false ? (
+            <>
+              <Pressable
+                onPress={handleWeChatLogin}
+                style={({ pressed }) => [
+                  styles.authButton,
+                  styles.authButtonWeChat,
+                  pressed && styles.authButtonPressed,
+                ]}>
+                <Text style={[styles.authButtonText, styles.authButtonTextWeChat]}>
+                  微信授权登录
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={handleInstitutionStart}
+                style={({ pressed }) => [
+                  styles.authButton,
+                  styles.authButtonInstitution,
+                  pressed && styles.authButtonPressed,
+                ]}>
+                <Text style={[styles.authButtonText, styles.authButtonTextInverse]}>
+                  机构授权登录
+                </Text>
+              </Pressable>
+              <Pressable onPress={handleGuestMode} style={styles.guestLink}>
+                <Text style={styles.guestText}>游客模式</Text>
+              </Pressable>
+            </>
+          ) : null}
+          <Text style={styles.registerHint}>点击后输入昵称即可快速登录</Text>
           <View style={styles.agreementRow}>
             <View style={styles.agreementDot} />
             <Text style={styles.agreementText}>

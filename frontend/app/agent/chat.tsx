@@ -256,22 +256,12 @@ async function buildVoiceFormData(uri: string) {
     if (!response.ok) {
       throw new Error('Failed to read recording');
     }
-    const blob = await response.blob();
-    const mimeType = blob.type || 'audio/webm';
-    const filename = mimeType.includes('wav')
-      ? 'voice.wav'
-      : mimeType.includes('mpeg')
-        ? 'voice.mp3'
-        : mimeType.includes('aac')
-          ? 'voice.aac'
-          : mimeType.includes('m4a') || mimeType.includes('mp4')
-            ? 'voice.m4a'
-            : 'voice.webm';
-
+    const sourceBlob = await response.blob();
+    const wavBlob = await transcodeBlobToWav16k(sourceBlob);
     if (typeof File !== 'undefined') {
-      formData.append('file', new File([blob], filename, { type: mimeType }));
+      formData.append('file', new File([wavBlob], 'voice.wav', { type: 'audio/wav' }));
     } else {
-      formData.append('file', blob, filename);
+      formData.append('file', wavBlob, 'voice.wav');
     }
     return formData;
   }
@@ -285,6 +275,96 @@ async function buildVoiceFormData(uri: string) {
     } as unknown as Blob
   );
   return formData;
+}
+
+async function transcodeBlobToWav16k(blob: Blob) {
+  const contextClass = (globalThis as { AudioContext?: new () => AudioContext; webkitAudioContext?: new () => AudioContext })
+    .AudioContext
+    ?? (globalThis as { AudioContext?: new () => AudioContext; webkitAudioContext?: new () => AudioContext }).webkitAudioContext;
+  if (!contextClass) {
+    throw new Error('AudioContext is not available');
+  }
+
+  const context = new contextClass();
+  try {
+    const source = await blob.arrayBuffer();
+    const decoded = await context.decodeAudioData(source.slice(0));
+    const mono = mixToMono(decoded);
+    const resampled = resampleLinear(mono, decoded.sampleRate, 16000);
+    const wavBuffer = encodeWav16Bit(resampled, 16000);
+    return new Blob([wavBuffer], { type: 'audio/wav' });
+  } finally {
+    await context.close();
+  }
+}
+
+function mixToMono(audioBuffer: AudioBuffer) {
+  const channels = audioBuffer.numberOfChannels;
+  if (channels <= 1) {
+    return new Float32Array(audioBuffer.getChannelData(0));
+  }
+  const length = audioBuffer.length;
+  const mixed = new Float32Array(length);
+  for (let channel = 0; channel < channels; channel += 1) {
+    const data = audioBuffer.getChannelData(channel);
+    for (let index = 0; index < length; index += 1) {
+      mixed[index] += data[index] / channels;
+    }
+  }
+  return mixed;
+}
+
+function resampleLinear(input: Float32Array, sourceRate: number, targetRate: number) {
+  if (sourceRate === targetRate) {
+    return input;
+  }
+  const ratio = sourceRate / targetRate;
+  const outputLength = Math.max(1, Math.round(input.length / ratio));
+  const output = new Float32Array(outputLength);
+  for (let index = 0; index < outputLength; index += 1) {
+    const position = index * ratio;
+    const left = Math.floor(position);
+    const right = Math.min(left + 1, input.length - 1);
+    const weight = position - left;
+    output[index] = input[left] * (1 - weight) + input[right] * weight;
+  }
+  return output;
+}
+
+function encodeWav16Bit(samples: Float32Array, sampleRate: number) {
+  const bytesPerSample = 2;
+  const dataSize = samples.length * bytesPerSample;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  writeAscii(view, 0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeAscii(view, 8, 'WAVE');
+  writeAscii(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * bytesPerSample, true);
+  view.setUint16(32, bytesPerSample, true);
+  view.setUint16(34, 16, true);
+  writeAscii(view, 36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+  for (let index = 0; index < samples.length; index += 1) {
+    const value = Math.max(-1, Math.min(1, samples[index]));
+    const int16 = value < 0 ? value * 0x8000 : value * 0x7fff;
+    view.setInt16(offset, int16, true);
+    offset += bytesPerSample;
+  }
+  return buffer;
+}
+
+function writeAscii(view: DataView, offset: number, text: string) {
+  for (let index = 0; index < text.length; index += 1) {
+    view.setUint8(offset + index, text.charCodeAt(index));
+  }
 }
 
 const styles = StyleSheet.create({

@@ -2,6 +2,7 @@ package com.pawzzle.web;
 
 import com.pawzzle.domain.user.AuthService;
 import com.pawzzle.domain.user.AuthService.AuthResponse;
+import com.pawzzle.domain.user.AuthService.DemoLoginRequest;
 import com.pawzzle.domain.user.AuthService.InstitutionLoginRequest;
 import com.pawzzle.domain.user.AuthService.LoginRequest;
 import com.pawzzle.domain.user.AuthService.RegisterRequest;
@@ -30,6 +31,11 @@ public class AuthController {
     @PostMapping("/login")
     public AuthResponse login(@RequestBody LoginRequest request) {
         return authService.login(request);
+    }
+
+    @PostMapping("/demo-login")
+    public AuthResponse demoLogin(@RequestBody DemoLoginRequest request) {
+        return authService.demoLogin(request);
     }
 
     @PostMapping("/wechat")

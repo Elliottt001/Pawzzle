@@ -17,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+    private static final String DEMO_PASSWORD = "123456789";
     private final UserRepository userRepository;
     private final UserSessionRepository userSessionRepository;
     private final PasswordEncoder passwordEncoder;
@@ -66,6 +67,22 @@ public class AuthService {
 
         UserSession session = createSession(user);
         return new AuthResponse(session.getToken(), toUserResponse(user));
+    }
+
+    public AuthResponse demoLogin(DemoLoginRequest request) {
+        requireNonBlank(request.name(), "Name is required");
+        String email = "demo:" + UUID.randomUUID();
+
+        User user = User.builder()
+            .name(request.name().trim())
+            .email(email)
+            .passwordHash(passwordEncoder.encode(DEMO_PASSWORD))
+            .userType(User.UserType.INDIVIDUAL)
+            .userIntent(User.UserIntent.ADOPTER)
+            .build();
+
+        userRepository.save(user);
+        return login(new LoginRequest(email, DEMO_PASSWORD));
     }
 
     public AuthResponse loginWithWeChat(WeChatLoginRequest request) {
@@ -234,6 +251,9 @@ public class AuthService {
     }
 
     public record LoginRequest(String email, String password) {
+    }
+
+    public record DemoLoginRequest(String name) {
     }
 
     public record WeChatLoginRequest(String code) {
