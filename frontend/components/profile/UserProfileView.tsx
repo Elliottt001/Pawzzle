@@ -7,8 +7,10 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Text } from '@/components/base-text';
-import IndexHelperSvg from '@/assets/images/index-helper.svg';
 import { FontAwesome5 } from '@expo/vector-icons';
+import IndexBackground from '@/assets/images/index-background.svg';
+import IndexCat from '@/assets/images/index-cat.svg';
+import IndexTick from '@/assets/images/index-tick.svg';
 import { useRouter } from 'expo-router';
 import { API_BASE_URL } from '@/lib/apiBase';
 import { setSession, setGuestMode, type AuthSession } from '@/lib/session';
@@ -202,12 +204,34 @@ export function UserProfileView({ session }: UserProfileViewProps) {
 
       {/* ── AI辅养 Section ── */}
       <Text style={homeStyles.sectionTitle}>AI辅养</Text>
-      <IndexHelperSvg
-        width="100%"
-        height="100%"
-        style={homeStyles.aiCard}
-        preserveAspectRatio="xMidYMid meet"
-      />
+      <View style={homeStyles.aiCard}>
+        <IndexBackground
+          width="100%"
+          height="100%"
+          preserveAspectRatio="xMidYMid slice"
+          style={{ position: 'absolute', top: 0, left: 0 }}
+        />
+        <View style={homeStyles.aiRow}>
+          <View style={homeStyles.aiIconWrap}>
+            <IndexCat width={20} height={15} />
+          </View>
+          <Text style={homeStyles.aiTitle}>3个月幼猫到家第4天</Text>
+        </View>
+        <View style={homeStyles.aiChecklist}>
+          <View style={homeStyles.aiCheckItem}>
+            <View style={homeStyles.checkboxWrap}>
+              <IndexTick width={13} height={12} />
+            </View>
+            <Text style={homeStyles.checkText}>原猫粮少量多餐，不喂牛奶/人食</Text>
+          </View>
+          <View style={homeStyles.aiCheckItem}>
+            <View style={homeStyles.checkboxWrap}>
+              <IndexTick width={13} height={12} />
+            </View>
+            <Text style={homeStyles.checkText}>固定猫砂盆、食碗水碗，给安静小窝</Text>
+          </View>
+        </View>
+      </View>
 
       {/* ── 我的宠物 Section ── */}
       <View style={homeStyles.petHeader}>
