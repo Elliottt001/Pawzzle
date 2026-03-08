@@ -89,13 +89,13 @@ export const styles = StyleSheet.create({
   },
   brandText: {
     fontSize: Theme.typography.size.s32,
-    fontFamily: Theme.fonts.brand,
+    fontFamily: Theme.fonts.brandXunzhao,
     color: Theme.colors.authBrandTitle,
     letterSpacing: 1.92,
   },
   brandTextEnglish: {
     fontSize: Theme.typography.size.s32,
-    fontFamily: Theme.fonts.bold,
+    fontFamily: Theme.fonts.brandPawzzle,
     color: Theme.colors.authBrandTitle,
     letterSpacing: 1.92,
   },
@@ -129,7 +129,7 @@ export const styles = StyleSheet.create({
   },
   authButtonText: {
     fontSize: Theme.typography.size.s15,
-    fontFamily: Theme.fonts.regular,
+    fontFamily: Theme.fonts.bold,
     color: Theme.colors.authPrimaryText,
   },
   authButtonTextWeChat: {
@@ -229,7 +229,7 @@ export const styles = StyleSheet.create({
   },
   ctaButtonText: {
     fontSize: Theme.typography.size.s15,
-    fontFamily: Theme.fonts.regular,
+    fontFamily: Theme.fonts.bold,
     color: Theme.colors.authDarkBrown,
   },
   ctaButtonTextDisabled: {
@@ -309,7 +309,7 @@ export const styles = StyleSheet.create({
   },
   nicknameTitle: {
     fontSize: Theme.typography.size.s32,
-    fontFamily: Theme.fonts.brand,
+    fontFamily: Theme.fonts.bold,
     color: Theme.colors.authBrandTitle,
     letterSpacing: 1.92,
   },

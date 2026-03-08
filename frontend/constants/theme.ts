@@ -215,15 +215,17 @@ const Typography = {
 };
 
 const FontFamilies = {
-  regular: 'PingFang-Regular',
+  regular: 'PingFang-Medium',
   medium: 'PingFang-Medium',
-  semiBold: 'PingFang-Medium',
+  semiBold: 'PingFang-Bold',
   bold: 'PingFang-Bold',
-  heavy: 'PingFang-Heavy',
-  light: 'PingFang-Light',
-  extraLight: 'PingFang-ExtraLight',
-  brand: 'ZhenyanGB2-Bold',
-  matchScore: 'REEJI-JinGang-ExtraBold',
+  heavy: 'PingFang-Bold',
+  light: 'PingFang-Medium',
+  extraLight: 'PingFang-Medium',
+  brand: 'PingFang-Bold',
+  brandPawzzle: 'PangMen-ZhengDao',
+  brandXunzhao: 'RuiZi-ChaoPai',
+  matchScore: 'RuiZi-Gong',
 };
 
 const Opacity = {

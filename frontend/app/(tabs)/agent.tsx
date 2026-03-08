@@ -37,6 +37,7 @@ type AgentMessage = {
 };
 
 type EvaluationResponse = {
+  ismalicious?: number | null;
   endverification: boolean;
   profile?: string | null;
   nextQuestions?: string[] | null;
@@ -52,6 +53,7 @@ type EvaluationSummary = {
 type AgentDecisionItem = { id: string; confidence?: number };
 
 type AgentDecisionResponse = {
+  ismalicious?: number | null;
   items: AgentDecisionItem[];
   rawResponse?: string;
   prompt?: string;
@@ -75,6 +77,8 @@ const RECOMMENDING_WAITING_TEXTS = [
 ];
 const VOICE_TRANSCRIBE_URL = `${API_BASE_URL}/api/voice/transcribe`;
 const TEST_TRANSCRIBE_URL = `${API_BASE_URL}/api/voice/transcribe-test-file`;
+const MALICIOUS_TERMINATION_TEXT =
+  '根据您目前的情况，暂时没有与您匹配的宠物呢，可以去宠物广场看看～';
 
 type FlowPhase = 'quiz' | 'chat' | 'survey' | 'result';
 
@@ -224,6 +228,13 @@ export default function AgentScreen() {
     ].join('\n');
   }, []);
 
+  const handleMaliciousInterruption = React.useCallback(() => {
+    setRecommendedItems([]);
+    setEvaluation({ profile: MALICIOUS_TERMINATION_TEXT });
+    setErrorMessage(null);
+    appendMessage('ai', MALICIOUS_TERMINATION_TEXT);
+  }, [appendMessage]);
+
   const loadPetCards = React.useCallback(async () => {
     if (petCardsStatus === 'ready' && petCards.length) {
       return petCards;
@@ -306,6 +317,10 @@ export default function AgentScreen() {
         buildAgentMessages(messages),
         enhancedPrompt
       );
+      if ((decision?.ismalicious ?? 0) === 1) {
+        handleMaliciousInterruption();
+        return;
+      }
       setRecommendedItems(decision?.items ?? []);
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
@@ -313,7 +328,7 @@ export default function AgentScreen() {
     } finally {
       setStatus('idle');
     }
-  }, [evaluation, messages, activeSystemPrompt, buildAgentMessages, loadPetCards]);
+  }, [evaluation, messages, activeSystemPrompt, buildAgentMessages, handleMaliciousInterruption, loadPetCards]);
 
   const handleSurveySkip = React.useCallback(async () => {
     setPhase('result');
@@ -326,6 +341,10 @@ export default function AgentScreen() {
         buildAgentMessages(messages),
         activeSystemPrompt ?? ''
       );
+      if ((decision?.ismalicious ?? 0) === 1) {
+        handleMaliciousInterruption();
+        return;
+      }
       setRecommendedItems(decision?.items ?? []);
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
@@ -333,7 +352,7 @@ export default function AgentScreen() {
     } finally {
       setStatus('idle');
     }
-  }, [evaluation, messages, activeSystemPrompt, buildAgentMessages, loadPetCards]);
+  }, [evaluation, messages, activeSystemPrompt, buildAgentMessages, handleMaliciousInterruption, loadPetCards]);
 
   // Effect: when entering chat phase, send initial evaluation request
   React.useEffect(() => {
@@ -346,6 +365,10 @@ export default function AgentScreen() {
 
     requestEvaluation([], activeSystemPrompt)
       .then((data) => {
+        if ((data?.ismalicious ?? 0) === 1) {
+          handleMaliciousInterruption();
+          return undefined;
+        }
         if (data?.endverification) {
           const summary = buildEvaluationSummary(data);
           setEvaluation(summary);
@@ -374,7 +397,7 @@ export default function AgentScreen() {
     activeSystemPrompt,
     formatEvaluationSummary,
     phase,
-    loadPetCards,
+    handleMaliciousInterruption,
   ]);
 
   React.useEffect(() => {
@@ -500,6 +523,10 @@ export default function AgentScreen() {
 
     try {
       const data = await requestEvaluation(buildAgentMessages(nextMessages), activeSystemPrompt);
+      if ((data?.ismalicious ?? 0) === 1) {
+        handleMaliciousInterruption();
+        return;
+      }
 
       if (data?.endverification) {
         const summary = buildEvaluationSummary(data);
@@ -1737,14 +1764,13 @@ const startStyles = StyleSheet.create({
   },
   brandText: {
     fontSize: 18,
-    fontFamily: Theme.fonts.brand,
+    fontFamily: Theme.fonts.brandPawzzle,
     color: '#743800',
     letterSpacing: 1.08,
   },
   brandSubText: {
     fontSize: 18,
-    fontFamily: Theme.fonts.brand,
-    fontWeight: '700' as const,
+    fontFamily: Theme.fonts.brandXunzhao,
     color: '#743800',
     letterSpacing: 1.08,
   },

@@ -59,11 +59,17 @@ public class AgentController {
         Step 4: Ask what they would do with their pet if a major life change happened
                 (e.g. moving, business travel).
 
+        If user shows malicious/inappropriate intent (e.g. clearly states they dislike pets,
+        abuse intent, hateful/offensive speech), return ONLY valid JSON:
+        {"ismalicious":1,"endverification":false,"nextQuestion":""}
+
         Return format — ONLY valid JSON, nothing else:
         - If fewer than 4 answers collected:
-          {"endverification":false,"nextQuestion":"<your question in Chinese>"}
+          {"ismalicious":0,"endverification":false,"nextQuestion":"<your question in Chinese>"}
         - If all 4 answers collected:
-          {"endverification":true,"profile":"<~200 char Chinese summary of user profile>"}
+          {"ismalicious":0,"endverification":true,"profile":"<~200 char Chinese summary of user profile>"}
+
+        Every response MUST include "ismalicious" with value 0 or 1.
         """;
 
     private static final String RECOMMEND_SYSTEM_PROMPT = """
@@ -96,6 +102,7 @@ public class AgentController {
         String content = response.getResult().getOutput().getContent();
         EvaluationResult result = parseEvaluation(content);
         return CompletableFuture.completedFuture(new EvaluationResponse(
+            result.ismalicious(),
             result.endverification(),
             result.profile(),
             result.nextQuestions(),
@@ -110,7 +117,7 @@ public class AgentController {
         CandidateSelection selection = resolveCandidatePets(request);
         List<PetCard> pets = selection.pets();
         if (pets.isEmpty()) {
-            return CompletableFuture.completedFuture(new RecommendationResponse(List.of(), "", "", selection.debug()));
+            return CompletableFuture.completedFuture(new RecommendationResponse(0, List.of(), "", "", selection.debug()));
         }
 
         String userPrompt = buildRecommendationPrompt(request, pets);
@@ -122,7 +129,7 @@ public class AgentController {
 
         String content = response.getResult().getOutput().getContent();
         List<RecommendationItem> items = parseItems(content, pets);
-        return CompletableFuture.completedFuture(new RecommendationResponse(items, content == null ? "" : content, userPrompt, selection.debug()));
+        return CompletableFuture.completedFuture(new RecommendationResponse(0, items, content == null ? "" : content, userPrompt, selection.debug()));
     }
 
     private String buildEvaluationPrompt(List<AgentMessage> messages) {
@@ -439,6 +446,10 @@ public class AgentController {
         String cleaned = stripCodeFences(response);
         try {
             JsonNode root = objectMapper.readTree(cleaned);
+            int ismalicious = parseMaliciousFlag(root);
+            if (ismalicious == 1) {
+                return new EvaluationResult(1, false, null, List.of());
+            }
             boolean endverification = root.path("endverification").asBoolean(false);
             String profile = readText(root.get("profile"));
             if (profile == null) {
@@ -472,17 +483,38 @@ public class AgentController {
                 if (profile == null) {
                     profile = "No profile summary provided.";
                 }
-                return new EvaluationResult(true, profile, List.of());
+                return new EvaluationResult(0, true, profile, List.of());
             }
 
             if (questions.isEmpty()) {
                 questions = fallbackQuestions(cleaned);
             }
-            return new EvaluationResult(false, null, limitQuestions(questions));
+            return new EvaluationResult(0, false, null, limitQuestions(questions));
         } catch (JsonProcessingException ex) {
             List<String> fallback = fallbackQuestions(cleaned);
-            return new EvaluationResult(false, null, limitQuestions(fallback));
+            return new EvaluationResult(0, false, null, limitQuestions(fallback));
         }
+    }
+
+    private int parseMaliciousFlag(JsonNode root) {
+        JsonNode node = root.get("ismalicious");
+        if (node == null || node.isNull()) {
+            node = root.get("isMalicious");
+        }
+        if (node == null || node.isNull()) {
+            return 0;
+        }
+        if (node.isBoolean()) {
+            return node.asBoolean() ? 1 : 0;
+        }
+        if (node.isNumber()) {
+            return node.asInt() == 0 ? 0 : 1;
+        }
+        if (node.isTextual()) {
+            String value = node.asText("").trim().toLowerCase(Locale.ROOT);
+            return ("1".equals(value) || "true".equals(value) || "yes".equals(value)) ? 1 : 0;
+        }
+        return 0;
     }
 
     private List<String> fallbackQuestions(String cleaned) {
@@ -676,6 +708,7 @@ public class AgentController {
     }
 
     public record EvaluationResponse(
+        int ismalicious,
         boolean endverification,
         String profile,
         List<String> nextQuestions,
@@ -696,7 +729,7 @@ public class AgentController {
     ) {
     }
 
-    public record RecommendationResponse(List<RecommendationItem> items, String rawResponse, String prompt, String debug) {
+    public record RecommendationResponse(int ismalicious, List<RecommendationItem> items, String rawResponse, String prompt, String debug) {
     }
 
     public record QuestionAnswer(String question, String answer) {
@@ -709,6 +742,7 @@ public class AgentController {
     }
 
     private record EvaluationResult(
+        int ismalicious,
         boolean endverification,
         String profile,
         List<String> nextQuestions
