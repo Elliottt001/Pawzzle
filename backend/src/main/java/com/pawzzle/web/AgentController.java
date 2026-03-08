@@ -93,7 +93,7 @@ public class AgentController {
     public CompletableFuture<EvaluationResponse> evaluate(@RequestBody EvaluationRequest request) {
         List<AgentMessage> messages = request.messages() == null ? List.of() : request.messages();
         String prompt = buildEvaluationPrompt(messages);
-        String systemPrompt = composeSystemPrompt(EVALUATION_SYSTEM_PROMPT, request.attitudePrompt());
+        String systemPrompt = composeSystemPrompt(EVALUATION_SYSTEM_PROMPT, request.contextPrompt());
         ChatResponse response = chatClient.call(new Prompt(List.of(
             new SystemMessage(systemPrompt),
             new UserMessage(prompt)
@@ -121,7 +121,7 @@ public class AgentController {
         }
 
         String userPrompt = buildRecommendationPrompt(request, pets);
-        String systemPrompt = composeSystemPrompt(RECOMMEND_SYSTEM_PROMPT, request.attitudePrompt());
+        String systemPrompt = composeSystemPrompt(RECOMMEND_SYSTEM_PROMPT, request.contextPrompt());
         ChatResponse response = chatClient.call(new Prompt(List.of(
             new SystemMessage(systemPrompt),
             new UserMessage(userPrompt)
@@ -421,17 +421,17 @@ public class AgentController {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private String composeSystemPrompt(String basePrompt, String attitudePrompt) {
-        String normalizedAttitude = normalizeText(attitudePrompt);
-        if (normalizedAttitude == null) {
+    private String composeSystemPrompt(String basePrompt, String contextPrompt) {
+        String normalizedContext = normalizeText(contextPrompt);
+        if (normalizedContext == null) {
             return basePrompt;
         }
         return """
             %s
 
-            Additional attitude prompt:
+            Additional conversation context:
             %s
-            """.formatted(basePrompt, normalizedAttitude);
+            """.formatted(basePrompt, normalizedContext);
     }
 
     private String toJson(Object value) {
@@ -704,7 +704,7 @@ public class AgentController {
         return trimmed.trim();
     }
 
-    public record EvaluationRequest(List<AgentMessage> messages, String attitudePrompt) {
+    public record EvaluationRequest(List<AgentMessage> messages, String contextPrompt) {
     }
 
     public record EvaluationResponse(
@@ -725,7 +725,7 @@ public class AgentController {
         List<AgentMessage> messages,
         EvaluationSummary evaluation,
         List<PetCard> pets,
-        String attitudePrompt
+        String contextPrompt
     ) {
     }
 

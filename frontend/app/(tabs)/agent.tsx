@@ -156,10 +156,6 @@ function buildSystemPromptFromQuiz(answers: Record<number, string>): string {
 export default function AgentScreen() {
   const [hasStarted, setHasStarted] = React.useState(false);
   const [phase, setPhase] = React.useState<FlowPhase>('quiz');
-  const [attitudePromptInput, setAttitudePromptInput] = React.useState('');
-  const [activeAttitudePrompt, setActiveAttitudePrompt] = React.useState<string | null>(null);
-  const [quizAnswers, setQuizAnswers] = React.useState<Record<number, string>>({});
-  const [surveyData, setSurveyData] = React.useState<Record<string, string>>({});
   const [activeSystemPrompt, setActiveSystemPrompt] = React.useState<string | null>(null);
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [input, setInput] = React.useState('');
@@ -183,7 +179,6 @@ export default function AgentScreen() {
   const isBusy = status === 'evaluating' || status === 'recommending';
   const isInputLocked = isBusy || isTranscribing || isTestingSample;
   const canSend = input.trim().length > 0 && !isInputLocked && phase === 'chat' && !evaluation;
-  const canApplyAttitudePrompt = attitudePromptInput.trim().length > 0;
   const waitingMessages =
     status === 'recommending' ? RECOMMENDING_WAITING_TEXTS : EVALUATING_WAITING_TEXTS;
   const waitingText = waitingMessages[waitingIndex % waitingMessages.length];
@@ -206,10 +201,6 @@ export default function AgentScreen() {
 
   const appendMessage = React.useCallback((role: ChatRole, content: string) => {
     setMessages((prev) => [...prev, { id: createId(), role, content }]);
-  }, []);
-
-  const appendDebug = React.useCallback((_title: string, _payload?: string | null) => {
-    // Debug output disabled on the agent page.
   }, []);
 
   const buildAgentMessages = React.useCallback((items: ChatMessage[]) => {
@@ -271,36 +262,15 @@ export default function AgentScreen() {
     setIsTestingSample(false);
   }, []);
 
-  const handleApplyAttitudePrompt = React.useCallback(() => {
-    const trimmed = attitudePromptInput.trim();
-    if (!trimmed) return;
-    setActiveAttitudePrompt(trimmed);
-    setPhase('quiz');
-  }, [attitudePromptInput]);
-
-  const handleChangeAttitudePrompt = React.useCallback(() => {
-    hasStartedRef.current = false;
-    resetConversationState();
-    setAttitudePromptInput(activeAttitudePrompt ?? '');
-    setActiveAttitudePrompt(null);
-    setActiveSystemPrompt(null);
-    setPhase('quiz');
-  }, [activeAttitudePrompt, resetConversationState]);
-
   const handleQuizComplete = React.useCallback((answers: Record<number, string>) => {
-    setQuizAnswers(answers);
     const quizPrompt = buildSystemPromptFromQuiz(answers);
-    const combined = activeAttitudePrompt
-      ? `${quizPrompt}\n\n【对话态度要求】\n${activeAttitudePrompt}`
-      : quizPrompt;
-    setActiveSystemPrompt(combined);
+    setActiveSystemPrompt(quizPrompt);
     hasStartedRef.current = false;
     resetConversationState();
     setPhase('chat');
-  }, [resetConversationState, activeAttitudePrompt]);
+  }, [resetConversationState]);
 
   const handleSurveyComplete = React.useCallback(async (data: Record<string, string>) => {
-    setSurveyData(data);
     setPhase('result');
     if (!evaluation) return;
     setStatus('recommending');
@@ -392,7 +362,6 @@ export default function AgentScreen() {
         setStatus('idle');
       });
   }, [
-    appendDebug,
     appendMessage,
     activeSystemPrompt,
     formatEvaluationSummary,
@@ -565,26 +534,10 @@ export default function AgentScreen() {
     return <AgentStartScreen onStart={() => {
       hasStartedRef.current = false;
       setHasStarted(true);
-      setActiveAttitudePrompt(null);
-      setAttitudePromptInput('');
       setPhase('quiz');
-      setQuizAnswers({});
-      setSurveyData({});
       setActiveSystemPrompt(null);
       resetConversationState();
     }} />;
-  }
-
-  if (!activeAttitudePrompt) {
-    return (
-      <AttitudePromptSetupScreen
-        value={attitudePromptInput}
-        onChange={setAttitudePromptInput}
-        onApply={handleApplyAttitudePrompt}
-        onBack={() => setHasStarted(false)}
-        canApply={canApplyAttitudePrompt}
-      />
-    );
   }
 
   if (phase === 'quiz') {
@@ -675,19 +628,7 @@ export default function AgentScreen() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.header}>
-          <View style={styles.headerRow}>
-            <Text style={styles.overline}>Pawzy</Text>
-            <Pressable
-              onPress={handleChangeAttitudePrompt}
-              disabled={isBusy}
-              style={({ pressed }) => [
-                styles.changeAttitudeButton,
-                isBusy && styles.sendButtonDisabled,
-                pressed && styles.sendButtonPressed,
-              ]}>
-              <Text style={styles.changeAttitudeText}>更换态度</Text>
-            </Pressable>
-          </View>
+          <Text style={styles.overline}>Pawzy</Text>
           <Text style={styles.title}>和你聊聊</Text>
         </View>
 
@@ -964,57 +905,6 @@ function AgentStartScreen({ onStart }: { onStart: () => void }) {
   );
 }
 
-function AttitudePromptSetupScreen({
-  value,
-  onChange,
-  onApply,
-  onBack,
-  canApply,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  onApply: () => void;
-  onBack: () => void;
-  canApply: boolean;
-}) {
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <View style={styles.attitudeCard}>
-          <Text style={styles.attitudeTitle}>请输入态度 prompt</Text>
-          <Text style={styles.attitudeDesc}>
-            会与基础身份/任务提示词拼接后，再发起对话请求。
-          </Text>
-          <TextInput
-            value={value}
-            onChangeText={onChange}
-            placeholder="例如：像朋友聊天，幽默一点，但问题要聚焦领养画像"
-            placeholderTextColor="#A1A1A1"
-            multiline
-            textAlignVertical="top"
-            style={styles.attitudeInput}
-          />
-          <Pressable
-            onPress={onApply}
-            disabled={!canApply}
-            style={({ pressed }) => [
-              styles.attitudeApplyButton,
-              !canApply && styles.sendButtonDisabled,
-              pressed && canApply && styles.sendButtonPressed,
-            ]}>
-            <Text style={styles.attitudeApplyText}>应用并开始对话</Text>
-          </Pressable>
-          <Pressable onPress={onBack} style={styles.attitudeBackButton}>
-            <Text style={styles.attitudeBackText}>返回</Text>
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
-}
-
 function QuizScreen({
   onComplete,
   onBack,
@@ -1158,22 +1048,22 @@ function SurveyScreen({
   );
 }
 
-async function requestEvaluation(messages: AgentMessage[], attitudePrompt: string) {
+async function requestEvaluation(messages: AgentMessage[], contextPrompt: string) {
   return postJson<EvaluationResponse>('/api/agent/evaluate', {
     messages,
-    attitudePrompt,
+    contextPrompt,
   });
 }
 
 async function requestRecommendation(
   summary: EvaluationSummary,
   messages: AgentMessage[],
-  attitudePrompt: string
+  contextPrompt: string
 ) {
   const payload = {
     messages,
     evaluation: summary,
-    attitudePrompt,
+    contextPrompt,
   };
   let lastError: unknown;
   for (let attempt = 0; attempt <= RECOMMEND_MAX_RETRIES; attempt += 1) {
@@ -1423,11 +1313,6 @@ const styles = StyleSheet.create({
     paddingTop: Theme.spacing.s12,
     paddingBottom: Theme.spacing.s6,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   overline: {
     fontSize: Theme.typography.size.s11,
     letterSpacing: Theme.typography.letterSpacing.s3,
@@ -1439,19 +1324,6 @@ const styles = StyleSheet.create({
     fontSize: Theme.typography.size.s22,
     fontFamily: Theme.fonts.semiBold,
     color: Theme.colors.text,
-  },
-  changeAttitudeButton: {
-    backgroundColor: '#FFF6EA',
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: 'rgba(237, 132, 63, 0.35)',
-  },
-  changeAttitudeText: {
-    fontSize: 11,
-    color: '#875B47',
-    fontFamily: Theme.fonts.regular,
   },
   chatList: {
     paddingHorizontal: Theme.spacing.s20,
@@ -1638,72 +1510,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 12,
     color: Theme.colors.textSecondary,
-  },
-  attitudeCard: {
-    marginHorizontal: Theme.spacing.s20,
-    marginTop: Theme.spacing.s40,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 18,
-    shadowColor: 'rgba(244, 193, 127, 0.25)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
-    shadowRadius: 18,
-    elevation: 5,
-  },
-  attitudeTitle: {
-    fontSize: Theme.typography.size.s18,
-    color: Theme.colors.text,
-    fontFamily: Theme.fonts.semiBold,
-  },
-  attitudeDesc: {
-    marginTop: 8,
-    fontSize: 12,
-    color: Theme.colors.textSecondary,
-    lineHeight: 18,
-  },
-  attitudeInput: {
-    marginTop: 14,
-    minHeight: 130,
-    borderRadius: 12,
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: 'rgba(237, 132, 63, 0.35)',
-    backgroundColor: '#FFFEF9',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13,
-    color: Theme.colors.text,
-    fontFamily: Theme.fonts.regular,
-    ...Platform.select({
-      web: {
-        outlineStyle: 'none',
-      },
-    }),
-  },
-  attitudeApplyButton: {
-    marginTop: 14,
-    borderRadius: 14,
-    height: 44,
-    backgroundColor: '#F4C17F',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  attitudeApplyText: {
-    color: '#FFFFFF',
-    fontFamily: Theme.fonts.semiBold,
-    fontSize: 14,
-  },
-  attitudeBackButton: {
-    marginTop: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 32,
-  },
-  attitudeBackText: {
-    fontSize: 12,
-    color: Theme.colors.textSecondary,
-    fontFamily: Theme.fonts.regular,
   },
 });
 
