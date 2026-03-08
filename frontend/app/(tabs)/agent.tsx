@@ -66,10 +66,7 @@ const RECOMMEND_MAX_RETRIES = 3;
 const RECOMMEND_RETRY_BASE_DELAY_MS = 1200;
 const RECOMMEND_RETRY_MAX_DELAY_MS = 5000;
 const EVALUATING_WAITING_TEXTS = [
-  '正在整理你的回答...',
-  '正在生成下一组问题...',
-  '正在核对关键信息...',
-  '正在补全匹配画像...',
+  'Pawzy 正在思考...',
 ];
 const RECOMMENDING_WAITING_TEXTS = [
   '正在筛选合适的毛孩子...',
@@ -138,20 +135,25 @@ function buildSystemPromptFromQuiz(answers: Record<number, string>): string {
     `- 年龄偏好：${agePreference}`,
     `- 毛发偏好：${furPreference}`,
     '',
-    '现在请通过对话进一步了解用户，帮助我们判断他们适不适合养宠物，以及适合什么样的宠物。',
-    '每次只问一个问题，用你自己自然的方式提问（绝对不要照搬下面的原文！要用你的风格重新表达）：',
-    '1. 请用户描述一下自己（性格、生活习惯、喜好等），以及他们心目中理想宠物的性格',
-    '2. 假设周末的一天，他们希望和宠物怎样一起度过',
-    '3. 问问他们能不能接受宠物的一些行为，比如掉毛、叫闹、偶尔调皮拆家、晚上活动等',
-    '4. 如果未来生活中出现突发变故（比如搬家、出差），他们会怎样对待自己的宠物',
+    '【极其严格的提问规则】',
+    '你必须通过对话收集以下4个维度的信息，但【绝对不可以】在一条回复中问多个维度的信息！',
+    '你一次【只能】提问一个维度。必须等用户回答完毕后，针对用户的回答给予简短、温暖的反馈，然后再抛出下一个维度的问题。',
     '',
-    '重要提醒：绝对不要直接使用上面的问题原文！要用你自己的方式来问，让对话感觉自然轻松。根据用户的回答灵活调整语气和追问。',
+    '需要收集的维度顺序：',
+    '第一步：请用户描述一下自己（性格、生活习惯、喜好等），以及心目中理想宠物的性格。',
+    '第二步：假设周末的一天，希望和宠物怎样一起度过。',
+    '第三步：问问能不能接受宠物的一些行为（如掉毛、叫闹、偶尔调皮拆家、晚上活动等）。',
+    '第四步：未来生活中出现突发变故（比如搬家、出差），会怎样对待自己的宠物。',
+    '',
+    '现在，请根据上面的“第一步”，结合用户的初始偏好，用自然聊天、非结构化的话术，向用户发起第一句开场提问！千万不要一上来就把后面的步骤也问了。',
   ].join('\n');
 }
 
 export default function AgentScreen() {
   const [hasStarted, setHasStarted] = React.useState(false);
   const [phase, setPhase] = React.useState<FlowPhase>('quiz');
+  const [attitudePromptInput, setAttitudePromptInput] = React.useState('');
+  const [activeAttitudePrompt, setActiveAttitudePrompt] = React.useState<string | null>(null);
   const [quizAnswers, setQuizAnswers] = React.useState<Record<number, string>>({});
   const [surveyData, setSurveyData] = React.useState<Record<string, string>>({});
   const [activeSystemPrompt, setActiveSystemPrompt] = React.useState<string | null>(null);
@@ -177,6 +179,7 @@ export default function AgentScreen() {
   const isBusy = status === 'evaluating' || status === 'recommending';
   const isInputLocked = isBusy || isTranscribing || isTestingSample;
   const canSend = input.trim().length > 0 && !isInputLocked && phase === 'chat' && !evaluation;
+  const canApplyAttitudePrompt = attitudePromptInput.trim().length > 0;
   const waitingMessages =
     status === 'recommending' ? RECOMMENDING_WAITING_TEXTS : EVALUATING_WAITING_TEXTS;
   const waitingText = waitingMessages[waitingIndex % waitingMessages.length];
@@ -257,14 +260,33 @@ export default function AgentScreen() {
     setIsTestingSample(false);
   }, []);
 
+  const handleApplyAttitudePrompt = React.useCallback(() => {
+    const trimmed = attitudePromptInput.trim();
+    if (!trimmed) return;
+    setActiveAttitudePrompt(trimmed);
+    setPhase('quiz');
+  }, [attitudePromptInput]);
+
+  const handleChangeAttitudePrompt = React.useCallback(() => {
+    hasStartedRef.current = false;
+    resetConversationState();
+    setAttitudePromptInput(activeAttitudePrompt ?? '');
+    setActiveAttitudePrompt(null);
+    setActiveSystemPrompt(null);
+    setPhase('quiz');
+  }, [activeAttitudePrompt, resetConversationState]);
+
   const handleQuizComplete = React.useCallback((answers: Record<number, string>) => {
     setQuizAnswers(answers);
-    const systemPrompt = buildSystemPromptFromQuiz(answers);
-    setActiveSystemPrompt(systemPrompt);
+    const quizPrompt = buildSystemPromptFromQuiz(answers);
+    const combined = activeAttitudePrompt
+      ? `${quizPrompt}\n\n【对话态度要求】\n${activeAttitudePrompt}`
+      : quizPrompt;
+    setActiveSystemPrompt(combined);
     hasStartedRef.current = false;
     resetConversationState();
     setPhase('chat');
-  }, [resetConversationState]);
+  }, [resetConversationState, activeAttitudePrompt]);
 
   const handleSurveyComplete = React.useCallback(async (data: Record<string, string>) => {
     setSurveyData(data);
@@ -516,12 +538,26 @@ export default function AgentScreen() {
     return <AgentStartScreen onStart={() => {
       hasStartedRef.current = false;
       setHasStarted(true);
+      setActiveAttitudePrompt(null);
+      setAttitudePromptInput('');
       setPhase('quiz');
       setQuizAnswers({});
       setSurveyData({});
       setActiveSystemPrompt(null);
       resetConversationState();
     }} />;
+  }
+
+  if (!activeAttitudePrompt) {
+    return (
+      <AttitudePromptSetupScreen
+        value={attitudePromptInput}
+        onChange={setAttitudePromptInput}
+        onApply={handleApplyAttitudePrompt}
+        onBack={() => setHasStarted(false)}
+        canApply={canApplyAttitudePrompt}
+      />
+    );
   }
 
   if (phase === 'quiz') {
@@ -612,7 +648,19 @@ export default function AgentScreen() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.header}>
-          <Text style={styles.overline}>Pawzy</Text>
+          <View style={styles.headerRow}>
+            <Text style={styles.overline}>Pawzy</Text>
+            <Pressable
+              onPress={handleChangeAttitudePrompt}
+              disabled={isBusy}
+              style={({ pressed }) => [
+                styles.changeAttitudeButton,
+                isBusy && styles.sendButtonDisabled,
+                pressed && styles.sendButtonPressed,
+              ]}>
+              <Text style={styles.changeAttitudeText}>更换态度</Text>
+            </Pressable>
+          </View>
           <Text style={styles.title}>和你聊聊</Text>
         </View>
 
@@ -886,6 +934,57 @@ function AgentStartScreen({ onStart }: { onStart: () => void }) {
         </ScrollView>
       </SafeAreaView>
     </View>
+  );
+}
+
+function AttitudePromptSetupScreen({
+  value,
+  onChange,
+  onApply,
+  onBack,
+  canApply,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onApply: () => void;
+  onBack: () => void;
+  canApply: boolean;
+}) {
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <View style={styles.attitudeCard}>
+          <Text style={styles.attitudeTitle}>请输入态度 prompt</Text>
+          <Text style={styles.attitudeDesc}>
+            会与基础身份/任务提示词拼接后，再发起对话请求。
+          </Text>
+          <TextInput
+            value={value}
+            onChangeText={onChange}
+            placeholder="例如：像朋友聊天，幽默一点，但问题要聚焦领养画像"
+            placeholderTextColor="#A1A1A1"
+            multiline
+            textAlignVertical="top"
+            style={styles.attitudeInput}
+          />
+          <Pressable
+            onPress={onApply}
+            disabled={!canApply}
+            style={({ pressed }) => [
+              styles.attitudeApplyButton,
+              !canApply && styles.sendButtonDisabled,
+              pressed && canApply && styles.sendButtonPressed,
+            ]}>
+            <Text style={styles.attitudeApplyText}>应用并开始对话</Text>
+          </Pressable>
+          <Pressable onPress={onBack} style={styles.attitudeBackButton}>
+            <Text style={styles.attitudeBackText}>返回</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
