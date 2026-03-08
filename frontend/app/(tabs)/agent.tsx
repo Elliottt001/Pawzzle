@@ -1,7 +1,5 @@
 import * as React from 'react';
 import {
-  Animated,
-  Easing,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -149,6 +147,11 @@ function buildSystemPromptFromQuiz(answers: Record<number, string>): string {
     '第三步：问问能不能接受宠物的一些行为（如掉毛、叫闹、偶尔调皮拆家、晚上活动等）。',
     '第四步：未来生活中出现突发变故（比如搬家、出差），会怎样对待自己的宠物。',
     '',
+    '【字数与风格硬性限制】',
+    '每一次提问不要超过50字。',
+    '严禁提问涉及哲学、诗意隐喻或过于抽象的类比（如：将宠物比作天气、星辰、灵魂）。',
+    '所有情境必须锚定在“具体的生活碎片”上——例如：沾满毛的黑色西装、被推倒的水杯、凌晨三点的跑酷声、由于照顾宠物而错过的约会。',
+    '',
     '现在，请根据上面的“第一步”，结合用户的初始偏好，用自然聊天、非结构化的话术，向用户发起第一句开场提问！千万不要一上来就把后面的步骤也问了。',
   ].join('\n');
 }
@@ -156,6 +159,8 @@ function buildSystemPromptFromQuiz(answers: Record<number, string>): string {
 export default function AgentScreen() {
   const [hasStarted, setHasStarted] = React.useState(false);
   const [phase, setPhase] = React.useState<FlowPhase>('quiz');
+  const [quizAnswers, setQuizAnswers] = React.useState<Record<number, string>>({});
+  const [surveyData, setSurveyData] = React.useState<Record<string, string>>({});
   const [activeSystemPrompt, setActiveSystemPrompt] = React.useState<string | null>(null);
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [input, setInput] = React.useState('');
@@ -263,8 +268,8 @@ export default function AgentScreen() {
   }, []);
 
   const handleQuizComplete = React.useCallback((answers: Record<number, string>) => {
-    const quizPrompt = buildSystemPromptFromQuiz(answers);
-    setActiveSystemPrompt(quizPrompt);
+    setQuizAnswers(answers);
+    setActiveSystemPrompt(buildSystemPromptFromQuiz(answers));
     hasStartedRef.current = false;
     resetConversationState();
     setPhase('chat');
@@ -813,30 +818,6 @@ function DecoPaw({
 }
 
 function AgentStartScreen({ onStart }: { onStart: () => void }) {
-  const floatAnim = React.useRef(new Animated.Value(0)).current;
-
-  React.useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(floatAnim, {
-          toValue: -8,
-          duration: 1800,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(floatAnim, {
-          toValue: 0,
-          duration: 1800,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-
-    animation.start();
-    return () => animation.stop();
-  }, [floatAnim]);
-
   return (
     <View style={startStyles.safeArea}>
       {/* Background glows */}
@@ -868,15 +849,11 @@ function AgentStartScreen({ onStart }: { onStart: () => void }) {
           <View style={startStyles.hero}>
             {/* Mascot */}
             <View style={startStyles.mascotWrap}>
-              <View style={startStyles.mascotGlow} />
-              <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
-                <AgentAvatarSvg
-                  width={150}
-                  height={185}
-                  style={startStyles.agentHero}
-                  accessibilityLabel="Pawzy"
-                />
-              </Animated.View>
+              <AgentAvatarSvg
+                width={150}
+                height={185}
+                accessibilityLabel="Pawzy"
+              />
             </View>
 
             {/* Greeting */}
@@ -1589,16 +1566,17 @@ const startStyles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 8,
   },
-  mascotGlow: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'rgba(244, 193, 127, 0.08)',
-  },
-  agentHero: {
+  mascotGradient: {
     width: 150,
     height: 185,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden' as const,
+    shadowColor: '#F4C17F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.66,
+    shadowRadius: 11,
+    elevation: 8,
   },
   headline: {
     fontSize: 18,

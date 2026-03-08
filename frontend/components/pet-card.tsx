@@ -41,11 +41,9 @@ export function PetCard({ pet, confidence }: PetCardProps) {
     pet.icon === 'cat'
       ? `https://placecats.com/${imageDimension}/${imageDimension}`
       : `https://placedog.net/${imageDimension}/${imageDimension}?id=${avatarId}`;
-  const avatarUri = resolvePetImageUri(pet.imageUrl) ?? fallbackAvatarUri;
-  const isFemale = pet.icon === 'cat';
-  const genderIcon: FontAwesome5IconName = isFemale ? 'venus' : 'mars';
-  const genderBgColor = isFemale ? '#FFB6C1' : '#8DCEFF';
-  const genderIconColor = '#FFFFFF';
+  const avatarSource = pet.imageSource
+    ? pet.imageSource
+    : { uri: resolvePetImageUri(pet.imageUrl) ?? fallbackAvatarUri };
 
 
   return (
@@ -64,15 +62,12 @@ export function PetCard({ pet, confidence }: PetCardProps) {
       {/* 顶部区域：头像 + 信息 */}
       <View style={styles.cardTop}>
         <View style={styles.avatarRing}>
-          <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
+          <Image source={avatarSource} style={styles.avatar} contentFit="cover" />
         </View>
         <View style={styles.cardBody}>
-          {/* 名字 + 性别 */}
+          {/* 名字 */}
           <View style={styles.nameRow}>
             <Text style={styles.petName}>{pet.name}</Text>
-            <View style={[styles.genderBadge, { backgroundColor: genderBgColor }]}>
-              <FontAwesome5 name={genderIcon} size={12} color={genderIconColor} />
-            </View>
           </View>
           {/* 距离 */}
           <View style={styles.distanceRow}>

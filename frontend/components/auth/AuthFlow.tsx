@@ -119,6 +119,7 @@ export function AuthFlow() {
       });
       setSession(data);
       setStatus('已登录。');
+      router.replace('/(tabs)/agent');
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         setAuthStep('nickname');
@@ -154,6 +155,7 @@ export function AuthFlow() {
         const data = await request<AuthSession>('/api/auth/wechat/mock', {});
         setSession(data);
         setStatus('已登录。');
+        router.replace('/(tabs)/agent');
       } catch (error) {
         const message = error instanceof Error ? error.message : '';
         setStatus(ensureChinese(message, '微信登录失败，请稍后再试。'));
@@ -183,6 +185,7 @@ export function AuthFlow() {
         const data = await request<AuthSession>('/api/auth/institution', { code });
         setSession(data);
         setStatus('已登录。');
+        router.replace('/(tabs)/agent');
       } catch (error) {
         if (error instanceof ApiError && error.status === 404) {
           throw new Error('机构登录接口未部署，请重启后端。');
@@ -290,6 +293,7 @@ export function AuthFlow() {
       });
       setSession(data);
       setStatus('已登录。');
+      router.replace('/(tabs)/agent');
     });
 
   // Render Helpers
