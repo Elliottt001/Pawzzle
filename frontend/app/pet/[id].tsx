@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   infoCardLabel: {
-    fontSize: 8,
+    fontSize: 10,
     color: WARM_BROWN_MUTED,
     fontFamily: Theme.fonts.regular,
     lineHeight: 23,
@@ -494,9 +494,9 @@ const styles = StyleSheet.create({
   chatButtonText: {
     textAlign: 'center',
     color: '#FEFFD4',
-    fontSize: 18,
+    fontSize: 14,
     fontFamily: Theme.fonts.regular,
-    lineHeight: 26,
-    letterSpacing: 1.08,
+    lineHeight: 20,
+    letterSpacing: 0.84,
   },
 });
