@@ -27,6 +27,9 @@ type ChatMessage = {
   id: string;
   role: ChatRole;
   content: string;
+  options?: QuizOption[];
+  optionsDisabled?: boolean;
+  isQuiz?: boolean;
 };
 
 type AgentMessage = {
@@ -177,8 +180,10 @@ export default function AgentScreen() {
   const [isTestingSample, setIsTestingSample] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [waitingIndex, setWaitingIndex] = React.useState(0);
+  const [quizStep, setQuizStep] = React.useState(0);
   const scrollRef = React.useRef<ScrollView | null>(null);
   const hasStartedRef = React.useRef(false);
+  const quizInitRef = React.useRef(false);
   const { startRecording, stopRecording, isRecording } = useVoiceRecorder();
 
   const isBusy = status === 'evaluating' || status === 'recommending';
@@ -210,7 +215,7 @@ export default function AgentScreen() {
 
   const buildAgentMessages = React.useCallback((items: ChatMessage[]) => {
     return items
-      .filter((item) => item.role !== 'debug')
+      .filter((item) => item.role !== 'debug' && !item.isQuiz)
       .map<AgentMessage>((item) => ({
         role: item.role === 'user' ? 'user' : 'assistant',
         content: item.content,
@@ -271,9 +276,54 @@ export default function AgentScreen() {
     setQuizAnswers(answers);
     setActiveSystemPrompt(buildSystemPromptFromQuiz(answers));
     hasStartedRef.current = false;
-    resetConversationState();
+    // Don't reset messages — keep quiz conversation visible
+    setInput('');
+    setStatus('idle');
+    setEvaluation(null);
+    setRecommendedItems([]);
+    setErrorMessage(null);
+    setWaitingIndex(0);
+    setIsTranscribing(false);
+    setIsTestingSample(false);
     setPhase('chat');
-  }, [resetConversationState]);
+  }, []);
+
+  const handleQuizOptionSelect = React.useCallback((messageId: string, optionText: string) => {
+    const currentStep = quizStep;
+    const newAnswers = { ...quizAnswers, [QUIZ_QUESTIONS[currentStep].id]: optionText };
+    setQuizAnswers(newAnswers);
+
+    const userMsg: ChatMessage = {
+      id: createId(),
+      role: 'user',
+      content: optionText,
+      isQuiz: true,
+    };
+
+    if (currentStep < QUIZ_QUESTIONS.length - 1) {
+      const nextStep = currentStep + 1;
+      const nextQ = QUIZ_QUESTIONS[nextStep];
+      setQuizStep(nextStep);
+
+      setMessages(prev => [
+        ...prev.map(m => m.id === messageId ? { ...m, optionsDisabled: true } : m),
+        userMsg,
+        {
+          id: createId(),
+          role: 'ai' as ChatRole,
+          content: nextQ.title,
+          options: nextQ.options,
+          isQuiz: true,
+        },
+      ]);
+    } else {
+      setMessages(prev => [
+        ...prev.map(m => m.id === messageId ? { ...m, optionsDisabled: true } : m),
+        userMsg,
+      ]);
+      setTimeout(() => handleQuizComplete(newAnswers), 500);
+    }
+  }, [quizStep, quizAnswers, handleQuizComplete]);
 
   const handleSurveyComplete = React.useCallback(async (data: Record<string, string>) => {
     setPhase('result');
@@ -328,6 +378,23 @@ export default function AgentScreen() {
       setStatus('idle');
     }
   }, [evaluation, messages, activeSystemPrompt, buildAgentMessages, handleMaliciousInterruption, loadPetCards]);
+
+  // Effect: initialize quiz questions in chat
+  React.useEffect(() => {
+    if (phase === 'quiz' && !quizInitRef.current) {
+      quizInitRef.current = true;
+      const firstQ = QUIZ_QUESTIONS[0];
+      setMessages([{
+        id: createId(),
+        role: 'ai',
+        content: firstQ.title,
+        options: firstQ.options,
+        isQuiz: true,
+      }]);
+    } else if (phase !== 'quiz') {
+      quizInitRef.current = false;
+    }
+  }, [phase]);
 
   // Effect: when entering chat phase, send initial evaluation request
   React.useEffect(() => {
@@ -540,18 +607,13 @@ export default function AgentScreen() {
       hasStartedRef.current = false;
       setHasStarted(true);
       setPhase('quiz');
+      setQuizStep(0);
+      setQuizAnswers({});
+      setSurveyData({});
       setActiveSystemPrompt(null);
+      quizInitRef.current = false;
       resetConversationState();
     }} />;
-  }
-
-  if (phase === 'quiz') {
-    return (
-      <QuizScreen
-        onComplete={handleQuizComplete}
-        onBack={() => setHasStarted(false)}
-      />
-    );
   }
 
   if (phase === 'survey') {
@@ -619,7 +681,7 @@ export default function AgentScreen() {
     );
   }
 
-  // phase === 'chat'
+  // phase === 'quiz' or 'chat' — unified chat UI
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -633,8 +695,14 @@ export default function AgentScreen() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.header}>
-          <Text style={styles.overline}>Pawzy</Text>
-          <Text style={styles.title}>和你聊聊</Text>
+          {phase === 'quiz' ? (
+            <Pressable onPress={() => setHasStarted(false)} hitSlop={12}>
+              <Text style={styles.overline}>← 返回</Text>
+            </Pressable>
+          ) : (
+            <Text style={styles.overline}>Pawzy</Text>
+          )}
+          <Text style={styles.title}>{phase === 'quiz' ? '快速匹配' : '和你聊聊'}</Text>
         </View>
 
         <ScrollView
@@ -642,7 +710,15 @@ export default function AgentScreen() {
           contentContainerStyle={styles.chatList}
           keyboardShouldPersistTaps="handled">
           {messages.map((message) => (
-            <ChatBubble key={message.id} role={message.role} text={message.content} />
+            <ChatBubble
+              key={message.id}
+              messageId={message.id}
+              role={message.role}
+              text={message.content}
+              options={message.options}
+              optionsDisabled={message.optionsDisabled}
+              onOptionSelect={handleQuizOptionSelect}
+            />
           ))}
 
           {isBusy ? <ChatBubble role="ai" text={waitingText} /> : null}
@@ -659,7 +735,7 @@ export default function AgentScreen() {
                 style={styles.input}
                 returnKeyType="send"
                 onSubmitEditing={handleSend}
-                editable={!isInputLocked}
+                editable={!isInputLocked && phase !== 'quiz'}
               />
               <Pressable
                 onPressIn={handleVoicePressIn}
@@ -703,9 +779,32 @@ export default function AgentScreen() {
   );
 }
 
-function ChatBubble({ role, text }: { role: ChatRole; text: string }) {
+function ChatBubble({
+  role,
+  text,
+  options,
+  optionsDisabled,
+  messageId,
+  onOptionSelect,
+}: {
+  role: ChatRole;
+  text: string;
+  options?: QuizOption[];
+  optionsDisabled?: boolean;
+  messageId?: string;
+  onOptionSelect?: (messageId: string, optionText: string) => void;
+}) {
   const isUser = role === 'user';
   const isDebug = role === 'debug';
+  const hasOptions = options && options.length > 0;
+
+  // Split options into rows of 2
+  const optionRows: QuizOption[][] = [];
+  if (options) {
+    for (let i = 0; i < options.length; i += 2) {
+      optionRows.push(options.slice(i, i + 2));
+    }
+  }
 
   return (
     <View
@@ -730,6 +829,7 @@ function ChatBubble({ role, text }: { role: ChatRole; text: string }) {
           isUser && styles.userBubble,
           isDebug && styles.debugBubble,
           !isUser && !isDebug && styles.aiBubble,
+          hasOptions && styles.aiBubbleWithOptions,
         ]}>
         <Text
           style={[
@@ -740,6 +840,33 @@ function ChatBubble({ role, text }: { role: ChatRole; text: string }) {
           ]}>
           {text}
         </Text>
+        {hasOptions ? (
+          <View style={styles.optionsContainer}>
+            {optionRows.map((row, rowIndex) => (
+              <View key={rowIndex} style={styles.optionRow}>
+                {row.map((opt) => (
+                  <Pressable
+                    key={opt.label}
+                    style={({ pressed }) => [
+                      styles.optionButton,
+                      optionsDisabled && styles.optionButtonDisabled,
+                      pressed && !optionsDisabled && { transform: [{ scale: 0.96 }] },
+                    ]}
+                    onPress={() => !optionsDisabled && messageId && onOptionSelect?.(messageId, opt.text)}
+                    disabled={optionsDisabled}
+                  >
+                    <Text style={[
+                      styles.optionButtonText,
+                      optionsDisabled && styles.optionButtonTextDisabled,
+                    ]}>
+                      {opt.text}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ))}
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -876,79 +1003,6 @@ function AgentStartScreen({ onStart }: { onStart: () => void }) {
 
           {/* Privacy note */}
           <Text style={startStyles.privacyText}>对话仅用于匹配，我们保护你的隐私~</Text>
-        </ScrollView>
-      </SafeAreaView>
-    </View>
-  );
-}
-
-function QuizScreen({
-  onComplete,
-  onBack,
-}: {
-  onComplete: (answers: Record<number, string>) => void;
-  onBack: () => void;
-}) {
-  const [step, setStep] = React.useState(0);
-  const [answers, setAnswers] = React.useState<Record<number, string>>({});
-  const current = QUIZ_QUESTIONS[step];
-  const isLast = step === QUIZ_QUESTIONS.length - 1;
-  const progress = (step + 1) / QUIZ_QUESTIONS.length;
-
-  const handleSelect = (optionText: string) => {
-    const next = { ...answers, [current.id]: optionText };
-    setAnswers(next);
-    if (isLast) {
-      onComplete(next);
-    } else {
-      setStep(step + 1);
-    }
-  };
-
-  return (
-    <View style={quizStyles.safeArea}>
-      <View style={quizStyles.bgGlow} />
-      <SafeAreaView style={{ flex: 1 }}>
-        <View style={quizStyles.topBar}>
-          <Pressable onPress={onBack} hitSlop={12}>
-            <Text style={quizStyles.backText}>← 返回</Text>
-          </Pressable>
-          <Text style={quizStyles.stepText}>{step + 1} / {QUIZ_QUESTIONS.length}</Text>
-        </View>
-
-        <View style={quizStyles.progressBarTrack}>
-          <View style={[quizStyles.progressBarFill, { width: `${progress * 100}%` }]} />
-        </View>
-
-        <ScrollView contentContainerStyle={quizStyles.content} bounces={false}>
-          <Text style={quizStyles.questionTitle}>{current.title}</Text>
-
-          {current.options.map((opt) => {
-            const selected = answers[current.id] === opt.text;
-            return (
-              <Pressable
-                key={opt.label}
-                onPress={() => handleSelect(opt.text)}
-                style={({ pressed }) => [
-                  quizStyles.optionCard,
-                  selected && quizStyles.optionCardSelected,
-                  pressed && { transform: [{ scale: 0.97 }] },
-                ]}>
-                <View style={[quizStyles.optionLabel, selected && quizStyles.optionLabelSelected]}>
-                  <Text
-                    style={[
-                      quizStyles.optionLabelText,
-                      selected && quizStyles.optionLabelTextSelected,
-                    ]}>
-                    {opt.label}
-                  </Text>
-                </View>
-                <Text style={[quizStyles.optionText, selected && quizStyles.optionTextSelected]}>
-                  {opt.text}
-                </Text>
-              </Pressable>
-            );
-          })}
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -1350,6 +1404,43 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 25,
     borderBottomRightRadius: 25,
     borderBottomLeftRadius: 0,
+  },
+  aiBubbleWithOptions: {
+    padding: 17,
+  },
+  optionsContainer: {
+    marginTop: 10,
+    gap: 10,
+  },
+  optionRow: {
+    flexDirection: 'row' as const,
+    gap: 10,
+  },
+  optionButton: {
+    flex: 1,
+    backgroundColor: '#ED843F',
+    borderRadius: 20,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    minHeight: 26,
+    shadowColor: 'rgba(244, 193, 127, 0.30)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  optionButtonDisabled: {
+    opacity: 0.5,
+  },
+  optionButtonText: {
+    textAlign: 'center' as const,
+    color: '#FEFFD4',
+    fontSize: 12,
+    lineHeight: 26,
+    letterSpacing: 0.72,
+  },
+  optionButtonTextDisabled: {
+    opacity: 0.8,
   },
   debugBubble: {
     backgroundColor: Theme.colors.surfaceNeutral,
