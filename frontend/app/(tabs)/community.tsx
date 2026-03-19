@@ -19,13 +19,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Theme } from '../../constants/theme';
 import { API_BASE_URL } from '@/lib/apiBase';
 import { getSession, subscribeSession, type AuthSession } from '@/lib/session';
+import {
+  canSubmitCard,
+  canSubmitContent,
+  filterCommunityPosts,
+  getPublishSubmitLabel,
+  getVisibleContentItems,
+} from '@/components/community/logic';
 import ShareDailyBanner from '@/assets/images/share-daily.svg';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - 50;
 const BANNER_WIDTH = SCREEN_WIDTH - 60;
 const BANNER_HEIGHT = 143;
-const SCAN_DELAY_MS = 900;
 
 const TABS = [
   { id: 'recommend', label: '推荐' },
@@ -171,9 +177,6 @@ type CommunityContentResponse = {
 export default function CommunityScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = React.useState<TabId>('recommend');
-  const [isScanning, setIsScanning] = React.useState(false);
-  const [hasResult, setHasResult] = React.useState(false);
-  const [pushStatus, setPushStatus] = React.useState<'idle' | 'sent'>('idle');
   const [session, setSessionState] = React.useState<AuthSession | null>(() => getSession());
   const [updates, setUpdates] = React.useState<ContentItem[]>([]);
   const [guides, setGuides] = React.useState<ContentItem[]>([]);
@@ -218,18 +221,6 @@ export default function CommunityScreen() {
   const allBreeds = React.useMemo(() => [...breedOptions.CAT, ...breedOptions.DOG], []);
   const canGenerateCardTags =
     cardPersonalityText.trim().length > 0 && cardTagStatus !== 'generating';
-
-  React.useEffect(() => {
-    if (!isScanning) {
-      return;
-    }
-    const timeout = setTimeout(() => {
-      setIsScanning(false);
-      setHasResult(true);
-    }, SCAN_DELAY_MS);
-
-    return () => clearTimeout(timeout);
-  }, [isScanning]);
 
   React.useEffect(() => {
     const unsubscribe = subscribeSession((nextSession) => {
@@ -488,19 +479,6 @@ export default function CommunityScreen() {
     };
   }, [loadContent]);
 
-  const handleSnap = () => {
-    if (isScanning) {
-      return;
-    }
-    setHasResult(false);
-    setPushStatus('idle');
-    setIsScanning(true);
-  };
-
-  const handlePush = () => {
-    setPushStatus('sent');
-  };
-
   const handleToggleUpload = () => {
     setUploadOpen((prev) => !prev);
   };
@@ -520,6 +498,7 @@ export default function CommunityScreen() {
     const name = cardName.trim();
     const location = cardLocation.trim();
     const description = cardPersonalityText.trim();
+    const avoidAdopter = cardAvoidAdopterText.trim();
     const ageValue = Number(cardAge);
 
     if (!name) {
@@ -550,6 +529,13 @@ export default function CommunityScreen() {
     }
 
     try {
+      const genderLabel = GENDER_OPTIONS.find((option) => option.id === cardGender)?.label ?? null;
+      const descriptionParts = [
+        description || DEFAULT_DESCRIPTION,
+        avoidAdopter ? `不适合的领养人：${avoidAdopter}` : null,
+        genderLabel ? `性别：${genderLabel}` : null,
+        cardCareStatus ? `护理状态：${cardCareStatus}` : null,
+      ].filter(Boolean);
       let imageUrl = cardPhotoImageUrl;
       if (cardPhotoUri && !imageUrl) {
         imageUrl = await uploadCardPhoto();
@@ -567,7 +553,7 @@ export default function CommunityScreen() {
           age: ageValue,
           location,
           personalityTag: cardTags[0] ?? '亲人',
-          description: description || DEFAULT_DESCRIPTION,
+          description: descriptionParts.join('\n'),
           imageUrl: imageUrl ?? undefined,
         },
         session?.token
@@ -649,10 +635,37 @@ export default function CommunityScreen() {
   };
 
   const [searchText, setSearchText] = React.useState('');
-  const feedPosts = MOCK_POSTS;
+  const visiblePosts = React.useMemo(
+    () => filterCommunityPosts(MOCK_POSTS, searchText),
+    [searchText]
+  );
+  const visibleContentItems = React.useMemo(
+    () => getVisibleContentItems(activeTab, updates, guides),
+    [activeTab, guides, updates]
+  );
+  const submitLabel = getPublishSubmitLabel(uploadType);
+  const canSubmitCardForm = canSubmitCard({
+    isLoggedIn,
+    name: cardName,
+    breed: cardBreed ?? '',
+    age: cardAge,
+    location: cardLocation,
+  });
+  const canSubmitContentForm = canSubmitContent({
+    isLoggedIn,
+    uploadType,
+    title: contentTitle,
+    subtitle: contentSubtitle,
+  });
+  const handleSelectTab = (tabId: TabId) => {
+    setActiveTab(tabId);
+    if (tabId === 'post') {
+      setUploadOpen(true);
+    }
+  };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Top gradient overlay */}
       <LinearGradient
         colors={['#FEFFD4', 'rgba(255, 254, 249, 0)']}
@@ -663,36 +676,501 @@ export default function CommunityScreen() {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+        showsVerticalScrollIndicator={false}>
         {/* Banner */}
         <View style={styles.bannerContainer}>
           <ShareDailyBanner width={BANNER_WIDTH} height={BANNER_HEIGHT} />
         </View>
 
-        {/* Search bar */}
-        <View style={styles.searchBarContainer}>
-          <View style={styles.searchBar}>
-            <FontAwesome5 name="search" size={14} color="#C4C4C4" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="搜索"
-              placeholderTextColor="#C4C4C4"
-              value={searchText}
-              onChangeText={setSearchText}
-            />
-          </View>
+        <View style={styles.segmented}>
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <Pressable
+                key={tab.id}
+                onPress={() => handleSelectTab(tab.id)}
+                style={({ pressed }) => [
+                  styles.segmentItem,
+                  isActive && styles.segmentItemActive,
+                  pressed && styles.segmentItemPressed,
+                ]}>
+                <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>
+                  {tab.label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
-        {/* Feed posts */}
-        {feedPosts.map((post) => (
-          <CommunityPostCard key={post.id} post={post} />
-        ))}
+        {activeTab === 'recommend' ? (
+          <>
+            <View style={styles.searchBarContainer}>
+              <View style={styles.searchBar}>
+                <FontAwesome5 name="search" size={14} color="#C4C4C4" />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="搜索动态或用户"
+                  placeholderTextColor="#C4C4C4"
+                  value={searchText}
+                  onChangeText={setSearchText}
+                />
+              </View>
+            </View>
+
+            {contentLoading ? (
+              <View style={[styles.sectionCard, styles.searchBarContainer]}>
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator size="small" color={Theme.colors.textSecondary} />
+                  <Text style={styles.loadingText}>正在获取平台动态...</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {!contentLoading && contentError ? (
+              <View style={[styles.sectionCard, styles.searchBarContainer]}>
+                <Text style={styles.errorText}>{contentError}</Text>
+              </View>
+            ) : null}
+
+            {!contentLoading && !contentError && visibleContentItems.length > 0 ? (
+              <View style={[styles.sectionCard, styles.searchBarContainer]}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>平台动态</Text>
+                  <Text style={styles.sectionSubtitle}>来自后台内容池的最新推荐</Text>
+                </View>
+                <View style={styles.contentList}>
+                  {visibleContentItems.map((item) => (
+                    <ContentCard key={item.id} item={item} fallbackTag="动态" />
+                  ))}
+                </View>
+              </View>
+            ) : null}
+
+            {visiblePosts.length > 0 ? (
+              visiblePosts.map((post) => <CommunityPostCard key={post.id} post={post} />)
+            ) : (
+              <View style={[styles.sectionCard, styles.searchBarContainer]}>
+                <Text style={styles.emptyText}>没有找到匹配的社区动态，换个关键词试试。</Text>
+              </View>
+            )}
+          </>
+        ) : null}
+
+        {activeTab === 'knowledge' ? (
+          <View style={styles.content}>
+            <View style={styles.sectionCard}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>养宠知识库</Text>
+                <Text style={styles.sectionSubtitle}>点进来就有内容，不再是空入口</Text>
+              </View>
+
+              {contentLoading ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator size="small" color={Theme.colors.textSecondary} />
+                  <Text style={styles.loadingText}>正在加载指南...</Text>
+                </View>
+              ) : null}
+
+              {!contentLoading && contentError ? (
+                <Text style={styles.errorText}>{contentError}</Text>
+              ) : null}
+
+              {!contentLoading && !contentError && visibleContentItems.length === 0 ? (
+                <Text style={styles.emptyText}>暂时还没有指南内容。</Text>
+              ) : null}
+
+              {!contentLoading && !contentError && visibleContentItems.length > 0 ? (
+                <View style={styles.contentList}>
+                  {visibleContentItems.map((item) => (
+                    <ContentCard key={item.id} item={item} fallbackTag="指南" />
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
+        {activeTab === 'post' ? (
+          <View style={styles.content}>
+            <View style={styles.uploadCard}>
+              <Pressable
+                onPress={handleToggleUpload}
+                style={({ pressed }) => [
+                  styles.uploadHeader,
+                  pressed && styles.uploadHeaderPressed,
+                ]}>
+                <View>
+                  <Text style={styles.uploadTitle}>发布内容</Text>
+                  <Text style={styles.uploadSubtitle}>卡片、动态和指南都能在这里完成</Text>
+                </View>
+                <Text style={styles.uploadToggle}>{uploadOpen ? '收起' : '展开'}</Text>
+              </Pressable>
+
+              {uploadOpen ? (
+                <View style={styles.uploadBody}>
+                  <View style={styles.uploadTypeRow}>
+                    {uploadTypes.map((item) => {
+                      const isActive = uploadType === item.id;
+                      return (
+                        <Pressable
+                          key={item.id}
+                          onPress={() => setUploadType(item.id)}
+                          style={({ pressed }) => [
+                            styles.uploadTypePill,
+                            isActive && styles.uploadTypePillActive,
+                            pressed && styles.uploadTypePillPressed,
+                          ]}>
+                          <Text
+                            style={[
+                              styles.uploadTypeText,
+                              isActive && styles.uploadTypeTextActive,
+                            ]}>
+                            {item.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {!isLoggedIn ? (
+                    <View style={styles.loginHint}>
+                      <Text style={styles.loginHintText}>请先登录后再发布内容。</Text>
+                      <Pressable
+                        onPress={() => router.push('/')}
+                        style={({ pressed }) => [
+                          styles.loginButton,
+                          pressed && styles.loginButtonPressed,
+                        ]}>
+                        <Text style={styles.loginButtonText}>去登录</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+
+                  {uploadType === 'card' ? (
+                    <View style={styles.cardForm}>
+                      <View style={styles.cardField}>
+                        <FieldLabel text="照片" />
+                        <Pressable
+                          disabled={isSubmitting}
+                          onPress={handlePickCardPhoto}
+                          style={({ pressed }) => [
+                            styles.photoPicker,
+                            pressed && !isSubmitting && styles.photoPickerPressed,
+                            isSubmitting && styles.photoPickerDisabled,
+                          ]}>
+                          <Text style={styles.photoPickerText}>
+                            {cardPhotoUri ? '重新选择照片' : '选择宠物照片'}
+                          </Text>
+                        </Pressable>
+                        {cardPhotoUri ? (
+                          <View style={styles.photoPreviewRow}>
+                            <Image source={{ uri: cardPhotoUri }} style={styles.photoPreview} />
+                            <View style={styles.photoMeta}>
+                              <Text style={styles.photoNameText}>{cardPhotoName ?? '已选择照片'}</Text>
+                              <Text style={styles.photoStatusText}>
+                                {cardPhotoUploadStatus === 'uploading'
+                                  ? '上传中'
+                                  : cardPhotoUploadStatus === 'ready'
+                                    ? '已上传'
+                                    : '待上传'}
+                              </Text>
+                            </View>
+                          </View>
+                        ) : null}
+                        {cardPhotoUploadError ? (
+                          <Text style={styles.photoErrorText}>{cardPhotoUploadError}</Text>
+                        ) : null}
+                      </View>
+
+                      <View style={styles.cardField}>
+                        <FieldLabel text="名字" />
+                        <TextInput
+                          value={cardName}
+                          onChangeText={setCardName}
+                          placeholder="给毛孩子取个名字"
+                          placeholderTextColor={Theme.colors.placeholder}
+                          style={styles.cardInput}
+                        />
+                      </View>
+
+                      <View style={styles.cardField}>
+                        <FieldLabel text="品种" />
+                        <Pressable
+                          onPress={() => setCardBreedOpen((prev) => !prev)}
+                          style={({ pressed }) => [
+                            styles.cardSelect,
+                            pressed && styles.cardSelectPressed,
+                          ]}>
+                          <Text
+                            style={
+                              cardBreed ? styles.cardSelectValue : styles.cardSelectPlaceholder
+                            }>
+                            {cardBreed ?? '选择品种'}
+                          </Text>
+                          <Text style={styles.cardSelectValue}>{cardBreedOpen ? '收起' : '展开'}</Text>
+                        </Pressable>
+                        {cardBreedOpen ? (
+                          <View style={styles.cardOptionRow}>
+                            {allBreeds.map((breed) => {
+                              const selected = cardBreed === breed;
+                              return (
+                                <Pressable
+                                  key={breed}
+                                  onPress={() => setCardBreed(breed)}
+                                  style={({ pressed }) => [
+                                    styles.cardOptionPill,
+                                    selected && styles.cardOptionPillActive,
+                                    pressed && styles.cardOptionPillPressed,
+                                  ]}>
+                                  <Text
+                                    style={[
+                                      styles.cardOptionText,
+                                      selected && styles.cardOptionTextActive,
+                                    ]}>
+                                    {breed}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        ) : null}
+                      </View>
+
+                      <View style={styles.cardField}>
+                        <FieldLabel text="年龄" />
+                        <TextInput
+                          value={cardAge}
+                          onChangeText={setCardAge}
+                          placeholder="请输入年龄"
+                          placeholderTextColor={Theme.colors.placeholder}
+                          keyboardType="numeric"
+                          style={styles.cardInput}
+                        />
+                      </View>
+
+                      <View style={styles.cardField}>
+                        <FieldLabel text="城市" />
+                        <View style={styles.choiceRow}>
+                          {locationOptions.map((location) => {
+                            const selected = cardLocation === location;
+                            return (
+                              <Pressable
+                                key={location}
+                                onPress={() => setCardLocation(location)}
+                                style={({ pressed }) => [
+                                  styles.choicePill,
+                                  selected && styles.choicePillActive,
+                                  pressed && styles.choicePillPressed,
+                                ]}>
+                                <Text
+                                  style={[styles.choiceText, selected && styles.choiceTextActive]}>
+                                  {location}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </View>
+
+                      <View style={styles.cardField}>
+                        <FieldLabel text="性别" />
+                        <View style={styles.choiceRow}>
+                          {GENDER_OPTIONS.map((option) => {
+                            const selected = cardGender === option.id;
+                            return (
+                              <Pressable
+                                key={option.id}
+                                onPress={() => setCardGender(option.id)}
+                                style={({ pressed }) => [
+                                  styles.choicePill,
+                                  selected && styles.choicePillActive,
+                                  pressed && styles.choicePillPressed,
+                                ]}>
+                                <Text
+                                  style={[styles.choiceText, selected && styles.choiceTextActive]}>
+                                  {option.label}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </View>
+
+                      <View style={styles.cardField}>
+                        <FieldLabel text="护理状态" />
+                        <View style={styles.choiceRow}>
+                          {STATUS_OPTIONS.map((status) => {
+                            const selected = cardCareStatus === status;
+                            return (
+                              <Pressable
+                                key={status}
+                                onPress={() => setCardCareStatus(status)}
+                                style={({ pressed }) => [
+                                  styles.choicePill,
+                                  selected && styles.choicePillActive,
+                                  pressed && styles.choicePillPressed,
+                                ]}>
+                                <Text
+                                  style={[styles.choiceText, selected && styles.choiceTextActive]}>
+                                  {status}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </View>
+
+                      <View style={styles.cardField}>
+                        <FieldLabel text="性格侧写" />
+                        <View style={styles.cardTextAreaWrap}>
+                          <TextInput
+                            value={cardPersonalityText}
+                            onChangeText={setCardPersonalityText}
+                            placeholder="写一点它的性格、状态和相处感受"
+                            placeholderTextColor={Theme.colors.placeholder}
+                            multiline
+                            style={styles.cardTextArea}
+                          />
+                        </View>
+                      </View>
+
+                      <View style={styles.cardField}>
+                        <FieldLabel text="不适合的领养人（可选）" />
+                        <View style={styles.cardTextAreaWrap}>
+                          <TextInput
+                            value={cardAvoidAdopterText}
+                            onChangeText={setCardAvoidAdopterText}
+                            placeholder="例如：不适合长时间不在家的家庭"
+                            placeholderTextColor={Theme.colors.placeholder}
+                            multiline
+                            style={styles.cardTextArea}
+                          />
+                        </View>
+                      </View>
+
+                      <View style={styles.cardField}>
+                        <View style={styles.cardTagHeader}>
+                          <FieldLabel text="AI 标签" />
+                          <Pressable
+                            disabled={!canGenerateCardTags}
+                            onPress={handleGenerateCardTags}
+                            style={({ pressed }) => [
+                              styles.cardTagButton,
+                              pressed && canGenerateCardTags && styles.cardTagButtonPressed,
+                              !canGenerateCardTags && styles.cardTagButtonDisabled,
+                            ]}>
+                            <Text style={styles.cardTagButtonText}>
+                              {cardTagStatus === 'generating' ? '生成中...' : '生成标签'}
+                            </Text>
+                          </Pressable>
+                        </View>
+                        <View style={styles.cardTagRow}>
+                          {cardTags.length > 0 ? (
+                            cardTags.map((tag) => (
+                              <View key={tag} style={styles.cardTagPill}>
+                                <Text style={styles.cardTagText}>{tag}</Text>
+                              </View>
+                            ))
+                          ) : (
+                            <Text style={styles.cardTagEmpty}>生成后会显示在这里</Text>
+                          )}
+                        </View>
+                        {cardTagError ? (
+                          <Text style={styles.photoErrorText}>{cardTagError}</Text>
+                        ) : null}
+                      </View>
+
+                      <Pressable
+                        disabled={isSubmitting || !canSubmitCardForm}
+                        onPress={() => {
+                          void handleCreateCard();
+                        }}
+                        style={({ pressed }) => [
+                          styles.submitButton,
+                          (isSubmitting || !canSubmitCardForm) && styles.submitButtonDisabled,
+                          pressed && !isSubmitting && canSubmitCardForm && styles.submitButtonPressed,
+                        ]}>
+                        <Text style={styles.submitButtonText}>
+                          {isSubmitting ? '提交中...' : submitLabel}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View style={styles.formFields}>
+                      <View>
+                        <FieldLabel text="标题" />
+                        <TextInput
+                          value={contentTitle}
+                          onChangeText={setContentTitle}
+                          placeholder={`输入${uploadType === 'update' ? '动态' : '指南'}标题`}
+                          placeholderTextColor={Theme.colors.placeholder}
+                          style={styles.formInput}
+                        />
+                      </View>
+                      <View>
+                        <FieldLabel text="内容摘要" />
+                        <TextInput
+                          value={contentSubtitle}
+                          onChangeText={setContentSubtitle}
+                          placeholder="写一句用户点进来就能看懂的话"
+                          placeholderTextColor={Theme.colors.placeholder}
+                          multiline
+                          style={[styles.formInput, styles.formInputMultiline]}
+                        />
+                      </View>
+                      <View>
+                        <FieldLabel text="标签（可选）" />
+                        <TextInput
+                          value={contentTag}
+                          onChangeText={setContentTag}
+                          placeholder="例如：新手必看 / 经验分享"
+                          placeholderTextColor={Theme.colors.placeholder}
+                          style={styles.formInput}
+                        />
+                        <Text style={styles.formHint}>动态和指南现在都能直接发布。</Text>
+                      </View>
+
+                      <Pressable
+                        disabled={isSubmitting || !canSubmitContentForm}
+                        onPress={() => {
+                          void handleCreateContent();
+                        }}
+                        style={({ pressed }) => [
+                          styles.submitButton,
+                          (isSubmitting || !canSubmitContentForm) && styles.submitButtonDisabled,
+                          pressed &&
+                            !isSubmitting &&
+                            canSubmitContentForm &&
+                            styles.submitButtonPressed,
+                        ]}>
+                        <Text style={styles.submitButtonText}>
+                          {isSubmitting ? '发布中...' : submitLabel}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  )}
+
+                  {submitMessage ? (
+                    <Text
+                      style={[
+                        styles.submitMessage,
+                        submitStatus === 'error'
+                          ? styles.submitMessageError
+                          : styles.submitMessageSuccess,
+                      ]}>
+                      {submitMessage}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
 
         {/* Spacer for tab bar */}
         <View style={{ height: 100 }} />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 

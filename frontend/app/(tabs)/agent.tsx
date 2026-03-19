@@ -2,19 +2,36 @@ import * as React from 'react';
 import {
   Animated,
   Easing,
+  type GestureResponderEvent,
   Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  type PressableProps,
   ScrollView,
   StyleSheet,
+  type StyleProp,
   TextInput,
   View,
+  type ViewStyle,
 } from 'react-native';
 import { Text } from '@/components/base-text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import Reanimated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
+import {
+  getBubbleMotionPreset,
+  getPhaseMotionPreset,
+  getPressMotionPreset,
+  type PressMotionKind,
+} from '@/components/agent/motion';
+import { buildStreamingFrames, getStreamingTickMs } from '@/components/agent/streaming';
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
 import { Theme } from '@/constants/theme';
@@ -64,6 +81,7 @@ const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 const ensureChinese = (message: string, fallback: string) =>
   /[\u4e00-\u9fff]/.test(message) ? message : fallback;
 const WAITING_TEXT_INTERVAL_MS = 2600;
+const STREAMING_LEAD_IN_MS = 90;
 const RECOMMEND_MAX_RETRIES = 3;
 const RECOMMEND_RETRY_BASE_DELAY_MS = 1200;
 const RECOMMEND_RETRY_MAX_DELAY_MS = 5000;
@@ -76,7 +94,6 @@ const RECOMMENDING_WAITING_TEXTS = [
   '正在生成推荐结果...',
 ];
 const VOICE_TRANSCRIBE_URL = `${API_BASE_URL}/api/voice/transcribe`;
-const TEST_TRANSCRIBE_URL = `${API_BASE_URL}/api/voice/transcribe-test-file`;
 const MALICIOUS_TERMINATION_TEXT =
   '根据您目前的情况，暂时没有与您匹配的宠物呢，可以去宠物广场看看～';
 
@@ -153,6 +170,142 @@ function buildSystemPromptFromQuiz(answers: Record<number, string>): string {
   ].join('\n');
 }
 
+type AnimatedPressableProps = Omit<PressableProps, 'children' | 'style'> & {
+  kind: PressMotionKind;
+  style?: StyleProp<ViewStyle>;
+  pressedStyle?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+};
+
+function AnimatedPressable({
+  kind,
+  style,
+  pressedStyle,
+  disabled = false,
+  children,
+  onPressIn,
+  onPressOut,
+  ...props
+}: AnimatedPressableProps) {
+  const preset = getPressMotionPreset(kind);
+  const scale = useSharedValue(1);
+  const translateY = useSharedValue(0);
+  const [isPressed, setIsPressed] = React.useState(false);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }, { scale: scale.value }],
+  }));
+
+  const handlePressIn = React.useCallback(
+    (event: GestureResponderEvent) => {
+      setIsPressed(true);
+      scale.value = withTiming(preset.pressedScale, { duration: 150 });
+      translateY.value = withTiming(preset.translateY, { duration: 150 });
+      onPressIn?.(event);
+    },
+    [onPressIn, preset.pressedScale, preset.translateY, scale, translateY]
+  );
+
+  const handlePressOut = React.useCallback(
+    (event: GestureResponderEvent) => {
+      setIsPressed(false);
+      scale.value = withSpring(1, preset.releaseSpring);
+      translateY.value = withSpring(0, preset.releaseSpring);
+      onPressOut?.(event);
+    },
+    [onPressOut, preset.releaseSpring, scale, translateY]
+  );
+
+  return (
+    <Pressable
+      {...props}
+      disabled={disabled}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}>
+      <Reanimated.View
+        style={[
+          style,
+          disabled && { opacity: preset.disabledOpacity },
+          isPressed && pressedStyle,
+          animatedStyle,
+        ]}>
+        {children}
+      </Reanimated.View>
+    </Pressable>
+  );
+}
+
+function AnimatedPhaseView({
+  phaseKey,
+  style,
+  children,
+}: {
+  phaseKey: FlowPhase;
+  style?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  const preset = getPhaseMotionPreset();
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(preset.fromY);
+
+  React.useEffect(() => {
+    opacity.value = 0;
+    translateY.value = preset.fromY;
+    opacity.value = withTiming(1, { duration: preset.duration });
+    translateY.value = withTiming(0, { duration: preset.duration });
+  }, [opacity, phaseKey, preset.duration, preset.fromY, translateY]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  return <Reanimated.View style={[style, animatedStyle]}>{children}</Reanimated.View>;
+}
+
+function AnimatedChatBubble({
+  messageKey,
+  role,
+  text,
+}: {
+  messageKey: string;
+  role: ChatRole;
+  text: string;
+}) {
+  const preset = getBubbleMotionPreset(role);
+  const opacity = useSharedValue(0);
+  const translateX = useSharedValue(preset.fromX);
+  const translateY = useSharedValue(preset.fromY);
+
+  React.useEffect(() => {
+    opacity.value = 0;
+    translateX.value = preset.fromX;
+    translateY.value = preset.fromY;
+    opacity.value = withTiming(1, { duration: preset.duration });
+    translateX.value = withTiming(0, { duration: preset.duration });
+    translateY.value = withTiming(0, { duration: preset.duration });
+  }, [
+    messageKey,
+    opacity,
+    preset.duration,
+    preset.fromX,
+    preset.fromY,
+    translateX,
+    translateY,
+  ]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateX: translateX.value }, { translateY: translateY.value }],
+  }));
+
+  return (
+    <Reanimated.View style={animatedStyle}>
+      <ChatBubble role={role} text={text} />
+    </Reanimated.View>
+  );
+}
+
 export default function AgentScreen() {
   const [hasStarted, setHasStarted] = React.useState(false);
   const [phase, setPhase] = React.useState<FlowPhase>('quiz');
@@ -169,15 +322,16 @@ export default function AgentScreen() {
   const [evaluation, setEvaluation] = React.useState<EvaluationSummary | null>(null);
   const [recommendedItems, setRecommendedItems] = React.useState<AgentDecisionItem[]>([]);
   const [isTranscribing, setIsTranscribing] = React.useState(false);
-  const [isTestingSample, setIsTestingSample] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [waitingIndex, setWaitingIndex] = React.useState(0);
+  const [isStreamingReply, setIsStreamingReply] = React.useState(false);
   const scrollRef = React.useRef<ScrollView | null>(null);
   const hasStartedRef = React.useRef(false);
+  const streamingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const { startRecording, stopRecording, isRecording } = useVoiceRecorder();
 
   const isBusy = status === 'evaluating' || status === 'recommending';
-  const isInputLocked = isBusy || isTranscribing || isTestingSample;
+  const isInputLocked = isBusy || isTranscribing || isStreamingReply;
   const canSend = input.trim().length > 0 && !isInputLocked && phase === 'chat' && !evaluation;
   const waitingMessages =
     status === 'recommending' ? RECOMMENDING_WAITING_TEXTS : EVALUATING_WAITING_TEXTS;
@@ -199,9 +353,52 @@ export default function AgentScreen() {
     return () => clearInterval(interval);
   }, [isBusy, status]);
 
-  const appendMessage = React.useCallback((role: ChatRole, content: string) => {
-    setMessages((prev) => [...prev, { id: createId(), role, content }]);
+  const stopStreamingReply = React.useCallback(() => {
+    if (streamingTimeoutRef.current) {
+      clearTimeout(streamingTimeoutRef.current);
+      streamingTimeoutRef.current = null;
+    }
+    setIsStreamingReply(false);
   }, []);
+
+  const appendAiMessage = React.useCallback(
+    (content: string, onComplete?: () => void) => {
+      const frames = buildStreamingFrames(content);
+      if (!frames.length) {
+        onComplete?.();
+        return;
+      }
+
+      stopStreamingReply();
+      const messageId = createId();
+      const tickMs = getStreamingTickMs(Array.from(content.trim()).length);
+      let frameIndex = 0;
+
+      setMessages((prev) => [...prev, { id: messageId, role: 'ai', content: '' }]);
+      setIsStreamingReply(true);
+
+      const pushNextFrame = () => {
+        const nextFrame = frames[frameIndex];
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === messageId ? { ...message, content: nextFrame } : message
+          )
+        );
+        frameIndex += 1;
+
+        if (frameIndex >= frames.length) {
+          stopStreamingReply();
+          onComplete?.();
+          return;
+        }
+
+        streamingTimeoutRef.current = setTimeout(pushNextFrame, tickMs);
+      };
+
+      streamingTimeoutRef.current = setTimeout(pushNextFrame, STREAMING_LEAD_IN_MS);
+    },
+    [stopStreamingReply]
+  );
 
   const buildAgentMessages = React.useCallback((items: ChatMessage[]) => {
     return items
@@ -223,8 +420,8 @@ export default function AgentScreen() {
     setRecommendedItems([]);
     setEvaluation({ profile: MALICIOUS_TERMINATION_TEXT });
     setErrorMessage(null);
-    appendMessage('ai', MALICIOUS_TERMINATION_TEXT);
-  }, [appendMessage]);
+    appendAiMessage(MALICIOUS_TERMINATION_TEXT);
+  }, [appendAiMessage]);
 
   const loadPetCards = React.useCallback(async () => {
     if (petCardsStatus === 'ready' && petCards.length) {
@@ -250,7 +447,14 @@ export default function AgentScreen() {
     }
   }, [hasStarted, loadPetCards]);
 
+  React.useEffect(() => {
+    return () => {
+      stopStreamingReply();
+    };
+  }, [stopStreamingReply]);
+
   const resetConversationState = React.useCallback(() => {
+    stopStreamingReply();
     setMessages([]);
     setInput('');
     setStatus('idle');
@@ -259,8 +463,7 @@ export default function AgentScreen() {
     setErrorMessage(null);
     setWaitingIndex(0);
     setIsTranscribing(false);
-    setIsTestingSample(false);
-  }, []);
+  }, [stopStreamingReply]);
 
   const handleQuizComplete = React.useCallback((answers: Record<number, string>) => {
     const quizPrompt = buildSystemPromptFromQuiz(answers);
@@ -342,14 +545,15 @@ export default function AgentScreen() {
         if (data?.endverification) {
           const summary = buildEvaluationSummary(data);
           setEvaluation(summary);
-          appendMessage('ai', formatEvaluationSummary(summary));
-          setPhase('survey');
+          appendAiMessage(formatEvaluationSummary(summary), () => {
+            setPhase('survey');
+          });
           return undefined;
         }
 
         const questions = normalizeQuestions(data);
         if (questions.length) {
-          appendMessage('ai', questions[0]);
+          appendAiMessage(questions[0]);
         }
         return undefined;
       })
@@ -362,8 +566,8 @@ export default function AgentScreen() {
         setStatus('idle');
       });
   }, [
-    appendMessage,
     activeSystemPrompt,
+    appendAiMessage,
     formatEvaluationSummary,
     phase,
     handleMaliciousInterruption,
@@ -431,43 +635,6 @@ export default function AgentScreen() {
     }
   }, [evaluation, setErrorMessage, stopRecording]);
 
-  const handleTestAudioClick = React.useCallback(async () => {
-    if (isInputLocked || evaluation) {
-      return;
-    }
-    try {
-      setErrorMessage(null);
-      setIsTestingSample(true);
-
-      const response = await fetch(TEST_TRANSCRIBE_URL, {
-        method: 'POST',
-      });
-
-      let payload: { text?: string; error?: string } | null = null;
-      try {
-        payload = await response.json();
-      } catch {
-        payload = null;
-      }
-
-      if (!response.ok) {
-        const message = payload?.error ?? `HTTP ${response.status}`;
-        throw new Error(String(message));
-      }
-
-      const text = typeof payload?.text === 'string' ? payload.text.trim() : '';
-      if (text.length === 0) {
-        throw new Error('测试音频识别结果为空');
-      }
-      setInput(text);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '';
-      setErrorMessage(message || '测试音频识别失败');
-    } finally {
-      setIsTestingSample(false);
-    }
-  }, [evaluation, isInputLocked, setErrorMessage]);
-
   const handleSend = async () => {
     if (!activeSystemPrompt || phase !== 'chat') {
       return;
@@ -500,12 +667,13 @@ export default function AgentScreen() {
       if (data?.endverification) {
         const summary = buildEvaluationSummary(data);
         setEvaluation(summary);
-        appendMessage('ai', formatEvaluationSummary(summary));
-        setPhase('survey');
+        appendAiMessage(formatEvaluationSummary(summary), () => {
+          setPhase('survey');
+        });
       } else {
         const questions = normalizeQuestions(data);
         if (questions.length) {
-          appendMessage('ai', questions[0]);
+          appendAiMessage(questions[0]);
         }
       }
     } catch (error) {
@@ -542,159 +710,176 @@ export default function AgentScreen() {
 
   if (phase === 'quiz') {
     return (
-      <QuizScreen
-        onComplete={handleQuizComplete}
-        onBack={() => setHasStarted(false)}
-      />
+      <AnimatedPhaseView phaseKey="quiz" style={styles.phaseFill}>
+        <QuizScreen
+          onComplete={handleQuizComplete}
+          onBack={() => setHasStarted(false)}
+        />
+      </AnimatedPhaseView>
     );
   }
 
   if (phase === 'survey') {
     return (
-      <SurveyScreen
-        onComplete={handleSurveyComplete}
-        onSkip={handleSurveySkip}
-        onBack={() => setPhase('chat')}
-      />
+      <AnimatedPhaseView phaseKey="survey" style={styles.phaseFill}>
+        <SurveyScreen
+          onComplete={handleSurveyComplete}
+          onSkip={handleSurveySkip}
+          onBack={() => setPhase('chat')}
+        />
+      </AnimatedPhaseView>
     );
   }
 
   if (phase === 'result') {
     return (
-      <SafeAreaView style={styles.safeArea as object}>
-        <View style={styles.background as object}>
-          <View style={[styles.blob, styles.blobLeft]} />
-          <View style={[styles.blob, styles.blobRight]} />
-          <View style={[styles.blob, styles.blobBottom]} />
-        </View>
-        <ScrollView contentContainerStyle={quizStyles.resultContent} bounces={false}>
-          
-          <Text style={quizStyles.resultTitle}>你的专属宠物匹配结果</Text>
-          {evaluation ? (
-            <View style={quizStyles.resultProfileCard}>
-              <Text style={quizStyles.resultProfileText}>{evaluation.profile}</Text>
-            </View>
-          ) : null}
+      <AnimatedPhaseView phaseKey="result" style={styles.phaseFill}>
+        <SafeAreaView style={styles.safeArea as object}>
+          <View style={styles.background as object}>
+            <View style={[styles.blob, styles.blobLeft]} />
+            <View style={[styles.blob, styles.blobRight]} />
+            <View style={[styles.blob, styles.blobBottom]} />
+          </View>
+          <ScrollView contentContainerStyle={quizStyles.resultContent} bounces={false}>
+            <Text style={quizStyles.resultTitle}>你的专属宠物匹配结果</Text>
+            {evaluation ? (
+              <View style={quizStyles.resultProfileCard}>
+                <Text style={quizStyles.resultProfileText}>{evaluation.profile}</Text>
+              </View>
+            ) : null}
 
-          {status === 'recommending' && visiblePets.length === 0 ? (
-            <Text style={styles.matchWaitingText}>正在为您匹配伙伴…</Text>
-          ) : null}
+            {status === 'recommending' && visiblePets.length === 0 ? (
+              <Text style={styles.matchWaitingText}>正在为您匹配伙伴…</Text>
+            ) : null}
 
-          {visiblePets.length > 0 ? (
-            <>
-              <Text style={quizStyles.resultSubTitle}>
-                我们为你匹配到了最适合一起生活的小伙伴
-              </Text>
-              <Text style={quizStyles.resultSwipeHint}>见下方，右滑查看更多……</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.matchListContent}
-                style={styles.matchList}>
-                {visiblePets.map(({ pet, confidence }) => (
-                  <PetCard key={pet.id} pet={pet} confidence={confidence} />
-                ))}
-              </ScrollView>
-            </>
-          ) : null}
+            {visiblePets.length > 0 ? (
+              <>
+                <Text style={quizStyles.resultSubTitle}>
+                  我们为你匹配到了最适合一起生活的小伙伴
+                </Text>
+                <Text style={quizStyles.resultSwipeHint}>见下方，右滑查看更多……</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.matchListContent}
+                  style={styles.matchList}>
+                  {visiblePets.map(({ pet, confidence }) => (
+                    <PetCard key={pet.id} pet={pet} confidence={confidence} />
+                  ))}
+                </ScrollView>
+              </>
+            ) : null}
 
-          <Pressable
-            style={({ pressed }) => [
-              quizStyles.resultRestartButton,
-              pressed && styles.sendButtonPressed,
-            ]}
-            onPress={() => {
-              hasStartedRef.current = false;
-              setHasStarted(false);
-            }}>
-            <Text style={quizStyles.resultRestartText}>重新测试</Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
+            <AnimatedPressable
+              kind="cta"
+              style={quizStyles.resultRestartButton}
+              onPress={() => {
+                hasStartedRef.current = false;
+                setHasStarted(false);
+              }}>
+              <Text style={quizStyles.resultRestartText}>重新测试</Text>
+            </AnimatedPressable>
+          </ScrollView>
+        </SafeAreaView>
+      </AnimatedPhaseView>
     );
   }
 
   // phase === 'chat'
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.background}>
-        <View style={[styles.blob, styles.blobLeft]} />
-        <View style={[styles.blob, styles.blobRight]} />
-        <View style={[styles.blob, styles.blobBottom]} />
-      </View>
-
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <View style={styles.header}>
-          <Text style={styles.overline}>Pawzy</Text>
-          <Text style={styles.title}>和你聊聊</Text>
+    <AnimatedPhaseView phaseKey="chat" style={styles.phaseFill}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.background}>
+          <View style={[styles.blob, styles.blobLeft]} />
+          <View style={[styles.blob, styles.blobRight]} />
+          <View style={[styles.blob, styles.blobBottom]} />
         </View>
 
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={styles.chatList}
-          keyboardShouldPersistTaps="handled">
-          {messages.map((message) => (
-            <ChatBubble key={message.id} role={message.role} text={message.content} />
-          ))}
+        <KeyboardAvoidingView
+          style={styles.container}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.header}>
+            <Text style={styles.overline}>Pawzy</Text>
+            <Text style={styles.title}>和你聊聊</Text>
+          </View>
 
-          {isBusy ? <ChatBubble role="ai" text={waitingText} /> : null}
-        </ScrollView>
-
-        {!evaluation ? (
-          <View style={styles.inputDock}>
-            <View style={styles.inputRow}>
-              <TextInput
-                value={input}
-                onChangeText={setInput}
-                placeholder="输入你的回答"
-                placeholderTextColor="#A1A1A1"
-                style={styles.input}
-                returnKeyType="send"
-                onSubmitEditing={handleSend}
-                editable={!isInputLocked}
+          <ScrollView
+            ref={scrollRef}
+            contentContainerStyle={styles.chatList}
+            keyboardShouldPersistTaps="handled">
+            {messages.map((message) => (
+              <AnimatedChatBubble
+                key={message.id}
+                messageKey={message.id}
+                role={message.role}
+                text={message.content}
               />
-              <Pressable
-                onPressIn={handleVoicePressIn}
-                onPressOut={handleVoicePressOut}
-                disabled={isInputLocked || evaluation !== null}
-                style={({ pressed }) => [
-                  styles.voiceButton,
-                  isRecording && styles.voiceButtonRecording,
-                  (isInputLocked || evaluation !== null) && styles.voiceButtonDisabled,
-                  pressed && !(isInputLocked || evaluation !== null) && styles.sendButtonPressed,
-                ]}>
-                <Text style={styles.voiceButtonText}>
-                  {isRecording ? '录音中' : isTranscribing ? '识别中' : '语音'}
-                </Text>
-              </Pressable>
-              
-              <Pressable
-                onPress={handleSend}
-                disabled={!canSend}
-                style={({ pressed }) => [
-                  styles.sendButton,
-                  !canSend && styles.sendButtonDisabled,
-                  pressed && canSend && styles.sendButtonPressed,
-                ]}>
-                <SendIcon width={Theme.sizes.s18} height={Theme.sizes.s18} />
-              </Pressable>
-            </View>
-            <Text style={styles.helperText}>
-              {isTestingSample
-                ? '正在请求根目录 test.m4a...'
-                : isRecording
+            ))}
+
+            {isBusy ? (
+              <AnimatedChatBubble
+                key={`waiting-${status}`}
+                messageKey={`waiting-${status}`}
+                role="ai"
+                text={waitingText}
+              />
+            ) : null}
+          </ScrollView>
+
+          {!evaluation ? (
+            <View style={styles.inputDock}>
+              <View style={styles.inputRow}>
+                <TextInput
+                  value={input}
+                  onChangeText={setInput}
+                  placeholder="输入你的回答"
+                  placeholderTextColor="#A1A1A1"
+                  style={styles.input}
+                  returnKeyType="send"
+                  onSubmitEditing={handleSend}
+                  editable={!isInputLocked}
+                />
+                <AnimatedPressable
+                  kind="cta"
+                  onPressIn={handleVoicePressIn}
+                  onPressOut={handleVoicePressOut}
+                  disabled={isInputLocked || evaluation !== null}
+                  pressedStyle={styles.voiceButtonPressed}
+                  style={[
+                    styles.voiceButton,
+                    isRecording && styles.voiceButtonRecording,
+                    (isInputLocked || evaluation !== null) && styles.voiceButtonDisabled,
+                  ]}>
+                  <Text style={styles.voiceButtonText}>
+                    {isRecording ? '录音中' : isTranscribing ? '识别中' : '语音'}
+                  </Text>
+                </AnimatedPressable>
+
+                <AnimatedPressable
+                  kind="hero-icon"
+                  onPress={handleSend}
+                  disabled={!canSend}
+                  pressedStyle={styles.sendButtonPressed}
+                  style={[
+                    styles.sendButton,
+                    !canSend && styles.sendButtonDisabled,
+                  ]}>
+                  <SendIcon width={Theme.sizes.s18} height={Theme.sizes.s18} />
+                </AnimatedPressable>
+              </View>
+              <Text style={styles.helperText}>
+                {isRecording
                   ? '松开后将语音转成文字'
                   : isTranscribing
                     ? '正在识别语音...'
                     : errorMessage ?? ''}
-            </Text>
-          </View>
-        ) : null}
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+              </Text>
+            </View>
+          ) : null}
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </AnimatedPhaseView>
   );
 }
 
@@ -884,14 +1069,12 @@ function AgentStartScreen({ onStart }: { onStart: () => void }) {
             <Text style={startStyles.subhead}>准备好寻找你的伙伴了吗</Text>
 
             {/* CTA button */}
-            <Pressable
+            <AnimatedPressable
+              kind="cta"
               onPress={onStart}
-              style={({ pressed }) => [
-                startStyles.ctaButton,
-                pressed && startStyles.ctaButtonPressed,
-              ]}>
+              style={startStyles.ctaButton}>
               <Text style={startStyles.ctaText}>开始测试</Text>
-            </Pressable>
+            </AnimatedPressable>
 
             {/* Tip */}
             <Text style={startStyles.tipText}>随时开始，只需几分钟哦</Text>
@@ -949,13 +1132,13 @@ function QuizScreen({
           {current.options.map((opt) => {
             const selected = answers[current.id] === opt.text;
             return (
-              <Pressable
+              <AnimatedPressable
                 key={opt.label}
+                kind="card"
                 onPress={() => handleSelect(opt.text)}
-                style={({ pressed }) => [
+                style={[
                   quizStyles.optionCard,
                   selected && quizStyles.optionCardSelected,
-                  pressed && { transform: [{ scale: 0.97 }] },
                 ]}>
                 <View style={[quizStyles.optionLabel, selected && quizStyles.optionLabelSelected]}>
                   <Text
@@ -969,7 +1152,7 @@ function QuizScreen({
                 <Text style={[quizStyles.optionText, selected && quizStyles.optionTextSelected]}>
                   {opt.text}
                 </Text>
-              </Pressable>
+              </AnimatedPressable>
             );
           })}
         </ScrollView>
@@ -1028,20 +1211,20 @@ function SurveyScreen({
             </View>
           ))}
 
-          <Pressable
+          <AnimatedPressable
+            kind="cta"
             onPress={() => onComplete(formData)}
             disabled={!hasAnyData}
-            style={({ pressed }) => [
+            style={[
               quizStyles.surveySubmitButton,
               !hasAnyData && styles.sendButtonDisabled,
-              pressed && hasAnyData && styles.sendButtonPressed,
             ]}>
             <Text style={quizStyles.surveySubmitText}>提交并查看结果</Text>
-          </Pressable>
+          </AnimatedPressable>
 
-          <Pressable onPress={onSkip} style={quizStyles.surveySkipWrap}>
+          <AnimatedPressable kind="text" onPress={onSkip} style={quizStyles.surveySkipWrap}>
             <Text style={quizStyles.surveySkipText}>此处可跳过</Text>
-          </Pressable>
+          </AnimatedPressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -1283,6 +1466,9 @@ const styles = StyleSheet.create({
   container: {
     flex: Theme.layout.full,
   },
+  phaseFill: {
+    flex: Theme.layout.full,
+  },
   background: {
     ...StyleSheet.absoluteFillObject,
   },
@@ -1458,6 +1644,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
+    backgroundColor: '#FFF2D8',
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: 'rgba(237, 132, 63, 0.30)',
+    shadowColor: 'rgba(237, 132, 63, 0.20)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  sendButtonPressed: {
+    backgroundColor: '#F4C17F',
+    borderColor: '#F4C17F',
   },
   voiceButton: {
     minWidth: 54,
@@ -1471,6 +1669,10 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     paddingHorizontal: 10,
   },
+  voiceButtonPressed: {
+    backgroundColor: '#F8E4BF',
+    borderColor: 'rgba(237, 132, 63, 0.45)',
+  },
   voiceButtonRecording: {
     backgroundColor: '#F4C17F',
     borderColor: '#F4C17F',
@@ -1483,28 +1685,8 @@ const styles = StyleSheet.create({
     color: '#875B47',
     fontFamily: Theme.fonts.regular,
   },
-  testButton: {
-    minWidth: 66,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFF6EA',
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: 'rgba(237, 132, 63, 0.35)',
-    marginLeft: 8,
-    paddingHorizontal: 10,
-  },
-  testButtonText: {
-    fontSize: 11,
-    color: '#875B47',
-    fontFamily: Theme.fonts.regular,
-  },
   sendButtonDisabled: {
     opacity: 0.4,
-  },
-  sendButtonPressed: {
-    transform: [{ scale: 0.95 }],
   },
   helperText: {
     marginTop: 8,
@@ -1629,9 +1811,6 @@ const startStyles = StyleSheet.create({
     shadowOpacity: 0.76,
     shadowRadius: 10.6,
     elevation: 6,
-  },
-  ctaButtonPressed: {
-    transform: [{ scale: 0.97 }],
   },
   ctaText: {
     fontSize: 18,
