@@ -31,6 +31,7 @@ import {
   getPressMotionPreset,
   type PressMotionKind,
 } from '@/components/agent/motion';
+import { buildStreamingFrames, getStreamingTickMs } from '@/components/agent/streaming';
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
 import { Theme } from '@/constants/theme';
@@ -80,6 +81,7 @@ const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 const ensureChinese = (message: string, fallback: string) =>
   /[\u4e00-\u9fff]/.test(message) ? message : fallback;
 const WAITING_TEXT_INTERVAL_MS = 2600;
+const STREAMING_LEAD_IN_MS = 90;
 const RECOMMEND_MAX_RETRIES = 3;
 const RECOMMEND_RETRY_BASE_DELAY_MS = 1200;
 const RECOMMEND_RETRY_MAX_DELAY_MS = 5000;
@@ -322,12 +324,14 @@ export default function AgentScreen() {
   const [isTranscribing, setIsTranscribing] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [waitingIndex, setWaitingIndex] = React.useState(0);
+  const [isStreamingReply, setIsStreamingReply] = React.useState(false);
   const scrollRef = React.useRef<ScrollView | null>(null);
   const hasStartedRef = React.useRef(false);
+  const streamingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const { startRecording, stopRecording, isRecording } = useVoiceRecorder();
 
   const isBusy = status === 'evaluating' || status === 'recommending';
-  const isInputLocked = isBusy || isTranscribing;
+  const isInputLocked = isBusy || isTranscribing || isStreamingReply;
   const canSend = input.trim().length > 0 && !isInputLocked && phase === 'chat' && !evaluation;
   const waitingMessages =
     status === 'recommending' ? RECOMMENDING_WAITING_TEXTS : EVALUATING_WAITING_TEXTS;
@@ -349,9 +353,52 @@ export default function AgentScreen() {
     return () => clearInterval(interval);
   }, [isBusy, status]);
 
-  const appendMessage = React.useCallback((role: ChatRole, content: string) => {
-    setMessages((prev) => [...prev, { id: createId(), role, content }]);
+  const stopStreamingReply = React.useCallback(() => {
+    if (streamingTimeoutRef.current) {
+      clearTimeout(streamingTimeoutRef.current);
+      streamingTimeoutRef.current = null;
+    }
+    setIsStreamingReply(false);
   }, []);
+
+  const appendAiMessage = React.useCallback(
+    (content: string, onComplete?: () => void) => {
+      const frames = buildStreamingFrames(content);
+      if (!frames.length) {
+        onComplete?.();
+        return;
+      }
+
+      stopStreamingReply();
+      const messageId = createId();
+      const tickMs = getStreamingTickMs(Array.from(content.trim()).length);
+      let frameIndex = 0;
+
+      setMessages((prev) => [...prev, { id: messageId, role: 'ai', content: '' }]);
+      setIsStreamingReply(true);
+
+      const pushNextFrame = () => {
+        const nextFrame = frames[frameIndex];
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === messageId ? { ...message, content: nextFrame } : message
+          )
+        );
+        frameIndex += 1;
+
+        if (frameIndex >= frames.length) {
+          stopStreamingReply();
+          onComplete?.();
+          return;
+        }
+
+        streamingTimeoutRef.current = setTimeout(pushNextFrame, tickMs);
+      };
+
+      streamingTimeoutRef.current = setTimeout(pushNextFrame, STREAMING_LEAD_IN_MS);
+    },
+    [stopStreamingReply]
+  );
 
   const buildAgentMessages = React.useCallback((items: ChatMessage[]) => {
     return items
@@ -373,8 +420,8 @@ export default function AgentScreen() {
     setRecommendedItems([]);
     setEvaluation({ profile: MALICIOUS_TERMINATION_TEXT });
     setErrorMessage(null);
-    appendMessage('ai', MALICIOUS_TERMINATION_TEXT);
-  }, [appendMessage]);
+    appendAiMessage(MALICIOUS_TERMINATION_TEXT);
+  }, [appendAiMessage]);
 
   const loadPetCards = React.useCallback(async () => {
     if (petCardsStatus === 'ready' && petCards.length) {
@@ -400,7 +447,14 @@ export default function AgentScreen() {
     }
   }, [hasStarted, loadPetCards]);
 
+  React.useEffect(() => {
+    return () => {
+      stopStreamingReply();
+    };
+  }, [stopStreamingReply]);
+
   const resetConversationState = React.useCallback(() => {
+    stopStreamingReply();
     setMessages([]);
     setInput('');
     setStatus('idle');
@@ -409,7 +463,7 @@ export default function AgentScreen() {
     setErrorMessage(null);
     setWaitingIndex(0);
     setIsTranscribing(false);
-  }, []);
+  }, [stopStreamingReply]);
 
   const handleQuizComplete = React.useCallback((answers: Record<number, string>) => {
     const quizPrompt = buildSystemPromptFromQuiz(answers);
@@ -491,14 +545,15 @@ export default function AgentScreen() {
         if (data?.endverification) {
           const summary = buildEvaluationSummary(data);
           setEvaluation(summary);
-          appendMessage('ai', formatEvaluationSummary(summary));
-          setPhase('survey');
+          appendAiMessage(formatEvaluationSummary(summary), () => {
+            setPhase('survey');
+          });
           return undefined;
         }
 
         const questions = normalizeQuestions(data);
         if (questions.length) {
-          appendMessage('ai', questions[0]);
+          appendAiMessage(questions[0]);
         }
         return undefined;
       })
@@ -511,8 +566,8 @@ export default function AgentScreen() {
         setStatus('idle');
       });
   }, [
-    appendMessage,
     activeSystemPrompt,
+    appendAiMessage,
     formatEvaluationSummary,
     phase,
     handleMaliciousInterruption,
@@ -612,12 +667,13 @@ export default function AgentScreen() {
       if (data?.endverification) {
         const summary = buildEvaluationSummary(data);
         setEvaluation(summary);
-        appendMessage('ai', formatEvaluationSummary(summary));
-        setPhase('survey');
+        appendAiMessage(formatEvaluationSummary(summary), () => {
+          setPhase('survey');
+        });
       } else {
         const questions = normalizeQuestions(data);
         if (questions.length) {
-          appendMessage('ai', questions[0]);
+          appendAiMessage(questions[0]);
         }
       }
     } catch (error) {
@@ -785,10 +841,11 @@ export default function AgentScreen() {
                   editable={!isInputLocked}
                 />
                 <AnimatedPressable
-                  kind="text"
+                  kind="cta"
                   onPressIn={handleVoicePressIn}
                   onPressOut={handleVoicePressOut}
                   disabled={isInputLocked || evaluation !== null}
+                  pressedStyle={styles.voiceButtonPressed}
                   style={[
                     styles.voiceButton,
                     isRecording && styles.voiceButtonRecording,
@@ -800,9 +857,10 @@ export default function AgentScreen() {
                 </AnimatedPressable>
 
                 <AnimatedPressable
-                  kind="icon"
+                  kind="hero-icon"
                   onPress={handleSend}
                   disabled={!canSend}
+                  pressedStyle={styles.sendButtonPressed}
                   style={[
                     styles.sendButton,
                     !canSend && styles.sendButtonDisabled,
@@ -1586,6 +1644,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
+    backgroundColor: '#FFF2D8',
+    borderWidth: Theme.borderWidth.hairline,
+    borderColor: 'rgba(237, 132, 63, 0.30)',
+    shadowColor: 'rgba(237, 132, 63, 0.20)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  sendButtonPressed: {
+    backgroundColor: '#F4C17F',
+    borderColor: '#F4C17F',
   },
   voiceButton: {
     minWidth: 54,
@@ -1598,6 +1668,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(237, 132, 63, 0.35)',
     marginLeft: 8,
     paddingHorizontal: 10,
+  },
+  voiceButtonPressed: {
+    backgroundColor: '#F8E4BF',
+    borderColor: 'rgba(237, 132, 63, 0.45)',
   },
   voiceButtonRecording: {
     backgroundColor: '#F4C17F',
