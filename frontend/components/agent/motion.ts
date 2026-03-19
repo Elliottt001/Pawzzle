@@ -1,7 +1,16 @@
-export type PressMotionKind = 'cta' | 'card' | 'icon' | 'text';
+export type PressMotionKind = 'cta' | 'card' | 'icon' | 'hero-icon' | 'text';
 export type BubbleMotionKind = 'user' | 'ai' | 'debug';
 
 export function getPressMotionPreset(kind: PressMotionKind) {
+  if (kind === 'hero-icon') {
+    return {
+      pressedScale: 0.88,
+      translateY: -3,
+      disabledOpacity: 0.4,
+      releaseSpring: { damping: 12, stiffness: 240 },
+    };
+  }
+
   if (kind === 'icon') {
     return {
       pressedScale: 0.92,
@@ -51,4 +60,14 @@ export function getBubbleMotionPreset(kind: BubbleMotionKind) {
 
 export function getPhaseMotionPreset() {
   return { fromY: 12, duration: 220 };
+}
+
+export function getTabCenterMotionPreset() {
+  return {
+    focusedLift: -6,
+    pulseScale: 1.06,
+    pressScale: 0.88,
+    pressDepth: -4,
+    releaseSpring: { damping: 11, stiffness: 250 },
+  };
 }
