@@ -25,7 +25,11 @@ import Reanimated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { getPressMotionPreset, type PressMotionKind } from '@/components/agent/motion';
+import {
+  getPhaseMotionPreset,
+  getPressMotionPreset,
+  type PressMotionKind,
+} from '@/components/agent/motion';
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
 import { Theme } from '@/constants/theme';
@@ -226,6 +230,34 @@ function AnimatedPressable({
       </Reanimated.View>
     </Pressable>
   );
+}
+
+function AnimatedPhaseView({
+  phaseKey,
+  style,
+  children,
+}: {
+  phaseKey: FlowPhase;
+  style?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  const preset = getPhaseMotionPreset();
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(preset.fromY);
+
+  React.useEffect(() => {
+    opacity.value = 0;
+    translateY.value = preset.fromY;
+    opacity.value = withTiming(1, { duration: preset.duration });
+    translateY.value = withTiming(0, { duration: preset.duration });
+  }, [opacity, phaseKey, preset.duration, preset.fromY, translateY]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  return <Reanimated.View style={[style, animatedStyle]}>{children}</Reanimated.View>;
 }
 
 export default function AgentScreen() {
@@ -578,155 +610,162 @@ export default function AgentScreen() {
 
   if (phase === 'quiz') {
     return (
-      <QuizScreen
-        onComplete={handleQuizComplete}
-        onBack={() => setHasStarted(false)}
-      />
+      <AnimatedPhaseView phaseKey="quiz" style={styles.phaseFill}>
+        <QuizScreen
+          onComplete={handleQuizComplete}
+          onBack={() => setHasStarted(false)}
+        />
+      </AnimatedPhaseView>
     );
   }
 
   if (phase === 'survey') {
     return (
-      <SurveyScreen
-        onComplete={handleSurveyComplete}
-        onSkip={handleSurveySkip}
-        onBack={() => setPhase('chat')}
-      />
+      <AnimatedPhaseView phaseKey="survey" style={styles.phaseFill}>
+        <SurveyScreen
+          onComplete={handleSurveyComplete}
+          onSkip={handleSurveySkip}
+          onBack={() => setPhase('chat')}
+        />
+      </AnimatedPhaseView>
     );
   }
 
   if (phase === 'result') {
     return (
-      <SafeAreaView style={styles.safeArea as object}>
-        <View style={styles.background as object}>
-          <View style={[styles.blob, styles.blobLeft]} />
-          <View style={[styles.blob, styles.blobRight]} />
-          <View style={[styles.blob, styles.blobBottom]} />
-        </View>
-        <ScrollView contentContainerStyle={quizStyles.resultContent} bounces={false}>
-          
-          <Text style={quizStyles.resultTitle}>你的专属宠物匹配结果</Text>
-          {evaluation ? (
-            <View style={quizStyles.resultProfileCard}>
-              <Text style={quizStyles.resultProfileText}>{evaluation.profile}</Text>
-            </View>
-          ) : null}
+      <AnimatedPhaseView phaseKey="result" style={styles.phaseFill}>
+        <SafeAreaView style={styles.safeArea as object}>
+          <View style={styles.background as object}>
+            <View style={[styles.blob, styles.blobLeft]} />
+            <View style={[styles.blob, styles.blobRight]} />
+            <View style={[styles.blob, styles.blobBottom]} />
+          </View>
+          <ScrollView contentContainerStyle={quizStyles.resultContent} bounces={false}>
+            <Text style={quizStyles.resultTitle}>你的专属宠物匹配结果</Text>
+            {evaluation ? (
+              <View style={quizStyles.resultProfileCard}>
+                <Text style={quizStyles.resultProfileText}>{evaluation.profile}</Text>
+              </View>
+            ) : null}
 
-          {status === 'recommending' && visiblePets.length === 0 ? (
-            <Text style={styles.matchWaitingText}>正在为您匹配伙伴…</Text>
-          ) : null}
+            {status === 'recommending' && visiblePets.length === 0 ? (
+              <Text style={styles.matchWaitingText}>正在为您匹配伙伴…</Text>
+            ) : null}
 
-          {visiblePets.length > 0 ? (
-            <>
-              <Text style={quizStyles.resultSubTitle}>
-                我们为你匹配到了最适合一起生活的小伙伴
-              </Text>
-              <Text style={quizStyles.resultSwipeHint}>见下方，右滑查看更多……</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.matchListContent}
-                style={styles.matchList}>
-                {visiblePets.map(({ pet, confidence }) => (
-                  <PetCard key={pet.id} pet={pet} confidence={confidence} />
-                ))}
-              </ScrollView>
-            </>
-          ) : null}
+            {visiblePets.length > 0 ? (
+              <>
+                <Text style={quizStyles.resultSubTitle}>
+                  我们为你匹配到了最适合一起生活的小伙伴
+                </Text>
+                <Text style={quizStyles.resultSwipeHint}>见下方，右滑查看更多……</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.matchListContent}
+                  style={styles.matchList}>
+                  {visiblePets.map(({ pet, confidence }) => (
+                    <PetCard key={pet.id} pet={pet} confidence={confidence} />
+                  ))}
+                </ScrollView>
+              </>
+            ) : null}
 
-          <AnimatedPressable
-            kind="cta"
-            style={quizStyles.resultRestartButton}
-            onPress={() => {
-              hasStartedRef.current = false;
-              setHasStarted(false);
-            }}>
-            <Text style={quizStyles.resultRestartText}>重新测试</Text>
-          </AnimatedPressable>
-        </ScrollView>
-      </SafeAreaView>
+            <AnimatedPressable
+              kind="cta"
+              style={quizStyles.resultRestartButton}
+              onPress={() => {
+                hasStartedRef.current = false;
+                setHasStarted(false);
+              }}>
+              <Text style={quizStyles.resultRestartText}>重新测试</Text>
+            </AnimatedPressable>
+          </ScrollView>
+        </SafeAreaView>
+      </AnimatedPhaseView>
     );
   }
 
   // phase === 'chat'
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.background}>
-        <View style={[styles.blob, styles.blobLeft]} />
-        <View style={[styles.blob, styles.blobRight]} />
-        <View style={[styles.blob, styles.blobBottom]} />
-      </View>
-
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <View style={styles.header}>
-          <Text style={styles.overline}>Pawzy</Text>
-          <Text style={styles.title}>和你聊聊</Text>
+    <AnimatedPhaseView phaseKey="chat" style={styles.phaseFill}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.background}>
+          <View style={[styles.blob, styles.blobLeft]} />
+          <View style={[styles.blob, styles.blobRight]} />
+          <View style={[styles.blob, styles.blobBottom]} />
         </View>
 
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={styles.chatList}
-          keyboardShouldPersistTaps="handled">
-          {messages.map((message) => (
-            <ChatBubble key={message.id} role={message.role} text={message.content} />
-          ))}
-
-          {isBusy ? <ChatBubble role="ai" text={waitingText} /> : null}
-        </ScrollView>
-
-        {!evaluation ? (
-          <View style={styles.inputDock}>
-            <View style={styles.inputRow}>
-              <TextInput
-                value={input}
-                onChangeText={setInput}
-                placeholder="输入你的回答"
-                placeholderTextColor="#A1A1A1"
-                style={styles.input}
-                returnKeyType="send"
-                onSubmitEditing={handleSend}
-                editable={!isInputLocked}
-              />
-              <AnimatedPressable
-                kind="text"
-                onPressIn={handleVoicePressIn}
-                onPressOut={handleVoicePressOut}
-                disabled={isInputLocked || evaluation !== null}
-                style={[
-                  styles.voiceButton,
-                  isRecording && styles.voiceButtonRecording,
-                  (isInputLocked || evaluation !== null) && styles.voiceButtonDisabled,
-                ]}>
-                <Text style={styles.voiceButtonText}>
-                  {isRecording ? '录音中' : isTranscribing ? '识别中' : '语音'}
-                </Text>
-              </AnimatedPressable>
-              
-              <AnimatedPressable
-                kind="icon"
-                onPress={handleSend}
-                disabled={!canSend}
-                style={[
-                  styles.sendButton,
-                  !canSend && styles.sendButtonDisabled,
-                ]}>
-                <SendIcon width={Theme.sizes.s18} height={Theme.sizes.s18} />
-              </AnimatedPressable>
-            </View>
-            <Text style={styles.helperText}>
-              {isRecording
-                ? '松开后将语音转成文字'
-                : isTranscribing
-                  ? '正在识别语音...'
-                  : errorMessage ?? ''}
-            </Text>
+        <KeyboardAvoidingView
+          style={styles.container}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.header}>
+            <Text style={styles.overline}>Pawzy</Text>
+            <Text style={styles.title}>和你聊聊</Text>
           </View>
-        ) : null}
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+
+          <ScrollView
+            ref={scrollRef}
+            contentContainerStyle={styles.chatList}
+            keyboardShouldPersistTaps="handled">
+            {messages.map((message) => (
+              <ChatBubble key={message.id} role={message.role} text={message.content} />
+            ))}
+
+            {isBusy ? <ChatBubble role="ai" text={waitingText} /> : null}
+          </ScrollView>
+
+          {!evaluation ? (
+            <View style={styles.inputDock}>
+              <View style={styles.inputRow}>
+                <TextInput
+                  value={input}
+                  onChangeText={setInput}
+                  placeholder="输入你的回答"
+                  placeholderTextColor="#A1A1A1"
+                  style={styles.input}
+                  returnKeyType="send"
+                  onSubmitEditing={handleSend}
+                  editable={!isInputLocked}
+                />
+                <AnimatedPressable
+                  kind="text"
+                  onPressIn={handleVoicePressIn}
+                  onPressOut={handleVoicePressOut}
+                  disabled={isInputLocked || evaluation !== null}
+                  style={[
+                    styles.voiceButton,
+                    isRecording && styles.voiceButtonRecording,
+                    (isInputLocked || evaluation !== null) && styles.voiceButtonDisabled,
+                  ]}>
+                  <Text style={styles.voiceButtonText}>
+                    {isRecording ? '录音中' : isTranscribing ? '识别中' : '语音'}
+                  </Text>
+                </AnimatedPressable>
+
+                <AnimatedPressable
+                  kind="icon"
+                  onPress={handleSend}
+                  disabled={!canSend}
+                  style={[
+                    styles.sendButton,
+                    !canSend && styles.sendButtonDisabled,
+                  ]}>
+                  <SendIcon width={Theme.sizes.s18} height={Theme.sizes.s18} />
+                </AnimatedPressable>
+              </View>
+              <Text style={styles.helperText}>
+                {isRecording
+                  ? '松开后将语音转成文字'
+                  : isTranscribing
+                    ? '正在识别语音...'
+                    : errorMessage ?? ''}
+              </Text>
+            </View>
+          ) : null}
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </AnimatedPhaseView>
   );
 }
 
@@ -1311,6 +1350,9 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.backgroundWarmAlt,
   },
   container: {
+    flex: Theme.layout.full,
+  },
+  phaseFill: {
     flex: Theme.layout.full,
   },
   background: {

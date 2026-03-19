@@ -50,5 +50,5 @@ export function getBubbleMotionPreset(kind: BubbleMotionKind) {
 }
 
 export function getPhaseMotionPreset() {
-  return { fromY: 14, duration: 220 };
+  return { fromY: 12, duration: 220 };
 }

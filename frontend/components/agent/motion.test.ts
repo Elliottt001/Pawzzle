@@ -43,6 +43,7 @@ test('user and ai bubbles use distinct entrance presets', () => {
 test('phase preset stays lightweight and upward', () => {
   const phase = getPhaseMotionPreset();
 
-  assert.equal(phase.fromY > 0, true);
-  assert.equal(phase.duration <= 260, true);
+  assert.equal(phase.fromY, 12);
+  assert.equal(phase.duration >= 180 && phase.duration <= 260, true);
+  assert.equal('fromX' in phase, false);
 });
