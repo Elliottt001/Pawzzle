@@ -26,6 +26,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 
 import {
+  getBubbleMotionPreset,
   getPhaseMotionPreset,
   getPressMotionPreset,
   type PressMotionKind,
@@ -258,6 +259,49 @@ function AnimatedPhaseView({
   }));
 
   return <Reanimated.View style={[style, animatedStyle]}>{children}</Reanimated.View>;
+}
+
+function AnimatedChatBubble({
+  messageKey,
+  role,
+  text,
+}: {
+  messageKey: string;
+  role: ChatRole;
+  text: string;
+}) {
+  const preset = getBubbleMotionPreset(role);
+  const opacity = useSharedValue(0);
+  const translateX = useSharedValue(preset.fromX);
+  const translateY = useSharedValue(preset.fromY);
+
+  React.useEffect(() => {
+    opacity.value = 0;
+    translateX.value = preset.fromX;
+    translateY.value = preset.fromY;
+    opacity.value = withTiming(1, { duration: preset.duration });
+    translateX.value = withTiming(0, { duration: preset.duration });
+    translateY.value = withTiming(0, { duration: preset.duration });
+  }, [
+    messageKey,
+    opacity,
+    preset.duration,
+    preset.fromX,
+    preset.fromY,
+    translateX,
+    translateY,
+  ]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateX: translateX.value }, { translateY: translateY.value }],
+  }));
+
+  return (
+    <Reanimated.View style={animatedStyle}>
+      <ChatBubble role={role} text={text} />
+    </Reanimated.View>
+  );
 }
 
 export default function AgentScreen() {
@@ -709,10 +753,22 @@ export default function AgentScreen() {
             contentContainerStyle={styles.chatList}
             keyboardShouldPersistTaps="handled">
             {messages.map((message) => (
-              <ChatBubble key={message.id} role={message.role} text={message.content} />
+              <AnimatedChatBubble
+                key={message.id}
+                messageKey={message.id}
+                role={message.role}
+                text={message.content}
+              />
             ))}
 
-            {isBusy ? <ChatBubble role="ai" text={waitingText} /> : null}
+            {isBusy ? (
+              <AnimatedChatBubble
+                key={`waiting-${status}`}
+                messageKey={`waiting-${status}`}
+                role="ai"
+                text={waitingText}
+              />
+            ) : null}
           </ScrollView>
 
           {!evaluation ? (

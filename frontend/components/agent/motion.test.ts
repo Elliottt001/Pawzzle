@@ -36,8 +36,20 @@ test('user and ai bubbles use distinct entrance presets', () => {
   const ai = getBubbleMotionPreset('ai');
 
   assert.notDeepEqual(user, ai);
-  assert.equal(user.fromX > 0, true);
-  assert.equal(ai.fromY > user.fromY, true);
+  assert.equal(user.fromX, 12);
+  assert.equal(user.fromY, 6);
+  assert.equal(ai.fromY, 14);
+});
+
+test('debug bubbles stay calmer than user and ai bubbles', () => {
+  const debugPreset = getBubbleMotionPreset('debug');
+  const userPreset = getBubbleMotionPreset('user');
+  const aiPreset = getBubbleMotionPreset('ai');
+
+  assert.equal(debugPreset.duration < aiPreset.duration, true);
+  assert.equal(debugPreset.fromY, 6);
+  assert.equal(userPreset.fromX > 0, true);
+  assert.equal(aiPreset.fromY > debugPreset.fromY, true);
 });
 
 test('phase preset stays lightweight and upward', () => {

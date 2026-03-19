@@ -39,11 +39,11 @@ export function getPressMotionPreset(kind: PressMotionKind) {
 
 export function getBubbleMotionPreset(kind: BubbleMotionKind) {
   if (kind === 'user') {
-    return { fromX: 14, fromY: 8, duration: 220 };
+    return { fromX: 12, fromY: 6, duration: 220 };
   }
 
   if (kind === 'debug') {
-    return { fromX: 0, fromY: 8, duration: 180 };
+    return { fromX: 0, fromY: 6, duration: 180 };
   }
 
   return { fromX: 0, fromY: 14, duration: 260 };
