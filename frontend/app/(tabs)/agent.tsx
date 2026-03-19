@@ -2,19 +2,30 @@ import * as React from 'react';
 import {
   Animated,
   Easing,
+  type GestureResponderEvent,
   Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  type PressableProps,
   ScrollView,
   StyleSheet,
+  type StyleProp,
   TextInput,
   View,
+  type ViewStyle,
 } from 'react-native';
 import { Text } from '@/components/base-text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import Reanimated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
+import { getPressMotionPreset, type PressMotionKind } from '@/components/agent/motion';
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
 import { Theme } from '@/constants/theme';
@@ -76,7 +87,6 @@ const RECOMMENDING_WAITING_TEXTS = [
   '正在生成推荐结果...',
 ];
 const VOICE_TRANSCRIBE_URL = `${API_BASE_URL}/api/voice/transcribe`;
-const TEST_TRANSCRIBE_URL = `${API_BASE_URL}/api/voice/transcribe-test-file`;
 const MALICIOUS_TERMINATION_TEXT =
   '根据您目前的情况，暂时没有与您匹配的宠物呢，可以去宠物广场看看～';
 
@@ -153,6 +163,71 @@ function buildSystemPromptFromQuiz(answers: Record<number, string>): string {
   ].join('\n');
 }
 
+type AnimatedPressableProps = Omit<PressableProps, 'children' | 'style'> & {
+  kind: PressMotionKind;
+  style?: StyleProp<ViewStyle>;
+  pressedStyle?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+};
+
+function AnimatedPressable({
+  kind,
+  style,
+  pressedStyle,
+  disabled = false,
+  children,
+  onPressIn,
+  onPressOut,
+  ...props
+}: AnimatedPressableProps) {
+  const preset = getPressMotionPreset(kind);
+  const scale = useSharedValue(1);
+  const translateY = useSharedValue(0);
+  const [isPressed, setIsPressed] = React.useState(false);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }, { scale: scale.value }],
+  }));
+
+  const handlePressIn = React.useCallback(
+    (event: GestureResponderEvent) => {
+      setIsPressed(true);
+      scale.value = withTiming(preset.pressedScale, { duration: 150 });
+      translateY.value = withTiming(preset.translateY, { duration: 150 });
+      onPressIn?.(event);
+    },
+    [onPressIn, preset.pressedScale, preset.translateY, scale, translateY]
+  );
+
+  const handlePressOut = React.useCallback(
+    (event: GestureResponderEvent) => {
+      setIsPressed(false);
+      scale.value = withSpring(1, preset.releaseSpring);
+      translateY.value = withSpring(0, preset.releaseSpring);
+      onPressOut?.(event);
+    },
+    [onPressOut, preset.releaseSpring, scale, translateY]
+  );
+
+  return (
+    <Pressable
+      {...props}
+      disabled={disabled}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}>
+      <Reanimated.View
+        style={[
+          style,
+          disabled && { opacity: preset.disabledOpacity },
+          isPressed && pressedStyle,
+          animatedStyle,
+        ]}>
+        {children}
+      </Reanimated.View>
+    </Pressable>
+  );
+}
+
 export default function AgentScreen() {
   const [hasStarted, setHasStarted] = React.useState(false);
   const [phase, setPhase] = React.useState<FlowPhase>('quiz');
@@ -169,7 +244,6 @@ export default function AgentScreen() {
   const [evaluation, setEvaluation] = React.useState<EvaluationSummary | null>(null);
   const [recommendedItems, setRecommendedItems] = React.useState<AgentDecisionItem[]>([]);
   const [isTranscribing, setIsTranscribing] = React.useState(false);
-  const [isTestingSample, setIsTestingSample] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [waitingIndex, setWaitingIndex] = React.useState(0);
   const scrollRef = React.useRef<ScrollView | null>(null);
@@ -177,7 +251,7 @@ export default function AgentScreen() {
   const { startRecording, stopRecording, isRecording } = useVoiceRecorder();
 
   const isBusy = status === 'evaluating' || status === 'recommending';
-  const isInputLocked = isBusy || isTranscribing || isTestingSample;
+  const isInputLocked = isBusy || isTranscribing;
   const canSend = input.trim().length > 0 && !isInputLocked && phase === 'chat' && !evaluation;
   const waitingMessages =
     status === 'recommending' ? RECOMMENDING_WAITING_TEXTS : EVALUATING_WAITING_TEXTS;
@@ -259,7 +333,6 @@ export default function AgentScreen() {
     setErrorMessage(null);
     setWaitingIndex(0);
     setIsTranscribing(false);
-    setIsTestingSample(false);
   }, []);
 
   const handleQuizComplete = React.useCallback((answers: Record<number, string>) => {
@@ -431,43 +504,6 @@ export default function AgentScreen() {
     }
   }, [evaluation, setErrorMessage, stopRecording]);
 
-  const handleTestAudioClick = React.useCallback(async () => {
-    if (isInputLocked || evaluation) {
-      return;
-    }
-    try {
-      setErrorMessage(null);
-      setIsTestingSample(true);
-
-      const response = await fetch(TEST_TRANSCRIBE_URL, {
-        method: 'POST',
-      });
-
-      let payload: { text?: string; error?: string } | null = null;
-      try {
-        payload = await response.json();
-      } catch {
-        payload = null;
-      }
-
-      if (!response.ok) {
-        const message = payload?.error ?? `HTTP ${response.status}`;
-        throw new Error(String(message));
-      }
-
-      const text = typeof payload?.text === 'string' ? payload.text.trim() : '';
-      if (text.length === 0) {
-        throw new Error('测试音频识别结果为空');
-      }
-      setInput(text);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '';
-      setErrorMessage(message || '测试音频识别失败');
-    } finally {
-      setIsTestingSample(false);
-    }
-  }, [evaluation, isInputLocked, setErrorMessage]);
-
   const handleSend = async () => {
     if (!activeSystemPrompt || phase !== 'chat') {
       return;
@@ -598,17 +634,15 @@ export default function AgentScreen() {
             </>
           ) : null}
 
-          <Pressable
-            style={({ pressed }) => [
-              quizStyles.resultRestartButton,
-              pressed && styles.sendButtonPressed,
-            ]}
+          <AnimatedPressable
+            kind="cta"
+            style={quizStyles.resultRestartButton}
             onPress={() => {
               hasStartedRef.current = false;
               setHasStarted(false);
             }}>
             <Text style={quizStyles.resultRestartText}>重新测试</Text>
-          </Pressable>
+          </AnimatedPressable>
         </ScrollView>
       </SafeAreaView>
     );
@@ -656,40 +690,38 @@ export default function AgentScreen() {
                 onSubmitEditing={handleSend}
                 editable={!isInputLocked}
               />
-              <Pressable
+              <AnimatedPressable
+                kind="text"
                 onPressIn={handleVoicePressIn}
                 onPressOut={handleVoicePressOut}
                 disabled={isInputLocked || evaluation !== null}
-                style={({ pressed }) => [
+                style={[
                   styles.voiceButton,
                   isRecording && styles.voiceButtonRecording,
                   (isInputLocked || evaluation !== null) && styles.voiceButtonDisabled,
-                  pressed && !(isInputLocked || evaluation !== null) && styles.sendButtonPressed,
                 ]}>
                 <Text style={styles.voiceButtonText}>
                   {isRecording ? '录音中' : isTranscribing ? '识别中' : '语音'}
                 </Text>
-              </Pressable>
+              </AnimatedPressable>
               
-              <Pressable
+              <AnimatedPressable
+                kind="icon"
                 onPress={handleSend}
                 disabled={!canSend}
-                style={({ pressed }) => [
+                style={[
                   styles.sendButton,
                   !canSend && styles.sendButtonDisabled,
-                  pressed && canSend && styles.sendButtonPressed,
                 ]}>
                 <SendIcon width={Theme.sizes.s18} height={Theme.sizes.s18} />
-              </Pressable>
+              </AnimatedPressable>
             </View>
             <Text style={styles.helperText}>
-              {isTestingSample
-                ? '正在请求根目录 test.m4a...'
-                : isRecording
-                  ? '松开后将语音转成文字'
-                  : isTranscribing
-                    ? '正在识别语音...'
-                    : errorMessage ?? ''}
+              {isRecording
+                ? '松开后将语音转成文字'
+                : isTranscribing
+                  ? '正在识别语音...'
+                  : errorMessage ?? ''}
             </Text>
           </View>
         ) : null}
@@ -884,14 +916,12 @@ function AgentStartScreen({ onStart }: { onStart: () => void }) {
             <Text style={startStyles.subhead}>准备好寻找你的伙伴了吗</Text>
 
             {/* CTA button */}
-            <Pressable
+            <AnimatedPressable
+              kind="cta"
               onPress={onStart}
-              style={({ pressed }) => [
-                startStyles.ctaButton,
-                pressed && startStyles.ctaButtonPressed,
-              ]}>
+              style={startStyles.ctaButton}>
               <Text style={startStyles.ctaText}>开始测试</Text>
-            </Pressable>
+            </AnimatedPressable>
 
             {/* Tip */}
             <Text style={startStyles.tipText}>随时开始，只需几分钟哦</Text>
@@ -949,13 +979,13 @@ function QuizScreen({
           {current.options.map((opt) => {
             const selected = answers[current.id] === opt.text;
             return (
-              <Pressable
+              <AnimatedPressable
                 key={opt.label}
+                kind="card"
                 onPress={() => handleSelect(opt.text)}
-                style={({ pressed }) => [
+                style={[
                   quizStyles.optionCard,
                   selected && quizStyles.optionCardSelected,
-                  pressed && { transform: [{ scale: 0.97 }] },
                 ]}>
                 <View style={[quizStyles.optionLabel, selected && quizStyles.optionLabelSelected]}>
                   <Text
@@ -969,7 +999,7 @@ function QuizScreen({
                 <Text style={[quizStyles.optionText, selected && quizStyles.optionTextSelected]}>
                   {opt.text}
                 </Text>
-              </Pressable>
+              </AnimatedPressable>
             );
           })}
         </ScrollView>
@@ -1028,20 +1058,20 @@ function SurveyScreen({
             </View>
           ))}
 
-          <Pressable
+          <AnimatedPressable
+            kind="cta"
             onPress={() => onComplete(formData)}
             disabled={!hasAnyData}
-            style={({ pressed }) => [
+            style={[
               quizStyles.surveySubmitButton,
               !hasAnyData && styles.sendButtonDisabled,
-              pressed && hasAnyData && styles.sendButtonPressed,
             ]}>
             <Text style={quizStyles.surveySubmitText}>提交并查看结果</Text>
-          </Pressable>
+          </AnimatedPressable>
 
-          <Pressable onPress={onSkip} style={quizStyles.surveySkipWrap}>
+          <AnimatedPressable kind="text" onPress={onSkip} style={quizStyles.surveySkipWrap}>
             <Text style={quizStyles.surveySkipText}>此处可跳过</Text>
-          </Pressable>
+          </AnimatedPressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -1483,28 +1513,8 @@ const styles = StyleSheet.create({
     color: '#875B47',
     fontFamily: Theme.fonts.regular,
   },
-  testButton: {
-    minWidth: 66,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFF6EA',
-    borderWidth: Theme.borderWidth.hairline,
-    borderColor: 'rgba(237, 132, 63, 0.35)',
-    marginLeft: 8,
-    paddingHorizontal: 10,
-  },
-  testButtonText: {
-    fontSize: 11,
-    color: '#875B47',
-    fontFamily: Theme.fonts.regular,
-  },
   sendButtonDisabled: {
     opacity: 0.4,
-  },
-  sendButtonPressed: {
-    transform: [{ scale: 0.95 }],
   },
   helperText: {
     marginTop: 8,
@@ -1629,9 +1639,6 @@ const startStyles = StyleSheet.create({
     shadowOpacity: 0.76,
     shadowRadius: 10.6,
     elevation: 6,
-  },
-  ctaButtonPressed: {
-    transform: [{ scale: 0.97 }],
   },
   ctaText: {
     fontSize: 18,

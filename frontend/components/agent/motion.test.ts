@@ -15,6 +15,22 @@ test('icon button presses more tightly than text actions', () => {
   assert.equal(icon.releaseSpring.damping > 0, true);
 });
 
+test('disabled buttons do not advertise active press feedback', () => {
+  const icon = getPressMotionPreset('icon');
+  const text = getPressMotionPreset('text');
+
+  assert.equal(icon.disabledOpacity < 1, true);
+  assert.equal(text.disabledOpacity < 1, true);
+  assert.equal(icon.translateY <= 0, true);
+});
+
+test('cta buttons rebound more gently than icon buttons', () => {
+  const cta = getPressMotionPreset('cta');
+  const icon = getPressMotionPreset('icon');
+
+  assert.equal(cta.releaseSpring.damping >= icon.releaseSpring.damping, true);
+});
+
 test('user and ai bubbles use distinct entrance presets', () => {
   const user = getBubbleMotionPreset('user');
   const ai = getBubbleMotionPreset('ai');

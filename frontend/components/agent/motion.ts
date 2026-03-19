@@ -5,6 +5,8 @@ export function getPressMotionPreset(kind: PressMotionKind) {
   if (kind === 'icon') {
     return {
       pressedScale: 0.92,
+      translateY: -1,
+      disabledOpacity: 0.4,
       releaseSpring: { damping: 14, stiffness: 220 },
     };
   }
@@ -12,12 +14,25 @@ export function getPressMotionPreset(kind: PressMotionKind) {
   if (kind === 'cta') {
     return {
       pressedScale: 0.96,
+      translateY: -1,
+      disabledOpacity: 0.45,
       releaseSpring: { damping: 16, stiffness: 210 },
+    };
+  }
+
+  if (kind === 'text') {
+    return {
+      pressedScale: 0.98,
+      translateY: 0,
+      disabledOpacity: 0.45,
+      releaseSpring: { damping: 18, stiffness: 200 },
     };
   }
 
   return {
     pressedScale: 0.97,
+    translateY: 0,
+    disabledOpacity: 0.4,
     releaseSpring: { damping: 18, stiffness: 200 },
   };
 }
