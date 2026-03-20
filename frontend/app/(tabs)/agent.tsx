@@ -29,6 +29,7 @@ import {
   getPressMotionPreset,
   type PressMotionKind,
 } from '@/components/agent/motion';
+import { shouldInitializeQuizMessages } from '@/components/agent/quiz';
 import { buildStreamingFrames, getStreamingTickMs } from '@/components/agent/streaming';
 import { PetCard } from '@/components/pet-card';
 import type { PetCardData } from '@/types/pet';
@@ -597,7 +598,13 @@ export default function AgentScreen() {
 
   // Effect: initialize quiz questions in chat
   React.useEffect(() => {
-    if (phase === 'quiz' && !quizInitRef.current) {
+    if (
+      shouldInitializeQuizMessages({
+        hasStarted,
+        phase,
+        hasInitializedQuiz: quizInitRef.current,
+      })
+    ) {
       quizInitRef.current = true;
       const firstQ = QUIZ_QUESTIONS[0];
       setMessages([{
@@ -607,10 +614,10 @@ export default function AgentScreen() {
         options: firstQ.options,
         isQuiz: true,
       }]);
-    } else if (phase !== 'quiz') {
+    } else if (!hasStarted || phase !== 'quiz') {
       quizInitRef.current = false;
     }
-  }, [phase]);
+  }, [hasStarted, phase]);
 
   // Effect: when entering chat phase, send initial evaluation request
   React.useEffect(() => {
