@@ -12,8 +12,9 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Text } from '@/components/base-text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Theme } from '@/constants/theme';
+import { Theme, Colors } from '@/constants/theme';
 import { getTabCenterMotionPreset } from '@/components/agent/motion';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import MiddleLogo from '@/assets/images/middle.svg';
 
 const CENTER_ROUTE_NAME = 'agent';
@@ -26,9 +27,11 @@ const CENTER_LOGO_SIZE = Theme.sizes.s96;
 function AnimatedCenterTabButton({
   focused,
   onPress,
+  centerBaseColor,
 }: {
   focused: boolean;
   onPress: () => void;
+  centerBaseColor: string;
 }) {
   const preset = getTabCenterMotionPreset();
   const scale = useSharedValue(1);
@@ -85,8 +88,11 @@ function AnimatedCenterTabButton({
 
   return (
     <View style={styles.centerSlot}>
-      <View style={styles.centerBump} />
-      <Reanimated.View pointerEvents="none" style={[styles.centerHalo, haloStyle]} />
+      <View style={[styles.centerBump, { backgroundColor: centerBaseColor }]} />
+      <Reanimated.View
+        pointerEvents="none"
+        style={[styles.centerHalo, { backgroundColor: centerBaseColor }, haloStyle]}
+      />
       <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
         <Reanimated.View style={[styles.centerButton, buttonStyle]}>
           <MiddleLogo width={CENTER_LOGO_SIZE} height={CENTER_LOGO_SIZE} />
@@ -98,11 +104,13 @@ function AnimatedCenterTabButton({
 
 export function PawzzleTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme() ?? 'light';
+  const themeColors = Colors[colorScheme];
 
   return (
     <View style={[styles.wrapper, { paddingBottom: insets.bottom + Theme.spacing.s8 }]}>
-      <View style={styles.bar}>
-        <View style={styles.barHighlight} />
+      <View style={[styles.bar, { backgroundColor: themeColors.tabBarBackground, shadowColor: themeColors.tabBarShadow }]}>
+        <View style={[styles.barHighlight, { backgroundColor: themeColors.tabBarHighlight }]} />
         <View style={styles.row}>
           {state.routes.map((route, index) => {
             const { options } = descriptors[route.key];
@@ -137,6 +145,7 @@ export function PawzzleTabBar({ state, descriptors, navigation }: BottomTabBarPr
                   key={route.key}
                   focused={isFocused}
                   onPress={onPress}
+                  centerBaseColor={themeColors.tabBarCenterBase}
                 />
               );
             }
@@ -151,7 +160,7 @@ export function PawzzleTabBar({ state, descriptors, navigation }: BottomTabBarPr
                 ]}>
                 {options.tabBarIcon
                   ? options.tabBarIcon({
-                      color: isFocused ? Theme.colors.tabBarActive : Theme.colors.tabBarInactive,
+                      color: isFocused ? themeColors.tabBarActive : themeColors.tabBarInactive,
                       size: Theme.sizes.s24,
                       focused: isFocused,
                     })
@@ -159,7 +168,8 @@ export function PawzzleTabBar({ state, descriptors, navigation }: BottomTabBarPr
                 <Text
                   style={[
                     styles.tabLabel,
-                    isFocused && styles.tabLabelActive,
+                    { color: themeColors.tabBarInactive },
+                    isFocused && [styles.tabLabelActive, { color: themeColors.tabBarActive }],
                   ]}>
                   {label}
                 </Text>
@@ -179,7 +189,6 @@ const styles = StyleSheet.create({
   bar: {
     position: 'relative',
     height: TAB_BAR_HEIGHT,
-    backgroundColor: Theme.colors.tabBarBackground,
     borderRadius: Theme.radius.r18,
     marginHorizontal: -Theme.spacing.s18,
     paddingVertical: Theme.spacing.s12,
@@ -193,7 +202,6 @@ const styles = StyleSheet.create({
     right: -Theme.spacing.s20,
     bottom: 0,
     height: Theme.spacing.s10,
-    backgroundColor: Theme.colors.tabBarHighlight,
     borderBottomLeftRadius: Theme.radius.r18,
     borderBottomRightRadius: Theme.radius.r18,
   },
@@ -215,10 +223,8 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: Theme.typography.size.s12,
     lineHeight: Theme.typography.lineHeight.s16,
-    color: Theme.colors.tabBarInactive,
   },
   tabLabelActive: {
-    color: Theme.colors.tabBarActive,
     fontFamily: Theme.fonts.semiBold,
   },
   centerSlot: {
@@ -233,7 +239,6 @@ const styles = StyleSheet.create({
     height: CENTER_BUMP_SIZE,
     borderRadius: CENTER_BUMP_SIZE / 2,
     top: CENTER_BUMP_OFFSET,
-    backgroundColor: Theme.colors.tabBarCenterBase,
   },
   centerHalo: {
     position: 'absolute',
